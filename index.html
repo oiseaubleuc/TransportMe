@@ -55,6 +55,15 @@
           <ul class="dashboard-vandaag-lijst" id="ritten-vandaag-lijst" aria-label="Ritten vandaag"></ul>
         </div>
 
+        <!-- Melding: rit via Kaart toegevoegd, bevestigen? -->
+        <div class="dashboard-rit-melding" id="dashboard-rit-melding" hidden>
+          <p class="dashboard-rit-melding-text">Er is een rit toegevoegd via de kaart. Bevestigen?</p>
+          <div class="dashboard-rit-melding-buttons">
+            <button type="button" class="btn btn-primary" id="dashboard-rit-melding-ja">Ja</button>
+            <button type="button" class="btn btn-outline" id="dashboard-rit-melding-nee">Nee</button>
+          </div>
+        </div>
+
         <!-- Hoofdactie: rit selecteren na oproep -->
         <div class="dashboard-cta-card">
           <h3 class="dashboard-cta-title">Rit na oproep</h3>
@@ -67,7 +76,7 @@
           </button>
         </div>
 
-        <!-- Financieel overzicht (periode) -->
+        <!-- Financieel overzicht (periode) + grafiek -->
         <div class="kpi-section">
           <h2 class="page-section-title">Financieel overzicht</h2>
           <p class="kpi-intro">Omzet, benzine en winst per periode</p>
@@ -94,6 +103,16 @@
             <button type="button" class="btn-period" data-period="week">Week</button>
             <button type="button" class="btn-period active" data-period="month">Maand</button>
           </div>
+          <div class="financial-chart-wrap" id="financial-chart-wrap">
+            <h3 class="chart-title">Omzet en winst per week</h3>
+            <div class="financial-chart" id="financial-chart" role="img" aria-label="Grafiek omzet en winst per week"></div>
+          </div>
+        </div>
+        <!-- Komende en lopende ritten (chauffeur + auto, knoppen Start / Voltooid) -->
+        <div class="ritten-status-section" id="ritten-status-section">
+          <h2 class="page-section-title">Ritten vandaag</h2>
+          <p class="kpi-intro">Komende en lopende ritten: kies chauffeur en voertuig. Start rit of bevestig voltooid.</p>
+          <ul class="ritten-status-lijst" id="ritten-status-lijst"></ul>
         </div>
         <div class="km-section">
           <h2 class="page-section-title">Kilometers</h2>
@@ -107,47 +126,99 @@
 
       <!-- Pagina: Ritten -->
       <section class="page" id="page-ritten" aria-labelledby="nav-ritten">
-        <h2 class="page-section-title">Rit toevoegen</h2>
-        <p class="form-intro">Kies je bestemming — je ziet direct de km, vergoeding en geschatte winst.</p>
-
-        <h3 class="list-title">Kies bestemming</h3>
-        <div class="vaste-ritten" id="vaste-ritten-list"></div>
-
-        <!-- Directe berekening zichtbaar zodra bestemming/km bekend is -->
-        <div class="rit-berekening-card" id="rit-berekening-card">
-          <p class="rit-berekening-bestemming" id="rit-selected-destination" hidden></p>
-          <div class="rit-berekening-grid">
-            <span class="rit-berekening-label">Afstand</span>
-            <strong class="rit-berekening-waarde" id="rit-preview-km">0 km</strong>
-            <span class="rit-berekening-label">Vergoeding</span>
-            <strong class="rit-berekening-waarde" id="rit-preview">€ 0</strong>
-            <span class="rit-berekening-label rit-berekening-winst-label" id="rit-label-winst">Geschatte winst</span>
-            <strong class="rit-berekening-waarde rit-berekening-winst" id="rit-preview-winst">—</strong>
+        <div class="ritten-page">
+          <!-- Kolom 1: Overzicht (3 kaarten) -->
+          <aside class="ritten-overzicht">
+            <h2 class="ritten-overzicht-title">Overzicht</h2>
+            <div class="ritten-kaarten">
+              <article class="rit-kaart rit-kaart--komend" id="ritten-blok-komend">
+                <header class="rit-kaart-header">
+                  <span class="rit-kaart-icon" aria-hidden="true">○</span>
+                  <h3 class="rit-kaart-titel">Nog te leveren</h3>
+                </header>
+                <ul class="rit-kaart-lijst" id="ritten-lijst-komend" aria-label="Nog te leveren ritten"></ul>
+                <p class="rit-kaart-leeg" id="ritten-leeg-komend">Geen ritten</p>
+              </article>
+              <article class="rit-kaart rit-kaart--lopend" id="ritten-blok-lopend">
+                <header class="rit-kaart-header">
+                  <span class="rit-kaart-icon" aria-hidden="true">◐</span>
+                  <h3 class="rit-kaart-titel">Onderweg</h3>
+                </header>
+                <ul class="rit-kaart-lijst" id="ritten-lijst-lopend" aria-label="Ritten onderweg"></ul>
+                <p class="rit-kaart-leeg" id="ritten-leeg-lopend">Geen ritten</p>
+              </article>
+              <article class="rit-kaart rit-kaart--voltooid" id="ritten-blok-voltooid">
+                <header class="rit-kaart-header">
+                  <span class="rit-kaart-icon" aria-hidden="true">✓</span>
+                  <h3 class="rit-kaart-titel">Voltooid</h3>
+                </header>
+                <ul class="rit-kaart-lijst" id="ritten-lijst-voltooid" aria-label="Voltooide ritten"></ul>
+                <p class="rit-kaart-leeg" id="ritten-leeg-voltooid">Geen ritten</p>
+              </article>
+            </div>
+          </aside>
+          <!-- Kolom 2: Nieuwe rit -->
+          <div class="ritten-toevoegen">
+            <h2 class="ritten-toevoegen-title">Nieuwe rit</h2>
+            <p class="ritten-toevoegen-intro">Kies een bestemming, vul gegevens in en sla op. Elke rit telt 2u30.</p>
+            <div class="rit-stap rit-stap--bestemming">
+              <h3 class="rit-stap-titel">Bestemming</h3>
+              <div class="rit-bestemming-kiezer">
+                <div class="form-row">
+                  <label for="rit-vertrek">Vertrek</label>
+                  <select id="rit-vertrek" class="select">
+                    <option value="">— Kies vertrek —</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label for="rit-bestemming">Bestemming</label>
+                  <select id="rit-bestemming" class="select">
+                    <option value="">— Kies bestemming —</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="rit-berekening-card" id="rit-berekening-card">
+              <p class="rit-berekening-bestemming" id="rit-selected-destination" hidden></p>
+              <div class="rit-berekening-grid">
+                <span class="rit-berekening-label">Afstand</span>
+                <strong class="rit-berekening-waarde" id="rit-preview-km">0 km</strong>
+                <span class="rit-berekening-label">Vergoeding</span>
+                <strong class="rit-berekening-waarde" id="rit-preview">€ 0</strong>
+                <span class="rit-berekening-label rit-berekening-winst-label" id="rit-label-winst">Geschatte winst</span>
+                <strong class="rit-berekening-waarde rit-berekening-winst" id="rit-preview-winst">—</strong>
+              </div>
+              <p class="info-text info-text--small" id="rit-geen-data">Vul brandstof in (Meer → Brandstof) voor geschatte winst.</p>
+            </div>
+            <form id="form-rit" class="form-rit form-section rit-stap">
+              <h3 class="rit-stap-titel">Gegevens</h3>
+              <div class="form-row">
+                <label for="rit-datum">Datum</label>
+                <input type="date" id="rit-datum" required />
+              </div>
+              <div class="form-row">
+                <label for="rit-chauffeur">Chauffeur</label>
+                <select id="rit-chauffeur" class="select" required>
+                  <option value="">— Kies chauffeur —</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="rit-voertuig">Voertuig</label>
+                <select id="rit-voertuig" class="select">
+                  <option value="">— Kies voertuig —</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="rit-km">Afstand (km)</label>
+                <input type="number" id="rit-km" min="1" step="1" placeholder="bv. 45" required />
+              </div>
+              <div id="rit-rendabiliteit" hidden><span id="rit-preview-benzine"></span></div>
+              <div id="rit-row-benzine" hidden></div>
+              <div id="rit-row-winst" hidden></div>
+              <button type="submit" class="btn btn-primary btn-block">Rit opslaan</button>
+            </form>
           </div>
-          <p class="info-text info-text--small" id="rit-geen-data">Vul brandstof in (Meer → Brandstof) voor geschatte winst.</p>
         </div>
-
-        <form id="form-rit" class="form-rit form-section">
-          <div class="form-row">
-            <label for="rit-datum">Datum</label>
-            <input type="date" id="rit-datum" required />
-          </div>
-          <div class="form-row">
-            <label for="rit-voertuig">Voertuig</label>
-            <select id="rit-voertuig" class="select">
-              <option value="">— Kies voertuig —</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label for="rit-km">Afstand (km)</label>
-            <input type="number" id="rit-km" min="1" step="1" placeholder="bv. 45" required />
-          </div>
-          <!-- Verborgen: forms.js gebruikt deze refs voor vergoeding/winst -->
-          <div id="rit-rendabiliteit" hidden><span id="rit-preview-benzine"></span></div>
-          <div id="rit-row-benzine" hidden></div>
-          <div id="rit-row-winst" hidden></div>
-          <button type="submit" class="btn btn-primary btn-block">Rit opslaan</button>
-        </form>
       </section>
 
       <!-- Pagina: Brandstof -->
@@ -190,11 +261,29 @@
       <!-- Pagina: Kaart -->
       <section class="page" id="page-kaart" aria-labelledby="nav-kaart">
         <h2 class="page-section-title">Ritten op kaart</h2>
-        <p class="form-intro" id="kaart-intro">Kies een vaste rit. De kaart gebruikt OpenStreetMap (gratis). Voor de route-lijn: gratis API-sleutel op <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>.</p>
+        <p class="form-intro" id="kaart-intro">Kies vertrek en aankomst. De kaart gebruikt OpenStreetMap (gratis). Voor de route-lijn: gratis API-sleutel op <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>.</p>
         <div class="form-row">
-          <label for="kaart-route-select">Kies een rit</label>
-          <select id="kaart-route-select" class="select">
-            <option value="">— Kies een rit —</option>
+          <label for="kaart-from">Vertrek</label>
+          <select id="kaart-from" class="select">
+            <option value="">— Kies vertrek —</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="kaart-to">Aankomst</label>
+          <select id="kaart-to" class="select">
+            <option value="">— Kies aankomst —</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="kaart-chauffeur">Chauffeur</label>
+          <select id="kaart-chauffeur" class="select">
+            <option value="">— Kies chauffeur —</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="kaart-voertuig">Voertuig</label>
+          <select id="kaart-voertuig" class="select">
+            <option value="">— Kies voertuig —</option>
           </select>
         </div>
         <div class="form-row">
@@ -203,7 +292,7 @@
           </button>
         </div>
         <div class="map-container" id="map-container">
-          <div class="map-placeholder" id="map-placeholder">Kies een rit om de kaart te zien.</div>
+          <div class="map-placeholder" id="map-placeholder">Kies vertrek en aankomst om de kaart te zien.</div>
         </div>
         <p class="info-text--small">Open in <a href="#" id="link-waze" target="_blank" rel="noopener">Waze</a> of <a href="#" id="link-google-nav" target="_blank" rel="noopener">Google Maps</a> voor navigatie.</p>
       </section>
@@ -241,6 +330,7 @@
           <label for="zoek-ziekenhuis">Zoek ziekenhuis of adres</label>
           <input type="text" id="zoek-ziekenhuis" placeholder="bv. UZ Leuven, Virga Jesse..." autocomplete="off" />
         </div>
+        <div id="zoek-suggesties" class="zoek-suggesties" hidden></div>
         <div id="zoek-resultaat" class="zoek-resultaat" hidden></div>
         <div class="saved-list" id="saved-ziekenhuizen-list">
           <h3 class="list-title">Mijn ziekenhuizen</h3>
@@ -248,7 +338,7 @@
         </div>
         <div class="form-section">
           <h3 class="list-title">Nieuwe vaste rit toevoegen</h3>
-          <p class="info-text--small">Kies vertrek en bestemming uit je lijst. Afstand wordt opgehaald via Google Maps.</p>
+          <p class="info-text--small">Kies vertrek en bestemming uit je lijst. Afstand wordt opgehaald via OpenRouteService (gratis).</p>
           <div class="form-row">
             <label for="new-route-from">Van</label>
             <select id="new-route-from" class="select"></select>
@@ -305,7 +395,7 @@
           <div class="tab-panel active" id="panel-ritten" role="tabpanel">
             <div class="table-wrap">
               <table class="data-table">
-                <thead><tr><th>Datum</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th></th></tr></thead>
+                <thead><tr><th>Datum</th><th>Chauffeur</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th>Status</th><th></th></tr></thead>
                 <tbody id="tbody-ritten"></tbody>
               </table>
             </div>

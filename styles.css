@@ -290,15 +290,52 @@ body {
   color: var(--accent);
 }
 
-/* Kaart */
+/* Kaart – responsive, moderne MapLibre GL */
 .map-container {
   position: relative;
   width: 100%;
-  min-height: 280px;
+  min-height: 240px;
+  height: 60vmin;
+  max-height: 480px;
   background: var(--surface2);
   border-radius: var(--radius);
   overflow: hidden;
   margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+}
+
+@media (min-width: 768px) {
+  .map-container {
+    min-height: 320px;
+    height: 50vmin;
+    max-height: 520px;
+  }
+}
+
+.map-container .map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* MapLibre custom markers */
+.maplibre-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  cursor: pointer;
+}
+
+.maplibre-marker-from {
+  background: var(--accent);
+}
+
+.maplibre-marker-to {
+  background: #c0392b;
 }
 
 .map-container iframe,
@@ -307,6 +344,7 @@ body {
   inset: 0;
   width: 100%;
   height: 100%;
+  z-index: 0;
 }
 
 .map-placeholder {
@@ -316,6 +354,7 @@ body {
   color: var(--text-muted);
   font-size: 0.9rem;
   padding: 1rem;
+  text-align: center;
 }
 
 /* Select */
@@ -360,6 +399,50 @@ body {
 .saved-list li.empty-state {
   color: var(--text-muted);
   font-size: 0.9rem;
+}
+
+.zoek-suggesties {
+  margin-top: -0.25rem;
+  margin-bottom: 0.5rem;
+  padding: 0.25rem 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.place-search-item {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.place-search-item:last-child {
+  border-bottom: none;
+}
+
+.place-search-item:hover {
+  background: var(--surface2);
+}
+
+.place-search-item strong {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.place-search-address {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 .zoek-resultaat {
@@ -595,6 +678,33 @@ body {
   color: var(--accent);
 }
 
+/* Melding: rit via Kaart toegevoegd – Bevestigen? Ja / Nee */
+.dashboard-rit-melding {
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.dashboard-rit-melding-text {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  font-weight: 500;
+}
+.dashboard-rit-melding-buttons {
+  display: flex;
+  gap: 0.75rem;
+}
+.dashboard-rit-melding-buttons .btn { flex: 1; }
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.btn-outline:hover {
+  background: var(--surface2);
+}
+
 /* CTA: Rit kiezen na oproep */
 .dashboard-cta-card {
   background: linear-gradient(145deg, rgba(107, 142, 35, 0.15) 0%, rgba(107, 142, 35, 0.05) 100%);
@@ -732,6 +842,205 @@ body {
   background: var(--accent-dim);
   border-color: var(--accent);
   color: #fff;
+}
+
+/* Financieel overzicht – grafiek per week */
+.financial-chart-wrap {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.chart-title {
+  font-size: 0.95rem;
+  margin: 0 0 1rem 0;
+  color: var(--text-muted);
+}
+.financial-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.chart-bar-group {
+  display: grid;
+  grid-template-columns: 5rem 1fr 6rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+}
+.chart-label {
+  color: var(--text-muted);
+}
+.chart-bars {
+  display: flex;
+  gap: 2px;
+  min-height: 1.25rem;
+  background: var(--surface2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.chart-bar {
+  min-width: 2px;
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+.chart-bar-omzet { background: var(--accent); }
+.chart-bar-winst { background: var(--text-muted); }
+.chart-legend {
+  color: var(--text-muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Ritten status (komend/lopend) op dashboard */
+.ritten-status-section {
+  margin-bottom: 2rem;
+}
+.ritten-status-lijst {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.ritten-status-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 0.5rem;
+}
+.ritten-status-rit { font-weight: 600; }
+.ritten-status-meta { font-size: 0.85rem; color: var(--text-muted); }
+.ritten-status-buttons { display: flex; gap: 0.5rem; margin-left: auto; }
+.ritten-status-empty {
+  padding: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.btn-small {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+/* ========== Rittenpagina: twee kolommen (overzicht | nieuwe rit) ========== */
+.ritten-page {
+  display: grid;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+@media (min-width: 720px) {
+  .ritten-page {
+    grid-template-columns: 340px 1fr;
+    align-items: start;
+  }
+}
+
+.ritten-overzicht-title,
+.ritten-toevoegen-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+.ritten-toevoegen-intro {
+  margin: 0 0 1.25rem 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* Drie kaarten (Nog te leveren | Onderweg | Voltooid) */
+.ritten-kaarten {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.rit-kaart {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 1rem;
+  border-top: 3px solid;
+}
+.rit-kaart--komend { border-top-color: #2563eb; }
+.rit-kaart--lopend  { border-top-color: #ea580c; }
+.rit-kaart--voltooid { border-top-color: #16a34a; }
+.rit-kaart-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.rit-kaart-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.rit-kaart--komend .rit-kaart-icon { background: rgba(37, 99, 235, 0.2); color: #2563eb; }
+.rit-kaart--lopend .rit-kaart-icon  { background: rgba(234, 88, 12, 0.2); color: #ea580c; }
+.rit-kaart--voltooid .rit-kaart-icon { background: rgba(22, 163, 74, 0.2); color: #16a34a; }
+.rit-kaart-titel {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.rit-kaart--komend .rit-kaart-titel { color: #2563eb; }
+.rit-kaart--lopend .rit-kaart-titel { color: #ea580c; }
+.rit-kaart--voltooid .rit-kaart-titel { color: #16a34a; }
+.rit-kaart-lijst {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.rit-kaart-lijst[hidden] { display: none; }
+.rit-kaart-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.rit-kaart-item:last-child { border-bottom: none; }
+.rit-kaart-datum {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+}
+.rit-kaart-rit { color: var(--text); }
+.rit-kaart-meta {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 0.15rem;
+}
+.rit-kaart-leeg {
+  margin: 0;
+  padding: 0.5rem 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.rit-kaart-leeg[hidden] { display: none; }
+
+/* Rechterkolom: nieuwe rit */
+.ritten-toevoegen {
+  min-width: 0;
+}
+.rit-stap {
+  margin-bottom: 1.25rem;
+}
+.rit-stap-titel {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.ritten-toevoegen .vaste-ritten {
+  margin-top: 0.25rem;
 }
 
 /* Km section */
@@ -973,6 +1282,24 @@ body {
 
 .btn-danger:hover {
   background: rgba(248, 81, 73, 0.15);
+}
+
+/* Toastmelding (bv. na rit toevoegen met geschatte afstand) */
+.toast-notice {
+  position: fixed;
+  bottom: 5rem;
+  left: 1rem;
+  right: 1rem;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 0.75rem 1rem;
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.9rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
 }
 
 /* Tables */

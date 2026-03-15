@@ -29,7 +29,7 @@ VITE_OPENROUTE_API_KEY=jouw_gratis_sleutel_hier
 
 Zonder sleutel: de kaart toont vertrek en bestemming; je kunt nog steeds **Rit vandaag toevoegen** als de vaste rit een vaste km-waarde heeft. De links naar **Waze** en **Google Maps** voor navigatie werken altijd.
 
-**Optioneel – Google Maps**: voor **ziekenhuizen zoeken met suggesties** kun je daarnaast `VITE_GOOGLE_MAPS_API_KEY` in `.env` zetten (Maps JavaScript API + Places API).
+**Ziekenhuizen zoeken** werkt **gratis** via OpenStreetMap (Nominatim) – geen API-sleutel nodig.
 
 ## Gebruik
 
@@ -62,8 +62,8 @@ Onderaan het scherm: **Dashboard** | **Ritten** | **Brandstof** | **Kaart** | **
 
 ### Meer
 
-- **Ziekenhuizen zoeken**: zoek een ziekenhuis (met API-sleutel) en voeg toe aan je lijst.
-- **Nieuwe vaste rit**: kies “Van” en “Naar” uit je ziekenhuizen; afstand wordt opgehaald (OpenRouteService of Google) en opgeslagen.
+- **Ziekenhuizen zoeken**: zoek een ziekenhuis of adres (gratis, OpenStreetMap) en voeg toe aan je lijst.
+- **Nieuwe vaste rit**: kies “Van” en “Naar” uit je ziekenhuizen; afstand wordt opgehaald via OpenRouteService (gratis) en opgeslagen.
 - **Overige kosten** en **Gegevens**: tabellen ritten, brandstof, overige. **Mijn ritten** is per week gerangschikt (nieuwste week eerst).
 
 ## Vergoeding

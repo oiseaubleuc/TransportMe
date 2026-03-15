@@ -3,7 +3,7 @@
  */
 
 import { getData, saveRitten, saveBrandstof, saveOverig } from './storage.js';
-import { vergoedingVoorRit, getWeekKey, getWeekLabel } from './calculations.js';
+import { vergoedingVoorRit, getWeekKey, getWeekLabel, isRitVoltooid } from './calculations.js';
 import { formatEuro, formatLiter } from './format.js';
 
 function escapeHtml(str) {
@@ -23,12 +23,13 @@ export function renderRitten(onRender) {
 
   if (ritten.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="5" class="empty-state">Nog geen ritten. Voeg een rit toe boven.</td></tr>';
+      '<tr><td colspan="7" class="empty-state">Nog geen ritten. Voeg een rit toe boven.</td></tr>';
     return;
   }
 
-  const totaalKm = ritten.reduce((s, r) => s + (r.km || 0), 0);
-  const totaalVergoeding = ritten.reduce(
+  const voltooide = ritten.filter(isRitVoltooid);
+  const totaalKm = voltooide.reduce((s, r) => s + (r.km || 0), 0);
+  const totaalVergoeding = voltooide.reduce(
     (s, r) => s + (r.vergoeding ?? vergoedingVoorRit(r.km)),
     0
   );
@@ -44,27 +45,30 @@ export function renderRitten(onRender) {
     byWeek[key].sort((a, b) => b.datum.localeCompare(a.datum));
   });
 
+  const statusLabel = (s) => (s === 'komend' ? 'Komend' : s === 'lopend' ? 'Lopend' : s === 'voltooid' ? 'Voltooid' : '—');
   let html = '';
   weekKeys.forEach((key) => {
     const weekRitten = byWeek[key];
     const label = getWeekLabel(weekRitten[0].datum);
-    html += `<tr class="week-header"><td colspan="5"><strong>${escapeHtml(label)}</strong></td></tr>`;
+    html += `<tr class="week-header"><td colspan="7"><strong>${escapeHtml(label)}</strong></td></tr>`;
     weekRitten.forEach(
       (r) =>
         (html += `<tr>
           <td>${escapeHtml(r.datum)}</td>
+          <td>${escapeHtml(r.chauffeurName || '—')}</td>
           <td>${escapeHtml(r.voertuigName || '—')}</td>
           <td class="num">${r.km} km</td>
           <td class="num">${formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km))}</td>
+          <td>${statusLabel(r.status)}</td>
           <td><button type="button" class="btn btn-danger btn-delete-rit" data-id="${r.id}">Verwijder</button></td>
         </tr>`)
     );
   });
   html += `<tr class="total-row">
-    <td colspan="2"><strong>Totaal (${ritten.length} rit${ritten.length === 1 ? '' : 'ten'})</strong></td>
+    <td colspan="3"><strong>Totaal voltooide (${voltooide.length} rit${voltooide.length === 1 ? '' : 'ten'})</strong></td>
     <td class="num"><strong>${totaalKm} km</strong></td>
     <td class="num"><strong>${formatEuro(totaalVergoeding)}</strong></td>
-    <td></td>
+    <td colspan="2"></td>
   </tr>`;
 
   tbody.innerHTML = html;

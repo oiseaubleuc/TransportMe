@@ -3,25 +3,33 @@
  * Mobielvriendelijk: navigatie, vaste ritten, kaart (Leaflet/ORS), ziekenhuizen
  */
 
-import 'leaflet/dist/leaflet.css';
-import { updateKPI, updateKmTeller, updateVandaagSummary, initPeriodToggle, syncPeriodButtons } from './js/dashboard.js';
+import { updateKPI, updateKmTeller, updateVandaagSummary, initPeriodToggle, syncPeriodButtons, updateFinancialChart, updateRittenStatusLijst, updateRitMelding } from './js/dashboard.js';
 import { initFormRit, initFormBrandstof, initFormOverig, setAlleDatumsVandaag } from './js/forms.js';
 import { renderAllTables } from './js/tables.js';
+import { DEFAULT_CHAUFFEURS, RIT_DUUR_MINUTEN } from './js/config.js';
 import { getData, getZiekenhuizen, saveZiekenhuizen, saveRitten, getPresetRoutes, savePresetRoutes, getVoertuigen, saveVoertuigen } from './js/storage.js';
-import { vergoedingVoorRit, toDateStr } from './js/calculations.js';
-import { getRouteDistance, initPlacesAutocomplete, hasMapsApiKey } from './js/maps.js';
-import { getRouteDistanceORS, showLeafletMap, addRouteToLeafletMap, hasOpenRouteApiKey, getDistanceMatrixORS } from './js/mapLeaflet.js';
+import { vergoedingVoorRit, toDateStr, isInDay, geschatteAfstandKm, isRitVoltooid } from './js/calculations.js';
+import { formatEuro, formatDatumTijd } from './js/format.js';
+import { getRouteDistance, hasMapsApiKey } from './js/maps.js';
+import { initPlaceSearchFree } from './js/placeSearchFree.js';
+import { getRouteDistanceORS, hasOpenRouteApiKey, getDistanceMatrixORS } from './js/mapLeaflet.js';
+import { showMapLibreMap, addRouteToMapLibreMap } from './js/mapLibre.js';
 import { buildDistanceMatrix, computeOptimalOrder } from './js/routeOptimization.js';
 
 function refresh() {
   updateKPI();
   updateKmTeller();
   updateVandaagSummary();
+  updateFinancialChart();
+  updateRitMelding(refresh);
+  updateRittenStatusLijst(refresh);
   renderAllTables(refresh);
   renderVasteRitten();
   renderSavedZiekenhuizen();
   fillVoertuigDropdowns();
+  fillChauffeurDropdown();
   renderVoertuigen();
+  renderRittenStatusPagina();
   renderKaartSelect();
   fillNewRouteDropdowns();
   renderRouteChecklist();
@@ -39,7 +47,10 @@ function showPage(pageId) {
   if (page) page.classList.add('active');
   if (pageId === 'kaart') initMapIfNeeded();
   if (pageId === 'route') initRoutePageIfNeeded();
-  if (pageId === 'dashboard') updateVandaagSummary();
+  if (pageId === 'dashboard') {
+    updateVandaagSummary();
+    updateRitMelding(refresh);
+  }
 }
 
 const THEME_STORAGE_KEY = 'transporteur_theme';
@@ -98,89 +109,99 @@ function initNavigation() {
   }
 }
 
-// --- Vaste ritten (gegroepeerd per vertrek) ---
+// --- Rit bestemming: twee dropdowns (Vertrek → Bestemming) ---
 function renderVasteRitten() {
-  const container = document.getElementById('vaste-ritten-list');
+  const vertrekSelect = document.getElementById('rit-vertrek');
+  const bestemmingSelect = document.getElementById('rit-bestemming');
   const kmInput = document.getElementById('rit-km');
-  if (!container || !kmInput) return;
+  if (!vertrekSelect || !bestemmingSelect || !kmInput) return;
 
   const presets = getPresetRoutes();
   const hospitals = getZiekenhuizen();
   const getHospital = (id) => hospitals.find((h) => h.id === id);
 
-  const byVertrek = {};
+  // Unieke vertrekken (fromId) met label fromName, gesorteerd op naam
+  const vertrekMap = new Map();
   presets.forEach((p) => {
-    const key = p.fromName || p.fromId;
-    if (!byVertrek[key]) byVertrek[key] = [];
-    byVertrek[key].push(p);
+    if (!vertrekMap.has(p.fromId)) vertrekMap.set(p.fromId, p.fromName || p.fromId);
   });
-  const vertrekken = Object.keys(byVertrek).sort((a, b) => a.localeCompare(b));
+  const vertrekIds = [...vertrekMap.entries()].sort((a, b) => (a[1] || '').localeCompare(b[1] || ''));
 
-  container.innerHTML = vertrekken
-    .map(
-      (vertrek) => `
-    <section class="vaste-ritten-groep">
-      <h3 class="vaste-ritten-groep-titel">${escapeHtml(vertrek)}</h3>
-      <ul class="vaste-ritten-lijst">
-        ${byVertrek[vertrek]
-          .map((p) => {
-            const km = p.defaultKm != null ? p.defaultKm : '?';
-            return `<li><button type="button" class="preset-rit-btn" data-preset-id="${p.id}">
-              <span class="preset-rit-bestemming">${escapeHtml(p.toName)}</span>
-              <span class="preset-rit-km">${km} km</span>
-            </button></li>`;
-          })
-          .join('')}
-      </ul>
-    </section>`
-    )
-    .join('');
+  vertrekSelect.innerHTML = '<option value="">— Kies vertrek —</option>';
+  vertrekIds.forEach(([id, name]) => {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = name;
+    vertrekSelect.appendChild(opt);
+  });
 
-  container.querySelectorAll('.preset-rit-btn').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const preset = presets.find((p) => p.id === btn.dataset.presetId);
-      if (!preset) return;
+  function vulBestemming() {
+    const fromId = vertrekSelect.value;
+    bestemmingSelect.innerHTML = '<option value="">— Kies bestemming —</option>';
+    if (!fromId) return;
+    const voorVertrek = presets.filter((p) => p.fromId === fromId).sort((a, b) => (a.toName || '').localeCompare(b.toName || ''));
+    voorVertrek.forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.defaultKm != null ? `${p.toName} (${p.defaultKm} km)` : p.toName;
+      bestemmingSelect.appendChild(opt);
+    });
+  }
 
-      // Visuele feedback: geselecteerde bestemming
-      container.querySelectorAll('.preset-rit-btn').forEach((b) => b.classList.remove('preset-rit-btn--selected'));
-      btn.classList.add('preset-rit-btn--selected');
+  vertrekSelect.addEventListener('change', () => {
+    vulBestemming();
+    bestemmingSelect.value = '';
+    kmInput.value = '';
+    kmInput.dispatchEvent(new Event('input'));
+    const destEl = document.getElementById('rit-selected-destination');
+    if (destEl) { destEl.hidden = true; destEl.textContent = ''; }
+  });
 
-      const destEl = document.getElementById('rit-selected-destination');
-      if (destEl) {
-        destEl.textContent = `Naar ${preset.toName}`;
-        destEl.hidden = false;
-      }
-
-      if (preset.defaultKm != null) {
-        kmInput.value = preset.defaultKm;
-        kmInput.dispatchEvent(new Event('input'));
-        return;
-      }
-      const from = getHospital(preset.fromId);
-      const to = getHospital(preset.toId);
-      if (from?.lat != null && to?.lat != null) {
-        if (hasOpenRouteApiKey()) {
-          try {
-            const { km } = await getRouteDistanceORS(from, to);
-            kmInput.value = km;
-            kmInput.dispatchEvent(new Event('input'));
-          } catch (e) {
-            if (preset.defaultKm != null) kmInput.value = preset.defaultKm;
-            else kmInput.value = '';
-          }
-        } else if (hasMapsApiKey()) {
-          try {
-            const { km } = await getRouteDistance(from, to);
-            kmInput.value = km;
-            kmInput.dispatchEvent(new Event('input'));
-          } catch (e) {
-            kmInput.value = preset.defaultKm ?? '';
-          }
+  bestemmingSelect.addEventListener('change', async () => {
+    const presetId = bestemmingSelect.value;
+    const preset = presets.find((p) => p.id === presetId);
+    const destEl = document.getElementById('rit-selected-destination');
+    if (!preset) {
+      if (destEl) destEl.hidden = true;
+      kmInput.value = '';
+      kmInput.dispatchEvent(new Event('input'));
+      return;
+    }
+    if (destEl) {
+      destEl.textContent = `${preset.fromName} → ${preset.toName}`;
+      destEl.hidden = false;
+    }
+    if (preset.defaultKm != null) {
+      kmInput.value = preset.defaultKm;
+      kmInput.dispatchEvent(new Event('input'));
+      return;
+    }
+    const from = getHospital(preset.fromId);
+    const to = getHospital(preset.toId);
+    if (from?.lat != null && to?.lat != null) {
+      if (hasOpenRouteApiKey()) {
+        try {
+          const { km } = await getRouteDistanceORS(from, to);
+          kmInput.value = km;
+          kmInput.dispatchEvent(new Event('input'));
+        } catch (e) {
+          kmInput.value = preset.defaultKm ?? '';
+          kmInput.dispatchEvent(new Event('input'));
+        }
+      } else if (hasMapsApiKey()) {
+        try {
+          const { km } = await getRouteDistance(from, to);
+          kmInput.value = km;
+          kmInput.dispatchEvent(new Event('input'));
+        } catch (e) {
+          kmInput.value = preset.defaultKm ?? '';
+          kmInput.dispatchEvent(new Event('input'));
         }
       }
-    });
+    }
   });
 
+  vulBestemming();
 }
 
 function escapeHtml(str) {
@@ -193,14 +214,13 @@ function escapeHtml(str) {
 let mapPageInited = false;
 
 function renderKaartSelect() {
-  const select = document.getElementById('kaart-route-select');
-  if (!select) return;
-  const presets = getPresetRoutes();
-  select.innerHTML =
-    '<option value="">— Kies een rit —</option>' +
-    presets
-      .map((p) => `<option value="${p.id}">${escapeHtml(p.fromName)} → ${escapeHtml(p.toName)}</option>`)
-      .join('');
+  const fromSelect = document.getElementById('kaart-from');
+  const toSelect = document.getElementById('kaart-to');
+  if (!fromSelect || !toSelect) return;
+  const locations = getZiekenhuizen();
+  const opts = locations.map((h) => `<option value="${h.id}">${escapeHtml(h.name)}</option>`).join('');
+  fromSelect.innerHTML = '<option value="">— Kies vertrek —</option>' + opts;
+  toSelect.innerHTML = '<option value="">— Kies aankomst —</option>' + opts;
 }
 
 function setNavigationLinks(from, to) {
@@ -217,114 +237,147 @@ function setNavigationLinks(from, to) {
 }
 
 function initMapIfNeeded() {
-  const select = document.getElementById('kaart-route-select');
+  const fromSelect = document.getElementById('kaart-from');
+  const toSelect = document.getElementById('kaart-to');
   const container = document.getElementById('map-container');
-  const placeholder = document.getElementById('map-placeholder');
   const linkWaze = document.getElementById('link-waze');
   const linkGoogle = document.getElementById('link-google-nav');
   const intro = document.getElementById('kaart-intro');
   const btnRitVandaag = document.getElementById('kaart-rit-vandaag-btn');
   const hasORS = hasOpenRouteApiKey();
+  const hospitals = getZiekenhuizen();
+
+  function getSelectedFromTo() {
+    const fromId = fromSelect?.value;
+    const toId = toSelect?.value;
+    if (!fromId || !toId || fromId === toId) return { from: null, to: null };
+    const from = hospitals.find((h) => h.id === fromId);
+    const to = hospitals.find((h) => h.id === toId);
+    return { from, to };
+  }
 
   function updateRitVandaagButton() {
-    if (btnRitVandaag) btnRitVandaag.disabled = !select?.value;
+    const { from, to } = getSelectedFromTo();
+    const chauffeur = document.getElementById('kaart-chauffeur')?.value;
+    const voertuig = document.getElementById('kaart-voertuig')?.value;
+    if (btnRitVandaag) btnRitVandaag.disabled = !from || !to || !chauffeur || !voertuig;
   }
 
   function updateMapAndLinks() {
-    const presetId = select?.value;
-    const presets = getPresetRoutes();
-    const hospitals = getZiekenhuizen();
-    const preset = presets.find((p) => p.id === presetId);
-    if (!preset) return;
-
-    const from = hospitals.find((h) => h.id === preset.fromId);
-    const to = hospitals.find((h) => h.id === preset.toId);
-
+    const { from, to } = getSelectedFromTo();
     setNavigationLinks(from, to);
     updateRitVandaagButton();
 
     if (!container) return;
-    if (!from?.lat || !to?.lat) {
-      container.innerHTML = '';
-      const ph = document.createElement('div');
-      ph.className = 'map-placeholder';
-      ph.textContent = 'Geen coördinaten voor deze rit.';
-      container.appendChild(ph);
-      return;
-    }
 
     container.innerHTML = '';
     const mapDiv = document.createElement('div');
     mapDiv.id = 'map-canvas';
-    mapDiv.style.width = '100%';
-    mapDiv.style.height = '280px';
+    mapDiv.className = 'map-canvas';
     container.appendChild(mapDiv);
 
-    const fromLatLng = { ...from, lat: from.lat, lng: from.lng };
-    const toLatLng = { ...to, lat: to.lat, lng: to.lng };
-    const map = showLeafletMap('map-canvas', fromLatLng, toLatLng);
+    const hasBoth = from?.lat != null && to?.lat != null;
+    const map = showMapLibreMap('map-canvas', hasBoth ? from : null, hasBoth ? to : null);
 
-    if (hasORS && map) {
+    if (map) {
+      const ro = new ResizeObserver(() => map.resize());
+      ro.observe(container);
+      map.on('remove', () => ro.disconnect());
+      setTimeout(() => map.resize(), 150);
+    }
+    if (hasBoth && hasORS && map) {
       getRouteDistanceORS(from, to)
-        .then(({ geometry }) => addRouteToLeafletMap(map, geometry))
+        .then(({ geometry }) => addRouteToMapLibreMap(map, geometry))
         .catch(() => {});
     }
   }
 
-  if (select && !mapPageInited) {
+  if (fromSelect && toSelect && !mapPageInited) {
     mapPageInited = true;
-    select.addEventListener('change', () => {
-      if (!select.value) {
-        if (container) {
-          container.innerHTML = '';
-          const ph = document.createElement('div');
-          ph.className = 'map-placeholder';
-          ph.id = 'map-placeholder';
-          ph.textContent = 'Kies een rit om de kaart te zien.';
-          container.appendChild(ph);
-        }
-        setNavigationLinks(null, null);
-        if (btnRitVandaag) btnRitVandaag.disabled = true;
-        return;
-      }
-      updateMapAndLinks();
-    });
+    function onKaartSelectChange() {
+      const { from, to } = getSelectedFromTo();
+      setNavigationLinks(from, to);
+      updateRitVandaagButton();
+      if (container) updateMapAndLinks();
+    }
+    fromSelect.addEventListener('change', onKaartSelectChange);
+    toSelect.addEventListener('change', onKaartSelectChange);
+    const kaartChauffeur = document.getElementById('kaart-chauffeur');
+    const kaartVoertuig = document.getElementById('kaart-voertuig');
+    kaartChauffeur?.addEventListener('change', updateRitVandaagButton);
+    kaartVoertuig?.addEventListener('change', updateRitVandaagButton);
   }
 
-  btnRitVandaag?.addEventListener('click', async () => {
-    const presetId = select?.value;
-    if (!presetId) return;
-    const presets = getPresetRoutes();
-    const hospitals = getZiekenhuizen();
-    const preset = presets.find((p) => p.id === presetId);
-    if (!preset) return;
+  updateMapAndLinks();
 
-    let km = preset.defaultKm;
-    if (km == null && preset.fromId && preset.toId) {
-      const from = hospitals.find((h) => h.id === preset.fromId);
-      const to = hospitals.find((h) => h.id === preset.toId);
-      if (from?.lat != null && to?.lat != null && hasOpenRouteApiKey()) {
+  btnRitVandaag?.addEventListener('click', async () => {
+    const { from, to } = getSelectedFromTo();
+    if (!from || !to) return;
+
+    const presets = getPresetRoutes();
+    const preset = presets.find((p) => p.fromId === from.id && p.toId === to.id);
+
+    let km = preset?.defaultKm;
+    if (km == null && from?.lat != null && to?.lat != null) {
+      if (hasORS) {
         try {
           const res = await getRouteDistanceORS(from, to);
           km = res.km;
         } catch (e) {}
-        if (km == null && hasMapsApiKey()) {
-          try {
-            const res = await getRouteDistance(from, to);
-            km = res.km;
-          } catch (e) {}
-        }
+      }
+      if ((km == null || km < 1) && hasMapsApiKey()) {
+        try {
+          const res = await getRouteDistance(from, to);
+          km = res.km;
+        } catch (e) {}
       }
     }
     if (km == null || km < 1) {
-      alert('Kon afstand niet bepalen. Voeg de rit handmatig toe op de pagina Ritten.');
-      return;
+      km = geschatteAfstandKm(from, to);
+      if (km == null || km < 1) {
+        alert('Kon afstand niet bepalen. Voeg de rit handmatig toe op de pagina Ritten.');
+        return;
+      }
+      // Afstand geschat (geen API-route beschikbaar)
+      if (typeof document !== 'undefined' && document.body) {
+        const notice = document.createElement('div');
+        notice.setAttribute('role', 'status');
+        notice.className = 'toast-notice';
+        notice.textContent = 'Afstand geschat (geen route beschikbaar). Je kunt km later aanpassen in Meer → Gegevens.';
+        document.body.appendChild(notice);
+        setTimeout(() => notice.remove(), 4000);
+      }
     }
 
-    const datum = toDateStr(new Date());
+    const chauffeurSel = document.getElementById('kaart-chauffeur');
+    const voertuigSel = document.getElementById('kaart-voertuig');
+    const chauffeurId = chauffeurSel?.value || '';
+    const chauffeurName = chauffeurSel?.selectedOptions?.[0]?.textContent || '';
+    const voertuigId = voertuigSel?.value || '';
+    const voertuigName = voertuigSel?.selectedOptions?.[0]?.textContent || '';
+    if (!chauffeurId || !voertuigId) {
+      alert('Kies chauffeur en voertuig.');
+      return;
+    }
+    const now = new Date();
+    const datum = toDateStr(now);
+    const tijd = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const vergoeding = vergoedingVoorRit(km);
     const { ritten } = getData();
-    ritten.push({ id: Date.now(), datum, km, vergoeding });
+    ritten.push({
+      id: Date.now(),
+      datum,
+      tijd,
+      km,
+      vergoeding,
+      voertuigId,
+      voertuigName,
+      chauffeurId,
+      chauffeurName,
+      status: 'komend',
+      duurMinuten: RIT_DUUR_MINUTEN,
+      toegevoegdVia: 'kaart',
+    });
     ritten.sort((a, b) => a.datum.localeCompare(b.datum));
     saveRitten(ritten);
     refresh();
@@ -362,7 +415,7 @@ function renderSavedZiekenhuizen() {
 
 function fillVoertuigDropdowns() {
   const voertuigen = getVoertuigen();
-  ['rit-voertuig', 'brandstof-voertuig'].forEach((id) => {
+  ['rit-voertuig', 'brandstof-voertuig', 'kaart-voertuig'].forEach((id) => {
     const sel = document.getElementById(id);
     if (!sel) return;
     sel.innerHTML = '<option value="">— Kies voertuig —</option>';
@@ -373,6 +426,54 @@ function fillVoertuigDropdowns() {
       sel.appendChild(opt);
     });
   });
+}
+
+function fillChauffeurDropdown() {
+  ['rit-chauffeur', 'kaart-chauffeur'].forEach((id) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Kies chauffeur —</option>';
+    DEFAULT_CHAUFFEURS.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.naam;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function renderRittenStatusPagina() {
+  const { ritten } = getData();
+  const komend = ritten.filter((r) => r.status === 'komend').sort((a, b) => (a.datum + (a.tijd || '')).localeCompare(b.datum + (b.tijd || '')));
+  const lopend = ritten.filter((r) => r.status === 'lopend').sort((a, b) => (b.datum + (b.tijd || '')).localeCompare(a.datum + (a.tijd || '')));
+  const voltooid = ritten.filter((r) => isRitVoltooid(r)).sort((a, b) => (b.datum + (b.voltooidTijd || b.tijd || '')).localeCompare(a.datum + (a.voltooidTijd || a.tijd || '')));
+
+  const leegIds = { 'ritten-lijst-komend': 'ritten-leeg-komend', 'ritten-lijst-lopend': 'ritten-leeg-lopend', 'ritten-lijst-voltooid': 'ritten-leeg-voltooid' };
+
+  function renderList(listId, items) {
+    const ul = document.getElementById(listId);
+    const leegEl = document.getElementById(leegIds[listId]);
+    if (!ul) return;
+    if (leegEl) leegEl.hidden = items.length > 0;
+    ul.hidden = items.length === 0;
+    ul.innerHTML = items
+      .map((r) => {
+        const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0);
+        const tijdDisplay = listId === 'ritten-lijst-voltooid' ? (r.voltooidTijd || r.tijd) : r.tijd;
+        const datumTijd = formatDatumTijd(r.datum, tijdDisplay);
+        const meta = [r.chauffeurName, r.voertuigName].filter(Boolean).join(' · ') || '—';
+        return `<li class="rit-kaart-item">
+          <span class="rit-kaart-datum">${escapeHtml(datumTijd)}</span>
+          <span class="rit-kaart-rit">${r.km || 0} km · ${formatEuro(verg)}</span>
+          <span class="rit-kaart-meta">${escapeHtml(meta)}</span>
+        </li>`;
+      })
+      .join('');
+  }
+
+  renderList('ritten-lijst-komend', komend);
+  renderList('ritten-lijst-lopend', lopend);
+  renderList('ritten-lijst-voltooid', voltooid);
 }
 
 function renderVoertuigen() {
@@ -562,8 +663,8 @@ function initZiekenhuizen() {
   const resultDiv = document.getElementById('zoek-resultaat');
   const btnAddPreset = document.getElementById('btn-add-preset-route');
 
-  if (hasMapsApiKey() && searchInput) {
-    initPlacesAutocomplete('zoek-ziekenhuis', (place) => {
+  if (searchInput) {
+    initPlaceSearchFree('zoek-ziekenhuis', 'zoek-suggesties', (place) => {
       pendingPlace = place;
       if (resultDiv) {
         resultDiv.hidden = false;
@@ -588,9 +689,6 @@ function initZiekenhuizen() {
         });
       }
     });
-  } else if (searchInput) {
-    searchInput.placeholder = 'Google Maps API-sleutel nodig om te zoeken (zie README)';
-    searchInput.disabled = true;
   }
 
   btnAddPreset?.addEventListener('click', async () => {

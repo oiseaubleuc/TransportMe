@@ -21,6 +21,17 @@ export const PERIOD_LABELS = {
   month: 'Deze maand',
 };
 
+/** Vaste duur per rit: 2u30 = 150 minuten */
+export const RIT_DUUR_MINUTEN = 150;
+
+/** Standaard chauffeurs (keuze bij komende ritten) */
+export const DEFAULT_CHAUFFEURS = [
+  { id: 'chauffeur-houdaifa', naam: 'Houdaifa' },
+  { id: 'chauffeur-frederik', naam: 'Frederik' },
+  { id: 'chauffeur-amine', naam: 'Amine' },
+  { id: 'chauffeur-student1', naam: 'Student1' },
+];
+
 /** Standaard voertuigen (worden bij eerste gebruik of merge toegevoegd) */
 export const DEFAULT_VOERTUIGEN = [
   { id: 'voertuig-2HKN136', naam: 'Audi A3', kenteken: '2HKN136' },
@@ -65,6 +76,7 @@ export const DEFAULT_PRESET_ROUTES = [
   { id: 'preset-excel-9', fromId: 'uz-brussel', toId: 'mol', fromName: 'UZ Brussel', toName: 'AZ Mol (Hart)', defaultKm: 72 },
   { id: 'preset-excel-10', fromId: 'uz-brussel', toId: 'brasschaat', fromName: 'UZ Brussel', toName: 'AZ Klina Brasschaat', defaultKm: 60 },
   { id: 'preset-excel-11', fromId: 'uz-brussel', toId: 'virga-jesse', fromName: 'UZ Brussel', toName: 'Virga Jesse Hasselt', defaultKm: 72 },
+  { id: 'preset-excel-11a', fromId: 'virga-jesse', toId: 'genk', fromName: 'Virga Jesse Hasselt', toName: 'ZOL Genk', defaultKm: 30 },
   { id: 'preset-excel-11b', fromId: 'uz-brussel', toId: 'bornem', fromName: 'UZ Brussel', toName: 'Bornem', defaultKm: 28 },
   { id: 'preset-excel-11c', fromId: 'uz-brussel', toId: 'sint-truiden', fromName: 'UZ Brussel', toName: 'Sint-Truiden', defaultKm: 76 },
   { id: 'preset-excel-12', fromId: 'mechelen', toId: 'gent', fromName: 'AZ Mechelen', toName: 'AZ Gent', defaultKm: 65 },

@@ -10,6 +10,20 @@ export function vergoedingVoorRit(km) {
   return OPSTART_PREMIE + schijven * VERGOEDING_PER_20KM;
 }
 
+/** Geschatte rijafstand (km) uit hemelsbreed: Haversine × factor 1,3. Voor fallback als ORS/API faalt. */
+export function geschatteAfstandKm(from, to) {
+  if (from?.lat == null || to?.lat == null) return null;
+  const R = 6371; // straal aarde in km
+  const dLat = ((to.lat - from.lat) * Math.PI) / 180;
+  const dLng = ((to.lng - from.lng) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((from.lat * Math.PI) / 180) * Math.cos((to.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const hemelsbreed = R * c;
+  return Math.max(1, Math.round(hemelsbreed * 1.3));
+}
+
 export function toDateStr(d) {
   if (typeof d === 'string') return d.slice(0, 10);
   const date = new Date(d);
@@ -96,9 +110,15 @@ export function filterByPeriod(items, period, dateKey = 'datum') {
   return items;
 }
 
+/** Alleen voltooide ritten tellen voor omzet/km (oude ritten zonder status = voltooid) */
+export function isRitVoltooid(rit) {
+  return rit.status === 'voltooid' || rit.status == null;
+}
+
 export function totalenVoorPeriode(period) {
   const { ritten, brandstof, overig } = getData();
-  const r = filterByPeriod(ritten, period);
+  const rAll = filterByPeriod(ritten, period);
+  const r = rAll.filter(isRitVoltooid);
   const b = filterByPeriod(brandstof, period);
   const o = filterByPeriod(overig, period);
 
@@ -115,10 +135,40 @@ export function totalenVoorPeriode(period) {
 export function kmTotalen() {
   const { ritten } = getData();
   const now = new Date();
-  const day = ritten.filter((r) => isInDay(r.datum, now)).reduce((s, r) => s + (r.km || 0), 0);
-  const week = ritten.filter((r) => isInWeek(r.datum, now)).reduce((s, r) => s + (r.km || 0), 0);
-  const month = ritten.filter((r) => isInMonth(r.datum, now)).reduce((s, r) => s + (r.km || 0), 0);
+  const voltooid = (r) => isRitVoltooid(r);
+  const day = ritten.filter((r) => isInDay(r.datum, now) && voltooid(r)).reduce((s, r) => s + (r.km || 0), 0);
+  const week = ritten.filter((r) => isInWeek(r.datum, now) && voltooid(r)).reduce((s, r) => s + (r.km || 0), 0);
+  const month = ritten.filter((r) => isInMonth(r.datum, now) && voltooid(r)).reduce((s, r) => s + (r.km || 0), 0);
   return { day, week, month };
+}
+
+/** Per-week data voor grafiek (laatste N weken). Weeklabel bv. "W12" of "12 mrt". */
+export function getWeeklyFinancials(weeksBack = 8) {
+  const { ritten, brandstof, overig } = getData();
+  const now = new Date();
+  const result = [];
+  const maanden = 'jan feb mrt apr mei jun jul aug sep okt nov dec';
+  for (let w = 0; w < weeksBack; w++) {
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - (now.getDay() || 7) + 1 - w * 7);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+    const r = ritten.filter(
+      (rit) => isRitVoltooid(rit) && new Date(rit.datum) >= weekStart && new Date(rit.datum) <= weekEnd
+    );
+    const b = brandstof.filter((x) => new Date(x.datum) >= weekStart && new Date(x.datum) <= weekEnd);
+    const o = overig.filter((x) => new Date(x.datum) >= weekStart && new Date(x.datum) <= weekEnd);
+    const omzet = r.reduce((sum, rit) => sum + (rit.vergoeding ?? vergoedingVoorRit(rit.km)), 0);
+    const brandstofKosten = b.reduce((sum, x) => sum + (x.prijs || 0), 0);
+    const overigeKosten = o.reduce((sum, x) => sum + (x.bedrag || 0), 0);
+    const winst = omzet - brandstofKosten - overigeKosten;
+    const weekNum = getISOWeek(weekStart).week;
+    const label = `W${weekNum} ${weekStart.getDate()} ${maanden.split(' ')[weekStart.getMonth()]}`;
+    result.unshift({ label, omzet, brandstofKosten, overigeKosten, winst });
+  }
+  return result;
 }
 
 /**

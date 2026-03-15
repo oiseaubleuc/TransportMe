@@ -2,6 +2,7 @@
  * Formulieren – ritten, brandstof, overige kosten
  */
 
+import { RIT_DUUR_MINUTEN } from './config.js';
 import { vergoedingVoorRit, toDateStr, rendabiliteitRit } from './calculations.js';
 import { formatEuro, formatLiter } from './format.js';
 import { getData, saveRitten, saveBrandstof, saveOverig } from './storage.js';
@@ -72,13 +73,30 @@ export function initFormRit(onSubmit) {
     e.preventDefault();
     const datum = datumInput.value;
     const km = parseInt(kmInput?.value, 10);
-    if (!datum || !km || km < 1) return;
+    const chauffeurSel = document.getElementById('rit-chauffeur');
+    const chauffeurId = chauffeurSel?.value || '';
+    const chauffeurName = chauffeurSel?.selectedOptions?.[0]?.textContent || '';
+    if (!datum || !km || km < 1 || !chauffeurId) return;
+    const now = new Date();
+    const tijd = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const vergoeding = vergoedingVoorRit(km);
     const voertuigSel = document.getElementById('rit-voertuig');
     const voertuigId = voertuigSel?.value || '';
     const voertuigName = voertuigSel?.selectedOptions?.[0]?.textContent || '';
     const { ritten } = getData();
-    ritten.push({ id: Date.now(), datum, km, vergoeding, voertuigId, voertuigName });
+    ritten.push({
+      id: Date.now(),
+      datum,
+      tijd,
+      km,
+      vergoeding,
+      voertuigId,
+      voertuigName,
+      chauffeurId,
+      chauffeurName,
+      status: 'komend',
+      duurMinuten: RIT_DUUR_MINUTEN,
+    });
     ritten.sort((a, b) => a.datum.localeCompare(b.datum));
     saveRitten(ritten);
     form.reset();
@@ -89,7 +107,12 @@ export function initFormRit(onSubmit) {
       destEl.textContent = '';
       destEl.hidden = true;
     }
-    document.querySelectorAll('.preset-rit-btn--selected').forEach((b) => b.classList.remove('preset-rit-btn--selected'));
+    const vertrekSel = document.getElementById('rit-vertrek');
+    const bestemmingSel = document.getElementById('rit-bestemming');
+    const ritDestEl = document.getElementById('rit-selected-destination');
+    if (vertrekSel) vertrekSel.value = '';
+    if (bestemmingSel) bestemmingSel.value = '';
+    if (ritDestEl) { ritDestEl.textContent = ''; ritDestEl.hidden = true; }
     onSubmit?.();
   });
 }
