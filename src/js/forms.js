@@ -3,9 +3,10 @@
  */
 
 import { vergoedingVoorRit, toDateStr, rendabiliteitRit } from './calculations.js';
-import { formatEuro } from './format.js';
+import { formatEuro, formatLiter } from './format.js';
 import { getData, saveRitten, saveBrandstof, saveOverig } from './storage.js';
 import { parseReceiptText } from './ocr.js';
+
 
 /** Zet alle datumvelden in de app op vandaag (bijv. bij laden). */
 export function setAlleDatumsVandaag() {
@@ -73,8 +74,11 @@ export function initFormRit(onSubmit) {
     const km = parseInt(kmInput?.value, 10);
     if (!datum || !km || km < 1) return;
     const vergoeding = vergoedingVoorRit(km);
+    const voertuigSel = document.getElementById('rit-voertuig');
+    const voertuigId = voertuigSel?.value || '';
+    const voertuigName = voertuigSel?.selectedOptions?.[0]?.textContent || '';
     const { ritten } = getData();
-    ritten.push({ id: Date.now(), datum, km, vergoeding });
+    ritten.push({ id: Date.now(), datum, km, vergoeding, voertuigId, voertuigName });
     ritten.sort((a, b) => a.datum.localeCompare(b.datum));
     saveRitten(ritten);
     form.reset();
@@ -88,6 +92,12 @@ export function initFormRit(onSubmit) {
     document.querySelectorAll('.preset-rit-btn--selected').forEach((b) => b.classList.remove('preset-rit-btn--selected'));
     onSubmit?.();
   });
+}
+
+function parseLiterInput(value) {
+  if (value == null || value === '') return NaN;
+  const s = String(value).trim().replace(',', '.');
+  return parseFloat(s);
 }
 
 export function initFormBrandstof(onSubmit) {
@@ -105,7 +115,7 @@ export function initFormBrandstof(onSubmit) {
   datumInput.value = toDateStr(new Date());
 
   function updatePerLiter() {
-    const liter = parseFloat(literInput?.value) || 0;
+    const liter = parseLiterInput(literInput?.value) || 0;
     const prijs = parseFloat(prijsInput?.value) || 0;
     if (perLiterEl) perLiterEl.textContent = liter ? formatEuro(prijs / liter) : '€ 0';
   }
@@ -134,7 +144,7 @@ export function initFormBrandstof(onSubmit) {
 
         if (parsed.datum) datumInput.value = parsed.datum;
         else datumInput.value = today;
-        if (parsed.liter != null) literInput.value = String(parsed.liter);
+        if (parsed.liter != null) literInput.value = String(parsed.liter).replace('.', ',');
         if (parsed.prijs != null) prijsInput.value = String(parsed.prijs);
 
         updatePerLiter();
@@ -158,11 +168,14 @@ export function initFormBrandstof(onSubmit) {
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const datum = datumInput.value;
-    const liter = parseFloat(literInput?.value);
+    const liter = parseLiterInput(literInput?.value);
     const prijs = parseFloat(prijsInput?.value);
     if (!datum || !Number.isFinite(liter) || liter <= 0 || !Number.isFinite(prijs) || prijs < 0) return;
+    const voertuigSel = document.getElementById('brandstof-voertuig');
+    const voertuigId = voertuigSel?.value || '';
+    const voertuigName = voertuigSel?.selectedOptions?.[0]?.textContent || '';
     const { brandstof } = getData();
-    brandstof.push({ id: Date.now(), datum, liter, prijs });
+    brandstof.push({ id: Date.now(), datum, liter, prijs, voertuigId, voertuigName });
     brandstof.sort((a, b) => a.datum.localeCompare(b.datum));
     saveBrandstof(brandstof);
     form.reset();

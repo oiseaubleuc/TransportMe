@@ -21,6 +21,12 @@ export const PERIOD_LABELS = {
   month: 'Deze maand',
 };
 
+/** Standaard voertuigen (worden bij eerste gebruik of merge toegevoegd) */
+export const DEFAULT_VOERTUIGEN = [
+  { id: 'voertuig-2HKN136', naam: 'Audi A3', kenteken: '2HKN136' },
+  { id: 'voertuig-2GGW635', naam: 'BMW Serie 1', kenteken: '2GGW635' },
+];
+
 /** Standaard ziekenhuizen (uit ritten_vergoeding_v2.xlsx, coördinaten België) */
 export const DEFAULT_ZIEKENHUIZEN = [
   { id: 'uz-brussel', name: 'UZ Brussel', address: 'UZ Brussel', lat: 50.8824, lng: 4.2745 },

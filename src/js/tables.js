@@ -4,7 +4,7 @@
 
 import { getData, saveRitten, saveBrandstof, saveOverig } from './storage.js';
 import { vergoedingVoorRit, getWeekKey, getWeekLabel } from './calculations.js';
-import { formatEuro } from './format.js';
+import { formatEuro, formatLiter } from './format.js';
 
 function escapeHtml(str) {
   if (str == null) return '';
@@ -23,7 +23,7 @@ export function renderRitten(onRender) {
 
   if (ritten.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="4" class="empty-state">Nog geen ritten. Voeg een rit toe boven.</td></tr>';
+      '<tr><td colspan="5" class="empty-state">Nog geen ritten. Voeg een rit toe boven.</td></tr>';
     return;
   }
 
@@ -48,11 +48,12 @@ export function renderRitten(onRender) {
   weekKeys.forEach((key) => {
     const weekRitten = byWeek[key];
     const label = getWeekLabel(weekRitten[0].datum);
-    html += `<tr class="week-header"><td colspan="4"><strong>${escapeHtml(label)}</strong></td></tr>`;
+    html += `<tr class="week-header"><td colspan="5"><strong>${escapeHtml(label)}</strong></td></tr>`;
     weekRitten.forEach(
       (r) =>
         (html += `<tr>
           <td>${escapeHtml(r.datum)}</td>
+          <td>${escapeHtml(r.voertuigName || '—')}</td>
           <td class="num">${r.km} km</td>
           <td class="num">${formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km))}</td>
           <td><button type="button" class="btn btn-danger btn-delete-rit" data-id="${r.id}">Verwijder</button></td>
@@ -60,7 +61,7 @@ export function renderRitten(onRender) {
     );
   });
   html += `<tr class="total-row">
-    <td><strong>Totaal (${ritten.length} rit${ritten.length === 1 ? '' : 'ten'})</strong></td>
+    <td colspan="2"><strong>Totaal (${ritten.length} rit${ritten.length === 1 ? '' : 'ten'})</strong></td>
     <td class="num"><strong>${totaalKm} km</strong></td>
     <td class="num"><strong>${formatEuro(totaalVergoeding)}</strong></td>
     <td></td>
@@ -85,7 +86,7 @@ export function renderBrandstof(onRender) {
 
   if (brandstof.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="5" class="empty-state">Nog geen tankbeurten. Vul hierboven een tankbeurt in.</td></tr>';
+      '<tr><td colspan="6" class="empty-state">Nog geen tankbeurten. Vul hierboven een tankbeurt in.</td></tr>';
     return;
   }
 
@@ -99,7 +100,8 @@ export function renderBrandstof(onRender) {
         (b) =>
           `<tr>
             <td>${escapeHtml(b.datum)}</td>
-            <td class="num">${Number(b.liter).toLocaleString('nl-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L</td>
+            <td>${escapeHtml(b.voertuigName || '—')}</td>
+            <td class="num">${formatLiter(b.liter)}</td>
             <td class="num">${formatEuro(b.prijs)}</td>
             <td class="num">${formatEuro(b.prijs / b.liter)}</td>
             <td><button type="button" class="btn btn-danger btn-delete-brandstof" data-id="${b.id}">Verwijder</button></td>
@@ -107,8 +109,8 @@ export function renderBrandstof(onRender) {
       )
       .join('') +
     `<tr class="total-row">
-      <td><strong>Totaal (${brandstof.length} tankbeurt${brandstof.length === 1 ? '' : 'en'})</strong></td>
-      <td class="num"><strong>${totaalLiter.toLocaleString('nl-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} L</strong></td>
+      <td colspan="2"><strong>Totaal (${brandstof.length} tankbeurt${brandstof.length === 1 ? '' : 'en'})</strong></td>
+      <td class="num"><strong>${formatLiter(totaalLiter)}</strong></td>
       <td class="num"><strong>${formatEuro(totaalPrijs)}</strong></td>
       <td class="num"></td>
       <td></td>

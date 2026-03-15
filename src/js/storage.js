@@ -2,7 +2,7 @@
  * Opslag – lezen en schrijven naar localStorage
  */
 
-import { STORAGE_KEYS, DEFAULT_ZIEKENHUIZEN, DEFAULT_PRESET_ROUTES } from './config.js';
+import { STORAGE_KEYS, DEFAULT_ZIEKENHUIZEN, DEFAULT_PRESET_ROUTES, DEFAULT_VOERTUIGEN } from './config.js';
 
 export function getData() {
   return {
@@ -11,7 +11,30 @@ export function getData() {
     overig: JSON.parse(localStorage.getItem(STORAGE_KEYS.overig) || '[]'),
     ziekenhuizen: getZiekenhuizen(),
     presetRoutes: getPresetRoutes(),
+    voertuigen: getVoertuigen(),
   };
+}
+
+function ensureDefaultVoertuigen() {
+  const raw = localStorage.getItem(STORAGE_KEYS.voertuigen);
+  if (!raw) {
+    localStorage.setItem(STORAGE_KEYS.voertuigen, JSON.stringify(DEFAULT_VOERTUIGEN));
+    return DEFAULT_VOERTUIGEN;
+  }
+  const stored = JSON.parse(raw);
+  const merged = [...stored];
+  for (const d of DEFAULT_VOERTUIGEN) {
+    if (!merged.some((m) => m.id === d.id)) merged.push(d);
+  }
+  return merged;
+}
+
+export function getVoertuigen() {
+  return ensureDefaultVoertuigen();
+}
+
+export function saveVoertuigen(voertuigen) {
+  localStorage.setItem(STORAGE_KEYS.voertuigen, JSON.stringify(voertuigen));
 }
 
 export function saveRitten(ritten) {

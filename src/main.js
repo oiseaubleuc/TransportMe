@@ -7,7 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import { updateKPI, updateKmTeller, updateVandaagSummary, initPeriodToggle, syncPeriodButtons } from './js/dashboard.js';
 import { initFormRit, initFormBrandstof, initFormOverig, setAlleDatumsVandaag } from './js/forms.js';
 import { renderAllTables } from './js/tables.js';
-import { getData, getZiekenhuizen, saveZiekenhuizen, saveRitten, getPresetRoutes, savePresetRoutes } from './js/storage.js';
+import { getData, getZiekenhuizen, saveZiekenhuizen, saveRitten, getPresetRoutes, savePresetRoutes, getVoertuigen, saveVoertuigen } from './js/storage.js';
 import { vergoedingVoorRit, toDateStr } from './js/calculations.js';
 import { getRouteDistance, initPlacesAutocomplete, hasMapsApiKey } from './js/maps.js';
 import { getRouteDistanceORS, showLeafletMap, addRouteToLeafletMap, hasOpenRouteApiKey, getDistanceMatrixORS } from './js/mapLeaflet.js';
@@ -20,6 +20,8 @@ function refresh() {
   renderAllTables(refresh);
   renderVasteRitten();
   renderSavedZiekenhuizen();
+  fillVoertuigDropdowns();
+  renderVoertuigen();
   renderKaartSelect();
   fillNewRouteDropdowns();
   renderRouteChecklist();
@@ -38,6 +40,52 @@ function showPage(pageId) {
   if (pageId === 'kaart') initMapIfNeeded();
   if (pageId === 'route') initRoutePageIfNeeded();
   if (pageId === 'dashboard') updateVandaagSummary();
+}
+
+const THEME_STORAGE_KEY = 'transporteur_theme';
+
+function getEffectiveTheme() {
+  const saved = localStorage.getItem(THEME_STORAGE_KEY);
+  if (saved === 'light' || saved === 'dark') return saved;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (theme === 'system') {
+    root.removeAttribute('data-theme');
+    theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } else {
+    root.setAttribute('data-theme', theme);
+  }
+  const meta = document.getElementById('meta-theme-color');
+  if (meta) meta.content = theme === 'dark' ? '#000000' : '#f0f0f0';
+  const saved = localStorage.getItem(THEME_STORAGE_KEY);
+  const activeChoice = saved === 'light' || saved === 'dark' ? saved : 'system';
+  document.querySelectorAll('.theme-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.theme === activeChoice);
+  });
+}
+
+function initTheme() {
+  const saved = localStorage.getItem(THEME_STORAGE_KEY);
+  if (saved === 'light' || saved === 'dark') applyTheme(saved);
+  else applyTheme('system');
+
+  document.querySelectorAll('.theme-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const theme = btn.dataset.theme;
+      if (theme === 'system') localStorage.removeItem(THEME_STORAGE_KEY);
+      else localStorage.setItem(THEME_STORAGE_KEY, theme);
+      applyTheme(theme);
+    });
+  });
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (localStorage.getItem(THEME_STORAGE_KEY) !== 'light' && localStorage.getItem(THEME_STORAGE_KEY) !== 'dark') {
+      applyTheme('system');
+    }
+  });
 }
 
 function initNavigation() {
@@ -312,6 +360,64 @@ function renderSavedZiekenhuizen() {
   });
 }
 
+function fillVoertuigDropdowns() {
+  const voertuigen = getVoertuigen();
+  ['rit-voertuig', 'brandstof-voertuig'].forEach((id) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Kies voertuig —</option>';
+    voertuigen.forEach((v) => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = v.kenteken ? `${v.naam} (${v.kenteken})` : v.naam;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function renderVoertuigen() {
+  const ul = document.getElementById('saved-voertuigen');
+  const btnAdd = document.getElementById('btn-voertuig-toevoegen');
+  const inputNaam = document.getElementById('voertuig-naam');
+  const inputKenteken = document.getElementById('voertuig-kenteken');
+  if (!ul) return;
+
+  const list = getVoertuigen();
+  ul.innerHTML =
+    list.length === 0
+      ? '<li class="empty-state">Nog geen voertuigen. Voeg hierboven een voertuig toe.</li>'
+      : list
+          .map(
+            (v) =>
+              `<li>
+                <span>${escapeHtml(v.naam)}${v.kenteken ? ' <em>(' + escapeHtml(v.kenteken) + ')</em>' : ''}</span>
+                <button type="button" class="btn btn-danger btn-remove-voertuig" data-id="${v.id}">Verwijder</button>
+              </li>`
+          )
+          .join('');
+
+  ul.querySelectorAll('.btn-remove-voertuig').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      saveVoertuigen(list.filter((v) => v.id !== id));
+      refresh();
+    });
+  });
+
+  if (btnAdd && inputNaam) {
+    btnAdd.onclick = () => {
+      const naam = inputNaam.value.trim();
+      if (!naam) return;
+      const kenteken = inputKenteken?.value.trim() || '';
+      const next = [...list, { id: String(Date.now()), naam, kenteken: kenteken || undefined }];
+      saveVoertuigen(next);
+      inputNaam.value = '';
+      if (inputKenteken) inputKenteken.value = '';
+      refresh();
+    };
+  }
+}
+
 function fillNewRouteDropdowns() {
   const fromSelect = document.getElementById('new-route-from');
   const toSelect = document.getElementById('new-route-to');
@@ -556,6 +662,7 @@ function initTabs() {
 // --- Start ---
 function init() {
   setAlleDatumsVandaag();
+  initTheme();
   initNavigation();
   initPeriodToggle(refresh);
   syncPeriodButtons();
