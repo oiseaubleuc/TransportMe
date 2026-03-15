@@ -12,6 +12,7 @@ export const STORAGE_KEYS = {
   overig: 'transporteur_overig',
   ziekenhuizen: 'transporteur_ziekenhuizen',
   presetRoutes: 'transporteur_preset_routes',
+  voertuigen: 'transporteur_voertuigen',
 };
 
 export const PERIOD_LABELS = {
