@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a2129" />
+  <title>Transporteur – Rendabiliteit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1 class="header-title">Transporteur</h1>
+      <p class="subtitle">Dashboard ziekenhuisvervoer</p>
+    </header>
+
+    <main class="main">
+      <!-- Pagina: Dashboard – professioneel overzicht voor chauffeur -->
+      <section class="page active" id="page-dashboard" aria-labelledby="nav-dashboard">
+        <!-- Vandaag: direct overzicht van de werkdag -->
+        <div class="dashboard-vandaag">
+          <h2 class="dashboard-vandaag-title">Vandaag</h2>
+          <div class="dashboard-vandaag-stats">
+            <div class="dashboard-stat">
+              <span class="dashboard-stat-value" id="vandaag-ritten">0</span>
+              <span class="dashboard-stat-label">ritten</span>
+            </div>
+            <div class="dashboard-stat">
+              <span class="dashboard-stat-value" id="vandaag-km">0</span>
+              <span class="dashboard-stat-label">km</span>
+            </div>
+            <div class="dashboard-stat">
+              <span class="dashboard-stat-value" id="vandaag-vergoeding">€ 0</span>
+              <span class="dashboard-stat-label">vergoeding</span>
+            </div>
+          </div>
+          <ul class="dashboard-vandaag-lijst" id="ritten-vandaag-lijst" aria-label="Ritten vandaag"></ul>
+        </div>
+
+        <!-- Hoofdactie: rit selecteren na oproep -->
+        <div class="dashboard-cta-card">
+          <h3 class="dashboard-cta-title">Rit na oproep</h3>
+          <p class="dashboard-cta-text">Kies de rit die je gaat rijden en voeg toe. Zo houd je eenvoudig overzicht over je werk.</p>
+          <button type="button" class="btn btn-primary btn-cta" id="dashboard-rit-kiezen">
+            <span class="btn-cta-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </span>
+            Rit kiezen
+          </button>
+        </div>
+
+        <!-- Financieel overzicht (periode) -->
+        <div class="kpi-section">
+          <h2 class="page-section-title">Financieel overzicht</h2>
+          <p class="kpi-intro">Omzet, benzine en winst per periode</p>
+          <div class="kpi-cards">
+            <div class="kpi-card kpi-omzet">
+              <span class="kpi-label">Omzet</span>
+              <span class="kpi-value" id="kpi-omzet">€ 0</span>
+              <span class="kpi-extra" id="kpi-omzet-extra"></span>
+              <span class="kpi-period" id="kpi-omzet-period">Deze maand</span>
+            </div>
+            <div class="kpi-card kpi-kosten">
+              <span class="kpi-label">Benzine</span>
+              <span class="kpi-value" id="kpi-brandstof">€ 0</span>
+              <span class="kpi-period" id="kpi-brandstof-period">Deze maand</span>
+            </div>
+            <div class="kpi-card kpi-winst">
+              <span class="kpi-label">Winst</span>
+              <span class="kpi-value" id="kpi-winst">€ 0</span>
+              <span class="kpi-period" id="kpi-winst-period">Deze maand</span>
+            </div>
+          </div>
+          <div class="period-toggle" role="group" aria-label="Periode">
+            <button type="button" class="btn-period" data-period="day">Vandaag</button>
+            <button type="button" class="btn-period" data-period="week">Week</button>
+            <button type="button" class="btn-period active" data-period="month">Maand</button>
+          </div>
+        </div>
+        <div class="km-section">
+          <h2 class="page-section-title">Kilometers</h2>
+          <div class="km-cards">
+            <div class="km-card"><span class="km-label">Vandaag</span><span class="km-value" id="km-day">0 km</span></div>
+            <div class="km-card"><span class="km-label">Week</span><span class="km-value" id="km-week">0 km</span></div>
+            <div class="km-card"><span class="km-label">Maand</span><span class="km-value" id="km-month">0 km</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pagina: Ritten -->
+      <section class="page" id="page-ritten" aria-labelledby="nav-ritten">
+        <h2 class="page-section-title">Rit toevoegen</h2>
+        <p class="form-intro">Kies je bestemming — je ziet direct de km, vergoeding en geschatte winst.</p>
+
+        <h3 class="list-title">Kies bestemming</h3>
+        <div class="vaste-ritten" id="vaste-ritten-list"></div>
+
+        <!-- Directe berekening zichtbaar zodra bestemming/km bekend is -->
+        <div class="rit-berekening-card" id="rit-berekening-card">
+          <p class="rit-berekening-bestemming" id="rit-selected-destination" hidden></p>
+          <div class="rit-berekening-grid">
+            <span class="rit-berekening-label">Afstand</span>
+            <strong class="rit-berekening-waarde" id="rit-preview-km">0 km</strong>
+            <span class="rit-berekening-label">Vergoeding</span>
+            <strong class="rit-berekening-waarde" id="rit-preview">€ 0</strong>
+            <span class="rit-berekening-label rit-berekening-winst-label" id="rit-label-winst">Geschatte winst</span>
+            <strong class="rit-berekening-waarde rit-berekening-winst" id="rit-preview-winst">—</strong>
+          </div>
+          <p class="info-text info-text--small" id="rit-geen-data">Vul brandstof in (Meer → Brandstof) voor geschatte winst.</p>
+        </div>
+
+        <form id="form-rit" class="form-rit form-section">
+          <div class="form-row">
+            <label for="rit-datum">Datum</label>
+            <input type="date" id="rit-datum" required />
+          </div>
+          <div class="form-row">
+            <label for="rit-km">Afstand (km)</label>
+            <input type="number" id="rit-km" min="1" step="1" placeholder="bv. 45" required />
+          </div>
+          <!-- Verborgen: forms.js gebruikt deze refs voor vergoeding/winst -->
+          <div id="rit-rendabiliteit" hidden><span id="rit-preview-benzine"></span></div>
+          <div id="rit-row-benzine" hidden></div>
+          <div id="rit-row-winst" hidden></div>
+          <button type="submit" class="btn btn-primary btn-block">Rit opslaan</button>
+        </form>
+      </section>
+
+      <!-- Pagina: Brandstof -->
+      <section class="page" id="page-brandstof" aria-labelledby="nav-brandstof">
+        <h2 class="page-section-title">Brandstof (tankbeurt)</h2>
+        <p class="form-intro">Standaard: vandaag. Optioneel: foto van tankbon uploaden voor automatische invulling.</p>
+        <div class="form-row">
+          <label for="brandstof-file">Foto tankbon (optioneel)</label>
+          <input type="file" id="brandstof-file" accept="image/*" capture="environment" />
+        </div>
+        <div class="analyse-resultaat" id="brandstof-analyse-resultaat" hidden>
+          <strong>Resultaat:</strong> <span id="brandstof-analyse-text"></span>
+        </div>
+        <form id="form-brandstof" class="form-brandstof form-section">
+          <div class="form-row">
+            <label for="brandstof-datum">Datum</label>
+            <input type="date" id="brandstof-datum" required />
+          </div>
+          <div class="form-row">
+            <label for="brandstof-liter">Liter</label>
+            <input type="number" id="brandstof-liter" min="0.01" step="0.01" placeholder="42.5" required />
+          </div>
+          <div class="form-row">
+            <label for="brandstof-prijs">Prijs totaal (€)</label>
+            <input type="number" id="brandstof-prijs" min="0" step="0.01" placeholder="85.00" required />
+          </div>
+          <div class="form-row form-row--info">
+            <span class="info-text">Per liter: <strong id="brandstof-per-liter">€ 0</strong></span>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Tankbeurt opslaan</button>
+        </form>
+      </section>
+
+      <!-- Pagina: Kaart -->
+      <section class="page" id="page-kaart" aria-labelledby="nav-kaart">
+        <h2 class="page-section-title">Ritten op kaart</h2>
+        <p class="form-intro" id="kaart-intro">Kies een vaste rit. De kaart gebruikt OpenStreetMap (gratis). Voor de route-lijn: gratis API-sleutel op <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>.</p>
+        <div class="form-row">
+          <label for="kaart-route-select">Kies een rit</label>
+          <select id="kaart-route-select" class="select">
+            <option value="">— Kies een rit —</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <button type="button" class="btn btn-primary btn-block" id="kaart-rit-vandaag-btn" disabled>
+            Rit vandaag toevoegen
+          </button>
+        </div>
+        <div class="map-container" id="map-container">
+          <div class="map-placeholder" id="map-placeholder">Kies een rit om de kaart te zien.</div>
+        </div>
+        <p class="info-text--small">Open in <a href="#" id="link-waze" target="_blank" rel="noopener">Waze</a> of <a href="#" id="link-google-nav" target="_blank" rel="noopener">Google Maps</a> voor navigatie.</p>
+      </section>
+
+      <!-- Pagina: Optimale route (meerdere ritten, kortste weg) -->
+      <section class="page" id="page-route" aria-labelledby="nav-route">
+        <h2 class="page-section-title">Optimale volgorde ritten</h2>
+        <p class="form-intro">Selecteer de ritten die je wilt doen en je startpunt. We berekenen de meest efficiënte volgorde en de kortste totale afstand (incl. lege km tussen ritten).</p>
+        <div class="form-row">
+          <label for="route-start">Startpunt (waar vertrek je?)</label>
+          <select id="route-start" class="select">
+            <option value="">— Kies startpunt —</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Ritten die je wilt doen (meerdere mogelijk, per vertrek)</label>
+          <div class="route-checklist" id="route-checklist"></div>
+        </div>
+        <div class="form-row">
+          <button type="button" class="btn btn-primary btn-block" id="route-bereken-btn">Bereken optimale route</button>
+        </div>
+        <div class="route-result" id="route-result" hidden>
+          <h3 class="list-title">Beste volgorde</h3>
+          <ol class="route-order-list" id="route-order-list"></ol>
+          <div class="route-totalen" id="route-totalen"></div>
+        </div>
+        <p class="info-text--small">Met een gratis OpenRouteService API-sleutel worden echte rij-afstanden gebruikt; anders schatting op basis van afstand.</p>
+      </section>
+
+      <!-- Pagina: Meer (Ziekenhuizen + Gegevens) -->
+      <section class="page" id="page-meer" aria-labelledby="nav-meer">
+        <h2 class="page-section-title">Ziekenhuizen zoeken en toevoegen</h2>
+        <p class="form-intro">Zoek een ziekenhuis en voeg toe aan je lijst. Daarna kun je vaste ritten maken tussen twee ziekenhuizen.</p>
+        <div class="form-row">
+          <label for="zoek-ziekenhuis">Zoek ziekenhuis of adres</label>
+          <input type="text" id="zoek-ziekenhuis" placeholder="bv. UZ Leuven, Virga Jesse..." autocomplete="off" />
+        </div>
+        <div id="zoek-resultaat" class="zoek-resultaat" hidden></div>
+        <div class="saved-list" id="saved-ziekenhuizen-list">
+          <h3 class="list-title">Mijn ziekenhuizen</h3>
+          <ul id="saved-ziekenhuizen"></ul>
+        </div>
+        <div class="form-section">
+          <h3 class="list-title">Nieuwe vaste rit toevoegen</h3>
+          <p class="info-text--small">Kies vertrek en bestemming uit je lijst. Afstand wordt opgehaald via Google Maps.</p>
+          <div class="form-row">
+            <label for="new-route-from">Van</label>
+            <select id="new-route-from" class="select"></select>
+          </div>
+          <div class="form-row">
+            <label for="new-route-to">Naar</label>
+            <select id="new-route-to" class="select"></select>
+          </div>
+          <button type="button" class="btn btn-primary" id="btn-add-preset-route">Vaste rit toevoegen</button>
+        </div>
+
+        <h2 class="page-section-title">Overige kosten</h2>
+        <form id="form-overig" class="form-overig form-section">
+          <div class="form-row">
+            <label for="overig-datum">Datum</label>
+            <input type="date" id="overig-datum" required />
+          </div>
+          <div class="form-row">
+            <label for="overig-omschrijving">Omschrijving</label>
+            <input type="text" id="overig-omschrijving" placeholder="Onderhoud, tol..." />
+          </div>
+          <div class="form-row">
+            <label for="overig-bedrag">Bedrag (€)</label>
+            <input type="number" id="overig-bedrag" min="0" step="0.01" required />
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Kosten opslaan</button>
+        </form>
+
+        <h2 class="page-section-title">Gegevens</h2>
+        <div class="tabs" role="tablist">
+          <button type="button" class="tab active" role="tab" data-tab="ritten" id="tab-ritten">Ritten</button>
+          <button type="button" class="tab" role="tab" data-tab="brandstof" id="tab-brandstof">Brandstof</button>
+          <button type="button" class="tab" role="tab" data-tab="overig" id="tab-overig">Overige</button>
+        </div>
+        <div class="tab-panels">
+          <div class="tab-panel active" id="panel-ritten" role="tabpanel">
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Datum</th><th>Km</th><th>Vergoeding</th><th></th></tr></thead>
+                <tbody id="tbody-ritten"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="tab-panel" id="panel-brandstof" role="tabpanel">
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Datum</th><th>L</th><th>€</th><th>€/L</th><th></th></tr></thead>
+                <tbody id="tbody-brandstof"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="tab-panel" id="panel-overig" role="tabpanel">
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Datum</th><th>Omschrijving</th><th>Bedrag</th><th></th></tr></thead>
+                <tbody id="tbody-overig"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" role="navigation" aria-label="Hoofdnavigatie">
+      <button type="button" class="nav-item active" data-page="dashboard" id="nav-dashboard" aria-current="page">
+        <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+        <span class="nav-label">Dashboard</span>
+      </button>
+      <button type="button" class="nav-item" data-page="ritten" id="nav-ritten">
+        <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14v-5H5v5z"/><path d="M7 17V9l4 2 4-2v8"/><path d="M5 12H3v4h2v-4zM19 12h2v4h-2v-4z"/></svg></span>
+        <span class="nav-label">Ritten</span>
+      </button>
+      <button type="button" class="nav-item" data-page="brandstof" id="nav-brandstof">
+        <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16v-6H4v6z"/><path d="M6 20V8l4-4 4 4v12"/><path d="M10 8h4"/></svg></span>
+        <span class="nav-label">Brandstof</span>
+      </button>
+      <button type="button" class="nav-item" data-page="kaart" id="nav-kaart">
+        <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6l6-3 8 3 6-3v14l-6 3-8-3-6 3V6z"/><path d="M8 3v14M16 6v14M2 6l6 3 6-3 6 3"/></svg></span>
+        <span class="nav-label">Kaart</span>
+      </button>
+      <button type="button" class="nav-item" data-page="route" id="nav-route">
+        <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 5 4-10 2 5h4"/></svg></span>
+        <span class="nav-label">Route</span>
+      </button>
+      <button type="button" class="nav-item" data-page="meer" id="nav-meer">
+        <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.5"/><circle cx="6" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/></svg></span>
+        <span class="nav-label">Meer</span>
+      </button>
+    </nav>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

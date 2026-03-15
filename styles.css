@@ -1,0 +1,977 @@
+:root {
+  --bg: #0f1419;
+  --surface: #1a2129;
+  --surface2: #242d38;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #3fb950;
+  --accent-dim: #238636;
+  --danger: #f85149;
+  --warning: #d29922;
+  --border: #30363d;
+  --radius: 12px;
+  --font: 'DM Sans', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1rem 1rem 5.5rem 1rem;
+  min-height: 100vh;
+}
+
+/* Header – compact op mobiel */
+.header {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.header-title {
+  margin: 0 0 0.15rem 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+@media (min-width: 600px) {
+  .app { padding: 1.5rem 1.5rem 2rem 1.5rem; }
+  .header-title { font-size: 1.75rem; }
+}
+
+/* Pagina’s – één zichtbaar */
+.page {
+  display: none;
+}
+
+.page.active {
+  display: block;
+}
+
+.page-section-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Bottom navigation – mobiel */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 0.35rem 0 calc(0.35rem + env(safe-area-inset-bottom, 0)) 0;
+  z-index: 100;
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 0.7rem;
+  cursor: pointer;
+  border-radius: 8px;
+  min-width: 4rem;
+}
+
+.nav-item:hover,
+.nav-item:focus {
+  color: var(--text);
+}
+
+.nav-item.active {
+  color: var(--accent);
+}
+
+.nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.nav-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+@media (min-width: 600px) {
+  .nav-item { font-size: 0.75rem; min-width: 4.5rem; }
+}
+
+/* Vaste ritten – gegroepeerd per vertrek */
+.vaste-ritten {
+  margin-bottom: 1.5rem;
+}
+
+.vaste-ritten-groep {
+  margin-bottom: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.vaste-ritten-groep-titel {
+  margin: 0;
+  padding: 0.65rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+
+.vaste-ritten-lijst {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0;
+}
+
+.vaste-ritten-lijst li {
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.vaste-ritten-lijst li:last-child {
+  border-bottom: none;
+}
+
+.preset-rit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.preset-rit-btn:hover {
+  background: rgba(63, 185, 80, 0.08);
+}
+
+.preset-rit-bestemming {
+  font-weight: 500;
+}
+
+.preset-rit-km {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.preset-rit-btn--selected {
+  background: rgba(63, 185, 80, 0.15);
+  border-left: 3px solid var(--accent);
+}
+
+.preset-rit-btn--selected .preset-rit-bestemming {
+  color: var(--accent);
+}
+
+/* Kaart */
+.map-container {
+  position: relative;
+  width: 100%;
+  min-height: 280px;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.map-container iframe,
+.map-container .map-placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.map-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 1rem;
+}
+
+/* Select */
+.select {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 1rem;
+}
+
+/* Ziekenhuizen / Meer */
+.list-title {
+  margin: 1rem 0 0.5rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.saved-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.saved-list li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.saved-list li:last-child {
+  border-bottom: none;
+}
+
+.zoek-resultaat {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--surface2);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.btn-block {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+/* Optimale route pagina – checklist gegroepeerd */
+.route-checklist {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.route-checklist-groep {
+  border-bottom: 1px solid var(--border);
+}
+
+.route-checklist-groep:last-child {
+  border-bottom: none;
+}
+
+.route-checklist-groep-titel {
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  background: var(--surface2);
+}
+
+.route-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+
+.route-checklist-item:last-child {
+  border-bottom: none;
+}
+
+.route-checklist-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.route-checklist-item input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+}
+
+.route-checklist-to {
+  flex: 1;
+}
+
+.route-checklist-km {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.route-result {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.route-order-list {
+  margin: 0 0 1.25rem 0;
+  padding-left: 0;
+  list-style: none;
+  counter-reset: route-step;
+}
+
+.route-order-list li {
+  position: relative;
+  padding: 0.6rem 0 0.6rem 2.5rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  counter-increment: route-step;
+}
+
+.route-order-list li:last-child {
+  border-bottom: none;
+}
+
+.route-order-list li::before {
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  content: counter(route-step);
+}
+
+.route-totalen {
+  padding: 1rem;
+  background: var(--surface2);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Header (legacy) */
+.header h1 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+/* Dashboard – professioneel overzicht */
+.dashboard-vandaag {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.dashboard-vandaag-title {
+  margin: 0 0 1rem 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.dashboard-vandaag-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.dashboard-stat {
+  text-align: center;
+}
+
+.dashboard-stat-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dashboard-vandaag-lijst {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.dashboard-vandaag-lijst.is-empty {
+  border-top: none;
+  padding-top: 0;
+}
+
+.dashboard-vandaag-empty {
+  margin: 0;
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.dashboard-vandaag-rit {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.dashboard-vandaag-rit:last-child {
+  border-bottom: none;
+}
+
+.dashboard-vandaag-rit-km {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.dashboard-vandaag-rit-vergoeding {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* CTA: Rit kiezen na oproep */
+.dashboard-cta-card {
+  background: linear-gradient(145deg, rgba(63, 185, 80, 0.12) 0%, rgba(63, 185, 80, 0.04) 100%);
+  border: 1px solid rgba(63, 185, 80, 0.35);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.dashboard-cta-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.dashboard-cta-text {
+  margin: 0 0 1.25rem 0;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.btn-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-cta-icon {
+  display: inline-flex;
+}
+
+.btn-cta-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* KPI section */
+.kpi-section {
+  margin-bottom: 2rem;
+}
+
+.kpi-section h2,
+.km-section h2,
+.form-section h2,
+.tables-section h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.kpi-intro {
+  margin: 0 0 1rem 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.kpi-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.kpi-card.kpi-omzet { border-left: 4px solid var(--accent); }
+.kpi-card.kpi-kosten { border-left: 4px solid var(--warning); }
+.kpi-card.kpi-overig { border-left: 4px solid var(--text-muted); }
+.kpi-card.kpi-winst { border-left: 4px solid #58a6ff; }
+
+.kpi-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kpi-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.kpi-winst .kpi-value.negative {
+  color: var(--danger);
+}
+
+.kpi-extra {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.kpi-period {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.period-toggle {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-period {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.btn-period:hover {
+  background: var(--surface2);
+}
+
+.btn-period.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* Km section */
+.km-section {
+  margin-bottom: 2rem;
+}
+
+.km-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.km-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.km-label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.km-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+@media (max-width: 500px) {
+  .km-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Forms */
+.form-section {
+  margin-bottom: 2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+
+.form-row {
+  margin-bottom: 1rem;
+}
+
+.label-hint {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.input-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.analyse-resultaat {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.analyse-resultaat p {
+  margin: 0.5rem 0 0 0;
+}
+
+.form-row label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.35rem;
+  color: var(--text-muted);
+}
+
+.form-row input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 1rem;
+}
+
+.form-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.form-intro {
+  margin: 0 0 1rem 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.list-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Berekening direct zichtbaar na keuze bestemming */
+.rit-berekening-card {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: opacity 0.2s;
+}
+
+.rit-berekening-card--heeft-km {
+  border-color: var(--accent);
+  background: rgba(63, 185, 80, 0.06);
+}
+
+.rit-berekening-bestemming {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.rit-berekening-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1.5rem;
+  align-items: baseline;
+  margin-bottom: 0.5rem;
+}
+
+.rit-berekening-label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.rit-berekening-label[hidden] {
+  display: none;
+}
+
+.rit-berekening-waarde {
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rit-berekening-winst.rit-winst--negatief {
+  color: var(--danger);
+}
+
+.rit-berekening-card .info-text--small {
+  margin: 0.5rem 0 0 0;
+}
+
+.rit-rendabiliteit {
+  margin-bottom: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.rit-winst.rit-winst--negatief .info-text strong {
+  color: var(--danger);
+}
+
+.info-text--small {
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.form-row--info {
+  margin-bottom: 0.5rem;
+}
+
+.info-text {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.info-text strong {
+  color: var(--text);
+}
+
+.btn {
+  padding: 0.65rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--accent-dim);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.btn-danger:hover {
+  background: rgba(248, 81, 73, 0.15);
+}
+
+/* Tables */
+.tables-section {
+  margin-bottom: 2rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.tab {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab.active {
+  background: var(--surface2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.tab-panel {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table th {
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  background: var(--surface2);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.data-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table tr.week-header td {
+  background: var(--surface2);
+  padding: 0.7rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border-top: 2px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table tr.week-header:first-child td {
+  border-top: none;
+}
+
+.data-table tr.total-row td {
+  border-top: 2px solid var(--border);
+  background: var(--surface2);
+  padding: 0.85rem 1rem;
+}
+
+.empty-state {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
