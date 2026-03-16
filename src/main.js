@@ -7,7 +7,8 @@ import { updateKPI, updateKmTeller, updateVandaagSummary, initPeriodToggle, sync
 import { initFormRit, initFormBrandstof, initFormOverig, setAlleDatumsVandaag } from './js/forms.js';
 import { renderAllTables } from './js/tables.js';
 import { DEFAULT_CHAUFFEURS, RIT_DUUR_MINUTEN } from './js/config.js';
-import { getData, getZiekenhuizen, saveZiekenhuizen, saveRitten, getPresetRoutes, savePresetRoutes, getVoertuigen, saveVoertuigen } from './js/storage.js';
+import { getData, getZiekenhuizen, saveZiekenhuizen, saveRitten, getPresetRoutes, savePresetRoutes, getVoertuigen, saveVoertuigen, getCurrentProfileId, setCurrentProfileId } from './js/storage.js';
+import { PROFILES } from './js/config.js';
 import { vergoedingVoorRit, toDateStr, isInDay, geschatteAfstandKm, isRitVoltooid } from './js/calculations.js';
 import { formatEuro, formatDatumTijd } from './js/format.js';
 import { getRouteDistance, hasMapsApiKey } from './js/maps.js';
@@ -17,6 +18,13 @@ import { showMapLibreMap, addRouteToMapLibreMap } from './js/mapLibre.js';
 import { buildDistanceMatrix, computeOptimalOrder } from './js/routeOptimization.js';
 
 function refresh() {
+  const profileId = getCurrentProfileId();
+  const profileName = PROFILES.find((p) => p.id === profileId)?.name || profileId;
+  const profileLabel = document.getElementById('dashboard-profile-label');
+  if (profileLabel) profileLabel.textContent = `Profiel: ${profileName}`;
+  const headerProfile = document.getElementById('header-profile');
+  if (headerProfile && headerProfile.value !== profileId) headerProfile.value = profileId;
+
   updateKPI();
   updateKmTeller();
   updateVandaagSummary();
@@ -51,6 +59,30 @@ function showPage(pageId) {
     updateVandaagSummary();
     updateRitMelding(refresh);
   }
+}
+
+let dashboardTabsInited = false;
+function initDashboardTabs() {
+  if (dashboardTabsInited) return;
+  const nav = document.querySelector('.dashboard-nav');
+  const panels = document.querySelectorAll('.dashboard-panel');
+  if (!nav || !panels.length) return;
+  dashboardTabsInited = true;
+  nav.addEventListener('click', (e) => {
+    const btn = e.target.closest('.dashboard-nav-btn');
+    if (!btn || !btn.dataset.dashboardTab) return;
+    const tabId = btn.dataset.dashboardTab;
+    nav.querySelectorAll('.dashboard-nav-btn').forEach((b) => {
+      b.classList.remove('active');
+      b.setAttribute('aria-selected', b === btn ? 'true' : 'false');
+    });
+    btn.classList.add('active');
+    panels.forEach((panel) => {
+      const isActive = panel.id === 'dashboard-panel-' + tabId;
+      panel.classList.toggle('active', isActive);
+      panel.hidden = !isActive;
+    });
+  });
 }
 
 const THEME_STORAGE_KEY = 'transporteur_theme';
@@ -757,13 +789,33 @@ function initTabs() {
   });
 }
 
+// --- Profielwissel (Test / Houdaifa): elk profiel behoudt eigen ritten, brandstof, overig ---
+function initProfileSwitcher() {
+  const sel = document.getElementById('header-profile');
+  if (!sel) return;
+  sel.innerHTML = '';
+  PROFILES.forEach((p) => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+  sel.value = getCurrentProfileId();
+  sel.addEventListener('change', () => {
+    setCurrentProfileId(sel.value);
+    refresh();
+  });
+}
+
 // --- Start ---
 function init() {
   setAlleDatumsVandaag();
   initTheme();
+  initProfileSwitcher();
   initNavigation();
   initPeriodToggle(refresh);
   syncPeriodButtons();
+  initDashboardTabs();
   initFormRit(refresh);
   initFormBrandstof(refresh);
   initFormOverig(refresh);

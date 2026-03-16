@@ -24,102 +24,119 @@
           <h1 class="header-title">Transporteur</h1>
           <p class="subtitle">Dashboard ziekenhuisvervoer</p>
         </div>
-        <div class="theme-switcher" role="group" aria-label="Weergave">
-          <button type="button" class="theme-btn" data-theme="light" title="Licht">☀</button>
-          <button type="button" class="theme-btn" data-theme="dark" title="Donker">◇</button>
-          <button type="button" class="theme-btn" data-theme="system" title="Volg systeem">◐</button>
+        <div class="header-actions">
+          <div class="profile-switcher">
+            <label for="header-profile" class="profile-switcher-label">Profiel</label>
+            <select id="header-profile" class="select select--header" aria-label="Kies profiel">
+              <option value="houdaifa">Houdaifa</option>
+              <option value="test">Test</option>
+            </select>
+          </div>
+          <div class="theme-switcher" role="group" aria-label="Weergave">
+            <button type="button" class="theme-btn" data-theme="light" title="Licht">☀</button>
+            <button type="button" class="theme-btn" data-theme="dark" title="Donker">◇</button>
+            <button type="button" class="theme-btn" data-theme="system" title="Volg systeem">◐</button>
+          </div>
         </div>
       </div>
     </header>
 
     <main class="main">
-      <!-- Pagina: Dashboard – professioneel overzicht voor chauffeur -->
+      <!-- Pagina: Dashboard – overzicht via tabnavigatie -->
       <section class="page active" id="page-dashboard" aria-labelledby="nav-dashboard">
-        <!-- Vandaag: direct overzicht van de werkdag -->
-        <div class="dashboard-vandaag">
-          <h2 class="dashboard-vandaag-title">Vandaag</h2>
-          <div class="dashboard-vandaag-stats">
-            <div class="dashboard-stat">
-              <span class="dashboard-stat-value" id="vandaag-ritten">0</span>
-              <span class="dashboard-stat-label">ritten</span>
-            </div>
-            <div class="dashboard-stat">
-              <span class="dashboard-stat-value" id="vandaag-km">0</span>
-              <span class="dashboard-stat-label">km</span>
-            </div>
-            <div class="dashboard-stat">
-              <span class="dashboard-stat-value" id="vandaag-vergoeding">€ 0</span>
-              <span class="dashboard-stat-label">vergoeding</span>
-            </div>
-          </div>
-          <ul class="dashboard-vandaag-lijst" id="ritten-vandaag-lijst" aria-label="Ritten vandaag"></ul>
-        </div>
+        <div class="dashboard-wrap">
+          <p class="dashboard-profile-label" id="dashboard-profile-label">Profiel: Houdaifa</p>
+          <nav class="dashboard-nav" role="tablist" aria-label="Dashboard secties">
+            <button type="button" class="dashboard-nav-btn active" role="tab" id="tab-dash-vandaag" aria-selected="true" data-dashboard-tab="vandaag">Vandaag</button>
+            <button type="button" class="dashboard-nav-btn" role="tab" id="tab-dash-financieel" aria-selected="false" data-dashboard-tab="financieel">Financieel</button>
+            <button type="button" class="dashboard-nav-btn" role="tab" id="tab-dash-km" aria-selected="false" data-dashboard-tab="km">Kilometers</button>
+          </nav>
 
-        <!-- Melding: rit via Kaart toegevoegd, bevestigen? -->
-        <div class="dashboard-rit-melding" id="dashboard-rit-melding" hidden>
-          <p class="dashboard-rit-melding-text">Er is een rit toegevoegd via de kaart. Bevestigen?</p>
-          <div class="dashboard-rit-melding-buttons">
-            <button type="button" class="btn btn-primary" id="dashboard-rit-melding-ja">Ja</button>
-            <button type="button" class="btn btn-outline" id="dashboard-rit-melding-nee">Nee</button>
+          <div class="dashboard-panel active" id="dashboard-panel-vandaag" role="tabpanel" aria-labelledby="tab-dash-vandaag">
+            <div class="dashboard-vandaag">
+              <h2 class="dashboard-vandaag-title">Vandaag</h2>
+              <div class="dashboard-vandaag-stats">
+                <div class="dashboard-stat">
+                  <span class="dashboard-stat-value" id="vandaag-ritten">0</span>
+                  <span class="dashboard-stat-label">ritten</span>
+                </div>
+                <div class="dashboard-stat">
+                  <span class="dashboard-stat-value" id="vandaag-km">0</span>
+                  <span class="dashboard-stat-label">km</span>
+                </div>
+                <div class="dashboard-stat">
+                  <span class="dashboard-stat-value" id="vandaag-vergoeding">€ 0</span>
+                  <span class="dashboard-stat-label">vergoeding</span>
+                </div>
+              </div>
+              <ul class="dashboard-vandaag-lijst" id="ritten-vandaag-lijst" aria-label="Ritten vandaag"></ul>
+            </div>
+            <div class="dashboard-rit-melding" id="dashboard-rit-melding" hidden>
+              <p class="dashboard-rit-melding-text">Er is een rit toegevoegd via de kaart. Bevestigen?</p>
+              <div class="dashboard-rit-melding-buttons">
+                <button type="button" class="btn btn-primary" id="dashboard-rit-melding-ja">Ja</button>
+                <button type="button" class="btn btn-outline" id="dashboard-rit-melding-nee">Nee</button>
+              </div>
+            </div>
+            <div class="dashboard-cta-card">
+              <h3 class="dashboard-cta-title">Rit na oproep</h3>
+              <p class="dashboard-cta-text">Kies de rit die je gaat rijden en voeg toe.</p>
+              <button type="button" class="btn btn-primary btn-cta" id="dashboard-rit-kiezen">
+                <span class="btn-cta-icon" aria-hidden="true">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </span>
+                Rit kiezen
+              </button>
+            </div>
+            <div class="ritten-status-section" id="ritten-status-section">
+              <h3 class="dashboard-panel-subtitle">Komende en lopende ritten</h3>
+              <ul class="ritten-status-lijst" id="ritten-status-lijst"></ul>
+            </div>
           </div>
-        </div>
 
-        <!-- Hoofdactie: rit selecteren na oproep -->
-        <div class="dashboard-cta-card">
-          <h3 class="dashboard-cta-title">Rit na oproep</h3>
-          <p class="dashboard-cta-text">Kies de rit die je gaat rijden en voeg toe. Zo houd je eenvoudig overzicht over je werk.</p>
-          <button type="button" class="btn btn-primary btn-cta" id="dashboard-rit-kiezen">
-            <span class="btn-cta-icon" aria-hidden="true">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            </span>
-            Rit kiezen
-          </button>
-        </div>
+          <div class="dashboard-panel" id="dashboard-panel-financieel" role="tabpanel" aria-labelledby="tab-dash-financieel" hidden>
+            <div class="kpi-section">
+              <h2 class="dashboard-panel-subtitle">Financieel overzicht</h2>
+              <p class="kpi-intro">Omzet, benzine en winst per periode</p>
+              <div class="kpi-cards">
+                <div class="kpi-card kpi-omzet">
+                  <span class="kpi-label">Omzet</span>
+                  <span class="kpi-value" id="kpi-omzet">€ 0</span>
+                  <span class="kpi-extra" id="kpi-omzet-extra"></span>
+                  <span class="kpi-period" id="kpi-omzet-period">Deze maand</span>
+                </div>
+                <div class="kpi-card kpi-kosten">
+                  <span class="kpi-label">Benzine</span>
+                  <span class="kpi-value" id="kpi-brandstof">€ 0</span>
+                  <span class="kpi-period" id="kpi-brandstof-period">Deze maand</span>
+                </div>
+                <div class="kpi-card kpi-winst">
+                  <span class="kpi-label">Winst</span>
+                  <span class="kpi-value" id="kpi-winst">€ 0</span>
+                  <span class="kpi-period" id="kpi-winst-period">Deze maand</span>
+                </div>
+              </div>
+              <div class="period-toggle" role="group" aria-label="Periode">
+                <button type="button" class="btn-period" data-period="day">Vandaag</button>
+                <button type="button" class="btn-period" data-period="week">Week</button>
+                <button type="button" class="btn-period active" data-period="month">Maand</button>
+              </div>
+              <div class="financial-chart-wrap" id="financial-chart-wrap">
+                <h3 class="chart-title">Omzet en winst per week</h3>
+                <div class="financial-chart" id="financial-chart" role="img" aria-label="Grafiek omzet en winst per week"></div>
+              </div>
+            </div>
+          </div>
 
-        <!-- Financieel overzicht (periode) + grafiek -->
-        <div class="kpi-section">
-          <h2 class="page-section-title">Financieel overzicht</h2>
-          <p class="kpi-intro">Omzet, benzine en winst per periode</p>
-          <div class="kpi-cards">
-            <div class="kpi-card kpi-omzet">
-              <span class="kpi-label">Omzet</span>
-              <span class="kpi-value" id="kpi-omzet">€ 0</span>
-              <span class="kpi-extra" id="kpi-omzet-extra"></span>
-              <span class="kpi-period" id="kpi-omzet-period">Deze maand</span>
+          <div class="dashboard-panel" id="dashboard-panel-km" role="tabpanel" aria-labelledby="tab-dash-km" hidden>
+            <div class="km-section">
+              <h2 class="dashboard-panel-subtitle">Kilometers</h2>
+              <div class="km-cards km-cards--dashboard">
+                <div class="km-card"><span class="km-label">Vandaag</span><span class="km-value" id="km-day">0 km</span></div>
+                <div class="km-card"><span class="km-label">Deze week</span><span class="km-value" id="km-week">0 km</span></div>
+                <div class="km-card"><span class="km-label">Deze maand</span><span class="km-value" id="km-month">0 km</span></div>
+              </div>
             </div>
-            <div class="kpi-card kpi-kosten">
-              <span class="kpi-label">Benzine</span>
-              <span class="kpi-value" id="kpi-brandstof">€ 0</span>
-              <span class="kpi-period" id="kpi-brandstof-period">Deze maand</span>
-            </div>
-            <div class="kpi-card kpi-winst">
-              <span class="kpi-label">Winst</span>
-              <span class="kpi-value" id="kpi-winst">€ 0</span>
-              <span class="kpi-period" id="kpi-winst-period">Deze maand</span>
-            </div>
-          </div>
-          <div class="period-toggle" role="group" aria-label="Periode">
-            <button type="button" class="btn-period" data-period="day">Vandaag</button>
-            <button type="button" class="btn-period" data-period="week">Week</button>
-            <button type="button" class="btn-period active" data-period="month">Maand</button>
-          </div>
-          <div class="financial-chart-wrap" id="financial-chart-wrap">
-            <h3 class="chart-title">Omzet en winst per week</h3>
-            <div class="financial-chart" id="financial-chart" role="img" aria-label="Grafiek omzet en winst per week"></div>
-          </div>
-        </div>
-        <!-- Komende en lopende ritten (chauffeur + auto, knoppen Start / Voltooid) -->
-        <div class="ritten-status-section" id="ritten-status-section">
-          <h2 class="page-section-title">Ritten vandaag</h2>
-          <p class="kpi-intro">Komende en lopende ritten: kies chauffeur en voertuig. Start rit of bevestig voltooid.</p>
-          <ul class="ritten-status-lijst" id="ritten-status-lijst"></ul>
-        </div>
-        <div class="km-section">
-          <h2 class="page-section-title">Kilometers</h2>
-          <div class="km-cards">
-            <div class="km-card"><span class="km-label">Vandaag</span><span class="km-value" id="km-day">0 km</span></div>
-            <div class="km-card"><span class="km-label">Week</span><span class="km-value" id="km-week">0 km</span></div>
-            <div class="km-card"><span class="km-label">Maand</span><span class="km-value" id="km-month">0 km</span></div>
           </div>
         </div>
       </section>

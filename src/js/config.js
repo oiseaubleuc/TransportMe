@@ -13,7 +13,14 @@ export const STORAGE_KEYS = {
   ziekenhuizen: 'transporteur_ziekenhuizen',
   presetRoutes: 'transporteur_preset_routes',
   voertuigen: 'transporteur_voertuigen',
+  currentProfile: 'transporteur_current_profile',
 };
+
+/** Profielen: elk profiel heeft eigen ritten, brandstof en overige kosten */
+export const PROFILES = [
+  { id: 'houdaifa', name: 'Houdaifa' },
+  { id: 'test', name: 'Test' },
+];
 
 export const PERIOD_LABELS = {
   day: 'Vandaag',

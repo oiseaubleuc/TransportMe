@@ -1,14 +1,54 @@
 /**
- * Opslag – lezen en schrijven naar localStorage
+ * Opslag – lezen en schrijven naar localStorage (per profiel: ritten, brandstof, overig)
  */
 
-import { STORAGE_KEYS, DEFAULT_ZIEKENHUIZEN, DEFAULT_PRESET_ROUTES, DEFAULT_VOERTUIGEN } from './config.js';
+import { STORAGE_KEYS, DEFAULT_ZIEKENHUIZEN, DEFAULT_PRESET_ROUTES, DEFAULT_VOERTUIGEN, PROFILES } from './config.js';
+
+const VALID_PROFILE_IDS = new Set(PROFILES.map((p) => p.id));
+
+export function getCurrentProfileId() {
+  const id = localStorage.getItem(STORAGE_KEYS.currentProfile);
+  return VALID_PROFILE_IDS.has(id) ? id : PROFILES[0].id;
+}
+
+export function setCurrentProfileId(id) {
+  if (!VALID_PROFILE_IDS.has(id)) return;
+  localStorage.setItem(STORAGE_KEYS.currentProfile, id);
+}
+
+function profileKey(baseKey) {
+  return `${baseKey}_${getCurrentProfileId()}`;
+}
+
+/** Eénmalige migratie: bestaande data zonder profiel-suffix naar huidig profiel (houdaifa) */
+function migrateLegacyToProfile() {
+  const profileId = getCurrentProfileId();
+  if (profileId !== 'houdaifa') return;
+  const rKey = profileKey(STORAGE_KEYS.ritten);
+  if (localStorage.getItem(rKey) != null) return;
+  const legacy = localStorage.getItem(STORAGE_KEYS.ritten);
+  if (legacy != null) {
+    localStorage.setItem(rKey, legacy);
+    localStorage.removeItem(STORAGE_KEYS.ritten);
+  }
+  const bKey = profileKey(STORAGE_KEYS.brandstof);
+  if (localStorage.getItem(bKey) == null && localStorage.getItem(STORAGE_KEYS.brandstof) != null) {
+    localStorage.setItem(bKey, localStorage.getItem(STORAGE_KEYS.brandstof));
+    localStorage.removeItem(STORAGE_KEYS.brandstof);
+  }
+  const oKey = profileKey(STORAGE_KEYS.overig);
+  if (localStorage.getItem(oKey) == null && localStorage.getItem(STORAGE_KEYS.overig) != null) {
+    localStorage.setItem(oKey, localStorage.getItem(STORAGE_KEYS.overig));
+    localStorage.removeItem(STORAGE_KEYS.overig);
+  }
+}
 
 export function getData() {
+  migrateLegacyToProfile();
   return {
-    ritten: JSON.parse(localStorage.getItem(STORAGE_KEYS.ritten) || '[]'),
-    brandstof: JSON.parse(localStorage.getItem(STORAGE_KEYS.brandstof) || '[]'),
-    overig: JSON.parse(localStorage.getItem(STORAGE_KEYS.overig) || '[]'),
+    ritten: JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.ritten)) || '[]'),
+    brandstof: JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.brandstof)) || '[]'),
+    overig: JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.overig)) || '[]'),
     ziekenhuizen: getZiekenhuizen(),
     presetRoutes: getPresetRoutes(),
     voertuigen: getVoertuigen(),
@@ -38,15 +78,15 @@ export function saveVoertuigen(voertuigen) {
 }
 
 export function saveRitten(ritten) {
-  localStorage.setItem(STORAGE_KEYS.ritten, JSON.stringify(ritten));
+  localStorage.setItem(profileKey(STORAGE_KEYS.ritten), JSON.stringify(ritten));
 }
 
 export function saveBrandstof(brandstof) {
-  localStorage.setItem(STORAGE_KEYS.brandstof, JSON.stringify(brandstof));
+  localStorage.setItem(profileKey(STORAGE_KEYS.brandstof), JSON.stringify(brandstof));
 }
 
 export function saveOverig(overig) {
-  localStorage.setItem(STORAGE_KEYS.overig, JSON.stringify(overig));
+  localStorage.setItem(profileKey(STORAGE_KEYS.overig), JSON.stringify(overig));
 }
 
 function routePairExists(routes, fromId, toId) {

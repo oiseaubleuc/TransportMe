@@ -93,6 +93,33 @@ body {
   gap: 1rem;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+
+.profile-switcher {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.profile-switcher-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.select--header {
+  min-width: 7rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+
 .theme-switcher {
   display: flex;
   gap: 0.25rem;
@@ -591,7 +618,63 @@ body {
   font-size: 0.95rem;
 }
 
-/* Dashboard – professioneel overzicht */
+/* Dashboard – tabnavigatie en panels */
+.dashboard-wrap {
+  margin-bottom: 1rem;
+}
+.dashboard-profile-label {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.dashboard-nav {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.25rem;
+  padding: 0.25rem;
+  background: var(--surface2);
+  border-radius: var(--radius);
+}
+.dashboard-nav-btn {
+  flex: 1;
+  padding: 0.65rem 0.75rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.dashboard-nav-btn:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+.dashboard-nav-btn.active {
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.dashboard-panel {
+  display: block;
+}
+.dashboard-panel[hidden] {
+  display: none !important;
+}
+.dashboard-panel-subtitle {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.km-cards--dashboard {
+  margin-top: 0.5rem;
+}
+
+/* Dashboard – vandaag blok */
 .dashboard-vandaag {
   background: var(--surface);
   border: 1px solid var(--border);
