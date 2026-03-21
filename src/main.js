@@ -1,29 +1,24 @@
 /**
  * Transporteur – hoofdingang
- * Mobielvriendelijk: navigatie, vaste ritten, kaart (Leaflet/ORS), ziekenhuizen
+ * Mobielvriendelijk: navigatie, vaste ritten, kaart (MapLibre/OSM + ORS), ziekenhuizen
  */
 
 import { updateKPI, updateKmTeller, updateVandaagSummary, initPeriodToggle, syncPeriodButtons, updateFinancialChart, updateRittenStatusLijst, updateRitMelding } from './js/dashboard.js';
 import { initFormRit, initFormBrandstof, initFormOverig, setAlleDatumsVandaag } from './js/forms.js';
 import { renderAllTables } from './js/tables.js';
 import { DEFAULT_CHAUFFEURS, RIT_DUUR_MINUTEN } from './js/config.js';
-import { getData, getZiekenhuizen, saveZiekenhuizen, saveRitten, getPresetRoutes, savePresetRoutes, getVoertuigen, saveVoertuigen, getCurrentProfileId, setCurrentProfileId } from './js/storage.js';
+import { getData, getZiekenhuizen, saveZiekenhuizen, saveRitten, getPresetRoutes, savePresetRoutes, getVoertuigen, saveVoertuigen } from './js/storage.js';
 import { PROFILES } from './js/config.js';
 import { vergoedingVoorRit, toDateStr, isInDay, geschatteAfstandKm, isRitVoltooid } from './js/calculations.js';
 import { formatEuro, formatDatumTijd } from './js/format.js';
-import { getRouteDistance, hasMapsApiKey } from './js/maps.js';
 import { initPlaceSearchFree } from './js/placeSearchFree.js';
-import { getRouteDistanceORS, hasOpenRouteApiKey, getDistanceMatrixORS } from './js/mapLeaflet.js';
+import { getRouteDistanceORS, hasOpenRouteApiKey, getDistanceMatrixORS } from './js/ors.js';
 import { showMapLibreMap, addRouteToMapLibreMap } from './js/mapLibre.js';
 import { buildDistanceMatrix, computeOptimalOrder } from './js/routeOptimization.js';
 
 function refresh() {
-  const profileId = getCurrentProfileId();
-  const profileName = PROFILES.find((p) => p.id === profileId)?.name || profileId;
   const profileLabel = document.getElementById('dashboard-profile-label');
-  if (profileLabel) profileLabel.textContent = `Profiel: ${profileName}`;
-  const headerProfile = document.getElementById('header-profile');
-  if (headerProfile && headerProfile.value !== profileId) headerProfile.value = profileId;
+  if (profileLabel) profileLabel.textContent = `Zelfstandige: ${PROFILES[0].name}`;
 
   updateKPI();
   updateKmTeller();
@@ -217,18 +212,14 @@ function renderVasteRitten() {
           kmInput.value = km;
           kmInput.dispatchEvent(new Event('input'));
         } catch (e) {
-          kmInput.value = preset.defaultKm ?? '';
+          const est = geschatteAfstandKm(from, to);
+          kmInput.value = est != null && est >= 1 ? est : preset.defaultKm ?? '';
           kmInput.dispatchEvent(new Event('input'));
         }
-      } else if (hasMapsApiKey()) {
-        try {
-          const { km } = await getRouteDistance(from, to);
-          kmInput.value = km;
-          kmInput.dispatchEvent(new Event('input'));
-        } catch (e) {
-          kmInput.value = preset.defaultKm ?? '';
-          kmInput.dispatchEvent(new Event('input'));
-        }
+      } else {
+        const est = geschatteAfstandKm(from, to);
+        kmInput.value = est != null && est >= 1 ? est : preset.defaultKm ?? '';
+        kmInput.dispatchEvent(new Event('input'));
       }
     }
   });
@@ -354,12 +345,6 @@ function initMapIfNeeded() {
       if (hasORS) {
         try {
           const res = await getRouteDistanceORS(from, to);
-          km = res.km;
-        } catch (e) {}
-      }
-      if ((km == null || km < 1) && hasMapsApiKey()) {
-        try {
-          const res = await getRouteDistance(from, to);
           km = res.km;
         } catch (e) {}
       }
@@ -747,13 +732,8 @@ function initZiekenhuizen() {
         console.error(e);
       }
     }
-    if (km == null && hasMapsApiKey()) {
-      try {
-        const res = await getRouteDistance(from, to);
-        km = res.km;
-      } catch (e) {
-        console.error(e);
-      }
+    if (km == null || km < 1) {
+      km = geschatteAfstandKm(from, to);
     }
 
     const presets = getPresetRoutes();
@@ -789,29 +769,10 @@ function initTabs() {
   });
 }
 
-// --- Profielwissel (Test / Houdaifa): elk profiel behoudt eigen ritten, brandstof, overig ---
-function initProfileSwitcher() {
-  const sel = document.getElementById('header-profile');
-  if (!sel) return;
-  sel.innerHTML = '';
-  PROFILES.forEach((p) => {
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = p.name;
-    sel.appendChild(opt);
-  });
-  sel.value = getCurrentProfileId();
-  sel.addEventListener('change', () => {
-    setCurrentProfileId(sel.value);
-    refresh();
-  });
-}
-
 // --- Start ---
 function init() {
   setAlleDatumsVandaag();
   initTheme();
-  initProfileSwitcher();
   initNavigation();
   initPeriodToggle(refresh);
   syncPeriodButtons();

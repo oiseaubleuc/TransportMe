@@ -1,8 +1,15 @@
 /**
- * Opslag – lezen en schrijven naar localStorage (per profiel: ritten, brandstof, overig)
+ * Opslag – localStorage: ritten, brandstof, overig (zelfstandige dataset) + rolling retentie
  */
 
-import { STORAGE_KEYS, DEFAULT_ZIEKENHUIZEN, DEFAULT_PRESET_ROUTES, DEFAULT_VOERTUIGEN, PROFILES } from './config.js';
+import {
+  STORAGE_KEYS,
+  DEFAULT_ZIEKENHUIZEN,
+  DEFAULT_PRESET_ROUTES,
+  DEFAULT_VOERTUIGEN,
+  PROFILES,
+  DATA_RETENTION_DAYS,
+} from './config.js';
 
 const VALID_PROFILE_IDS = new Set(PROFILES.map((p) => p.id));
 
@@ -43,12 +50,85 @@ function migrateLegacyToProfile() {
   }
 }
 
+/** Eénmalig: data van profiel «test» samenvoegen in houdaifa (zelfde browser) */
+function mergeTestProfileIntoHoudaifaOnce() {
+  if (localStorage.getItem(STORAGE_KEYS.mergedTestProfile)) return;
+  const h = 'houdaifa';
+  const t = 'test';
+  function pair(base) {
+    const rawH = localStorage.getItem(`${base}_${h}`);
+    const rawT = localStorage.getItem(`${base}_${t}`);
+    return {
+      houd: JSON.parse(rawH || '[]'),
+      tst: JSON.parse(rawT || '[]'),
+    };
+  }
+  function mergeArrays(aHoud, aTest) {
+    const ids = new Set(aHoud.map((x) => x.id));
+    const out = [...aHoud];
+    for (const item of aTest) {
+      if (item?.id != null && !ids.has(item.id)) {
+        out.push(item);
+        ids.add(item.id);
+      }
+    }
+    return out.sort((x, y) => (x.datum || '').localeCompare(y.datum || ''));
+  }
+  const r = pair(STORAGE_KEYS.ritten);
+  const b = pair(STORAGE_KEYS.brandstof);
+  const o = pair(STORAGE_KEYS.overig);
+  localStorage.setItem(`${STORAGE_KEYS.ritten}_${h}`, JSON.stringify(mergeArrays(r.houd, r.tst)));
+  localStorage.setItem(`${STORAGE_KEYS.brandstof}_${h}`, JSON.stringify(mergeArrays(b.houd, b.tst)));
+  localStorage.setItem(`${STORAGE_KEYS.overig}_${h}`, JSON.stringify(mergeArrays(o.houd, o.tst)));
+  localStorage.removeItem(`${STORAGE_KEYS.ritten}_${t}`);
+  localStorage.removeItem(`${STORAGE_KEYS.brandstof}_${t}`);
+  localStorage.removeItem(`${STORAGE_KEYS.overig}_${t}`);
+  localStorage.setItem(STORAGE_KEYS.mergedTestProfile, '1');
+  localStorage.setItem(STORAGE_KEYS.currentProfile, PROFILES[0].id);
+}
+
+function retentionCutoffMs() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - DATA_RETENTION_DAYS);
+  return d.getTime();
+}
+
+function keptInRollingWindow(datumStr) {
+  if (!datumStr || typeof datumStr !== 'string' || datumStr.length < 10) return true;
+  const [y, m, day] = datumStr.slice(0, 10).split('-').map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(day)) return true;
+  const t = new Date(y, m - 1, day).getTime();
+  if (Number.isNaN(t)) return true;
+  return t >= retentionCutoffMs();
+}
+
+/** Ritten, brandstof en overig: enkel laatste DATA_RETENTION_DAGEN bewaren */
+function applyRetentionAndPersist(ritten, brandstof, overig) {
+  const fR = ritten.filter((r) => keptInRollingWindow(r.datum));
+  const fB = brandstof.filter((x) => keptInRollingWindow(x.datum));
+  const fO = overig.filter((x) => keptInRollingWindow(x.datum));
+  const changed =
+    fR.length !== ritten.length || fB.length !== brandstof.length || fO.length !== overig.length;
+  if (changed) {
+    saveRitten(fR);
+    saveBrandstof(fB);
+    saveOverig(fO);
+  }
+  return { ritten: fR, brandstof: fB, overig: fO };
+}
+
 export function getData() {
   migrateLegacyToProfile();
+  mergeTestProfileIntoHoudaifaOnce();
+  const ritten = JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.ritten)) || '[]');
+  const brandstof = JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.brandstof)) || '[]');
+  const overig = JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.overig)) || '[]');
+  const pruned = applyRetentionAndPersist(ritten, brandstof, overig);
   return {
-    ritten: JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.ritten)) || '[]'),
-    brandstof: JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.brandstof)) || '[]'),
-    overig: JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.overig)) || '[]'),
+    ritten: pruned.ritten,
+    brandstof: pruned.brandstof,
+    overig: pruned.overig,
     ziekenhuizen: getZiekenhuizen(),
     presetRoutes: getPresetRoutes(),
     voertuigen: getVoertuigen(),
@@ -103,9 +183,21 @@ function ensureDefaultZiekenhuizen() {
   }
   const stored = JSON.parse(raw);
   const merged = [...stored];
+  let changed = false;
   for (const d of DEFAULT_ZIEKENHUIZEN) {
-    if (!merged.some((m) => m.id === d.id)) merged.push(d);
+    const idx = merged.findIndex((m) => m.id === d.id);
+    if (idx === -1) {
+      merged.push(d);
+      changed = true;
+    } else {
+      const cur = merged[idx];
+      if (cur.name !== d.name || cur.address !== d.address) {
+        merged[idx] = { ...cur, name: d.name, address: d.address };
+        changed = true;
+      }
+    }
   }
+  if (changed) localStorage.setItem(STORAGE_KEYS.ziekenhuizen, JSON.stringify(merged));
   return merged;
 }
 
@@ -117,9 +209,22 @@ function ensureDefaultPresetRoutes() {
   }
   const stored = JSON.parse(raw);
   const merged = [...stored];
+  let changed = false;
   for (const d of DEFAULT_PRESET_ROUTES) {
-    if (!routePairExists(merged, d.fromId, d.toId)) merged.push(d);
+    const idx = merged.findIndex((m) => m.fromId === d.fromId && m.toId === d.toId);
+    if (idx === -1) {
+      merged.push(d);
+      changed = true;
+    } else {
+      const cur = merged[idx];
+      const km = d.defaultKm != null ? d.defaultKm : cur.defaultKm;
+      if (cur.fromName !== d.fromName || cur.toName !== d.toName || cur.defaultKm !== km) {
+        merged[idx] = { ...cur, fromName: d.fromName, toName: d.toName, defaultKm: km };
+        changed = true;
+      }
+    }
   }
+  if (changed) localStorage.setItem(STORAGE_KEYS.presetRoutes, JSON.stringify(merged));
   return merged;
 }
 

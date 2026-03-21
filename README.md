@@ -1,6 +1,6 @@
 # Transporteur Dashboard
 
-Dashboard voor ziekenhuisvervoer: rendabiliteit, vaste ritten, kaart en ziekenhuizen zoeken. Werkt op **desktop en mobiel**.
+Dashboard voor **zelfstandig** ziekenhuisvervoer: slim ritbeheer, vergoeding/winst, vaste ritten, kaart en ziekenhuizen. Werkt op **desktop en mobiel**.
 
 ## Starten
 
@@ -15,7 +15,7 @@ Productiebuild: `npm run build` → map `dist/`.
 
 ## Gratis API-sleutel (kaart en afstand)
 
-De **kaart** gebruikt **OpenStreetMap** (Leaflet) en werkt zonder sleutel. Voor de **route-lijn** en **automatische afstand** kun je een **gratis** sleutel gebruiken:
+De **kaart** gebruikt **MapLibre** met **OpenStreetMap**-tegels en werkt zonder sleutel. Voor de **route-lijn** en **automatische afstand** via het wegennet kun je een **gratis** OpenRouteService-sleutel gebruiken:
 
 1. Ga naar [OpenRouteService](https://openrouteservice.org/dev/#/signup) en maak een gratis account.
 2. Kopieer je API-sleutel.
@@ -30,6 +30,18 @@ VITE_OPENROUTE_API_KEY=jouw_gratis_sleutel_hier
 Zonder sleutel: de kaart toont vertrek en bestemming; je kunt nog steeds **Rit vandaag toevoegen** als de vaste rit een vaste km-waarde heeft. De links naar **Waze** en **Google Maps** voor navigatie werken altijd.
 
 **Ziekenhuizen zoeken** werkt **gratis** via OpenStreetMap (Nominatim) – geen API-sleutel nodig.
+
+### Ziekenhuizenlijst (Vlaanderen)
+
+De app bevat **alle ziekenhuizen / zorglocaties** uit **OpenStreetMap** binnen het **Vlaams Gewest** (plus vaste ankertjes voor de Excel-preset-routes). Gegevens: © [OpenStreetMap](https://www.openstreetmap.org/copyright)-bijdragers, ODbL.
+
+Lijst vernieuwen (vereist internet):
+
+```bash
+npm run data:ziekenhuizen
+```
+
+Dit schrijft `src/data/ziekenhuizen-vlaanderen.json` opnieuw via de Overpass API.
 
 ## Gebruik
 
@@ -73,4 +85,4 @@ Onderaan het scherm: **Dashboard** | **Ritten** | **Brandstof** | **Kaart** | **
 
 Voorbeeld: 45 km → €15 + 3×€25 = **€90**.
 
-Gegevens worden lokaal opgeslagen (localStorage).
+Gegevens worden lokaal opgeslagen (**localStorage**). **Ritten, brandstof en overige kosten** ouder dan ca. **twee maanden** (62 dagen) worden automatisch verwijderd om de browser licht te houden. Ziekenhuizen, vaste routes en voertuigen blijven bewaard.

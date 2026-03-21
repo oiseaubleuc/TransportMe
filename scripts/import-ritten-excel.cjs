@@ -28,6 +28,7 @@ const nameToId = {
   'AZ Deurne (AZ Monica)': 'deurne',
   'AZ Herentals': 'herentals',
   'AZ Mechelen': 'mechelen',
+  'RKV Mechelen': 'mechelen',
   'AZ Gent': 'gent',
   'ZOL Genk': 'genk',
   'AZ Turnhout': 'az-turnhout',

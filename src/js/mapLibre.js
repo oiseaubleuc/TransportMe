@@ -1,12 +1,45 @@
 /**
- * Moderne vectorkaart met MapLibre GL JS – responsive, smooth zoom, geen API-key nodig.
- * Gebruikt gratis demo-style (OpenStreetMap-data).
+ * Kaart met MapLibre GL JS – responsive, smooth zoom.
+ * Standaard: OpenStreetMap-rastertegels (zelfde beeld als klassieke OSM-kaart).
+ * Optioneel: VITE_MAPLIBRE_STYLE_URL in .env voor een andere MapLibre-style.
  */
 
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { MAPLIBRE_STYLE_URL } from './config.js';
 
-const DEFAULT_STYLE = 'https://demotiles.maplibre.org/style.json';
+/** OpenStreetMap-tegels (officiële tileservers a/b/c) */
+const OSM_RASTER_STYLE = {
+  version: 8,
+  name: 'OpenStreetMap',
+  sources: {
+    openstreetmap: {
+      type: 'raster',
+      tiles: [
+        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      ],
+      tileSize: 256,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+      maxzoom: 19,
+    },
+  },
+  layers: [
+    {
+      id: 'osm',
+      type: 'raster',
+      source: 'openstreetmap',
+      minzoom: 0,
+      maxzoom: 19,
+    },
+  ],
+};
+
+function getMapStyle() {
+  return MAPLIBRE_STYLE_URL || OSM_RASTER_STYLE;
+}
 const DEFAULT_CENTER = [4.35, 51.0];
 const DEFAULT_ZOOM = 8;
 
@@ -33,7 +66,7 @@ export function showMapLibreMap(containerId, from, to) {
 
   const map = new maplibregl.Map({
     container,
-    style: DEFAULT_STYLE,
+    style: getMapStyle(),
     center,
     zoom: DEFAULT_ZOOM,
     attributionControl: true,
