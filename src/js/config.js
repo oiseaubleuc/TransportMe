@@ -20,11 +20,29 @@ export const STORAGE_KEYS = {
   mergedTestProfile: 'transporteur_merged_test_to_houdaifa_v1',
 };
 
-/** Profiel (zelfstandige): één dataset voor ritten, brandstof en overig */
-export const PROFILES = [{ id: 'houdaifa', name: 'Houdaifa' }];
+/** Profielen (zelfstandigen): elk eigen dataset ritten / brandstof / overig in localStorage */
+export const PROFILES = [
+  { id: 'houdaifa', name: 'Houdaifa' },
+  { id: 'amine', name: 'Amine' },
+];
 
 /** Ritten, brandstof en overige kosten: max. bewaard (rolling window, dagen) */
 export const DATA_RETENTION_DAYS = 62;
+
+/** Compacte UI: korte lijsten, scrollblokken, beheer zonder eindeloze pagina */
+export const UI_COMPACT = {
+  dashboardVandaagRitten: 4,
+  dashboardStatusRitten: 4,
+  ritKaartLijstMaxHoogteRem: 10,
+  rittenTabelWeken: 8,
+  rittenPerWeekInTabel: 15,
+  dataTabelScrollMaxRem: 14,
+  ziekenhuizenPreview: 12,
+  kaartRitKeuzeMax: 45,
+  grafiekWeken: 6,
+  /** Één overzichts-feed op tab Ritten */
+  rittenFeedMax: 40,
+};
 
 export const PERIOD_LABELS = {
   day: 'Vandaag',

@@ -22,3 +22,12 @@ export function formatDatumTijd(datumStr, tijdStr) {
   if (tijdStr && /^\d{1,2}:\d{2}$/.test(String(tijdStr).trim())) return `${datum}, ${tijdStr.trim()}`;
   return datum;
 }
+
+/** Korte weergave voor lijsten: "15/03 14:30" of "15/03" */
+export function formatDatumKort(datumStr, tijdStr) {
+  if (!datumStr || datumStr.length < 10) return '—';
+  const [, m, d] = datumStr.slice(0, 10).split('-');
+  const dd = `${d}/${m}`;
+  if (tijdStr && /^\d{1,2}:\d{2}$/.test(String(tijdStr).trim())) return `${dd} ${String(tijdStr).trim()}`;
+  return dd;
+}

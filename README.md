@@ -2,6 +2,8 @@
 
 Dashboard voor **zelfstandig** ziekenhuisvervoer: slim ritbeheer, vergoeding/winst, vaste ritten, kaart en ziekenhuizen. Werkt op **desktop en mobiel**.
 
+**Weergave:** licht/donker volgt automatisch de instelling van je telefoon of computer (geen aparte themaknop).
+
 ## Starten
 
 ```bash
@@ -56,9 +58,16 @@ Onderaan het scherm: **Dashboard** | **Ritten** | **Brandstof** | **Kaart** | **
 
 ### Ritten
 
-- **Vaste ritten**: standaard o.a. **UZ Brussel → UZ Leuven** en **UZ Brussel → Virga Jesse Hasselt**. Klik op een rit om de afstand in te vullen (of op te halen via Google als je een API-sleutel hebt).
+- **Vaste ritten**: standaard o.a. **UZ Brussel → UZ Leuven** en **UZ Brussel → Virga Jesse Hasselt**. Klik op een rit om de afstand in te vullen (eventueel via OpenRouteService als je een sleutel hebt).
 - Vul eventueel datum en km handmatig aan, zie direct vergoeding en geschatte winst.
 - **Rit opslaan**.
+- **Meerdere ritten tegelijk** (achterstand): op dezelfde pagina kun je regels **plakken uit Excel** (tab-scheiding) of scheiden met **puntkomma** of **komma**. Standaardchauffeur (en optioneel voertuig) kies je boven het tekstveld als een regel geen chauffeurkolom heeft. Ritten worden als **voltooid** opgeslagen (geschikt voor nadien invoeren). Optioneel eerste regel met koppen: `Datum`, `Tijd`, `km`, `Chauffeur`, `Voertuig`. Datums ook als `DD/MM/YYYY`.
+
+### Groot scherm (computer)
+
+- Vanaf ca. **1024px** breed: **navigatie links** als kolom, inhoud rechts met meer breedte (max. ~1320px).
+- Op de rittenpagina staan **één rit** en **bulkimport** naast elkaar vanaf ca. **960px**.
+- Tab **Financieel**: op brede schermen staan **KPI-kaarten** en de **weekgrafiek** naast elkaar.
 
 ### Brandstof
 

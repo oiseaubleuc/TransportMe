@@ -3,33 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" id="meta-theme-color" content="#000000" />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f2f7" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000" />
   <title>Transporteur – Zelfstandige ziekenhuisvervoer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
-  <script>
-    (function() {
-      var t = localStorage.getItem('transporteur_theme');
-      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
-    })();
-  </script>
 </head>
 <body>
   <div class="app">
     <header class="header">
       <div class="header-top">
-        <div>
+        <div class="header-brand">
           <h1 class="header-title">Transporteur</h1>
           <p class="subtitle">Slim ritbeheer · berekeningen voor zelfstandigen</p>
-        </div>
-        <div class="header-actions">
-          <div class="theme-switcher" role="group" aria-label="Weergave">
-            <button type="button" class="theme-btn" data-theme="light" title="Licht">☀</button>
-            <button type="button" class="theme-btn" data-theme="dark" title="Donker">◇</button>
-            <button type="button" class="theme-btn" data-theme="system" title="Volg systeem">◐</button>
-          </div>
         </div>
       </div>
     </header>
@@ -38,7 +26,13 @@
       <!-- Pagina: Dashboard – overzicht via tabnavigatie -->
       <section class="page active" id="page-dashboard" aria-labelledby="nav-dashboard">
         <div class="dashboard-wrap">
-          <p class="dashboard-profile-label" id="dashboard-profile-label">Zelfstandige: Houdaifa</p>
+          <div class="dashboard-profile-row">
+            <p class="dashboard-profile-label" id="dashboard-profile-label">Zelfstandige: Houdaifa</p>
+            <label class="profile-switcher-label">
+              <span class="profile-switcher-label-text">Profiel</span>
+              <select id="profile-switcher" class="profile-switcher" aria-label="Actief zelfstandig profiel"></select>
+            </label>
+          </div>
           <nav class="dashboard-nav" role="tablist" aria-label="Dashboard secties">
             <button type="button" class="dashboard-nav-btn active" role="tab" id="tab-dash-vandaag" aria-selected="true" data-dashboard-tab="vandaag">Vandaag</button>
             <button type="button" class="dashboard-nav-btn" role="tab" id="tab-dash-financieel" aria-selected="false" data-dashboard-tab="financieel">Financieel</button>
@@ -62,18 +56,18 @@
                   <span class="dashboard-stat-label">vergoeding</span>
                 </div>
               </div>
-              <ul class="dashboard-vandaag-lijst" id="ritten-vandaag-lijst" aria-label="Ritten vandaag"></ul>
+              <ul class="dashboard-vandaag-lijst dashboard-list-compact" id="ritten-vandaag-lijst" aria-label="Ritten vandaag"></ul>
             </div>
             <div class="dashboard-rit-melding" id="dashboard-rit-melding" hidden>
-              <p class="dashboard-rit-melding-text">Er is een rit toegevoegd via de kaart. Bevestigen?</p>
+              <p class="dashboard-rit-melding-text">Rit via kaart — bevestigen?</p>
               <div class="dashboard-rit-melding-buttons">
                 <button type="button" class="btn btn-primary" id="dashboard-rit-melding-ja">Ja</button>
                 <button type="button" class="btn btn-outline" id="dashboard-rit-melding-nee">Nee</button>
               </div>
             </div>
             <div class="dashboard-cta-card">
-              <h3 class="dashboard-cta-title">Rit na oproep</h3>
-              <p class="dashboard-cta-text">Kies de rit die je gaat rijden en voeg toe.</p>
+              <h3 class="dashboard-cta-title">Nieuwe rit</h3>
+              <p class="dashboard-cta-text">Direct invoeren na oproep.</p>
               <button type="button" class="btn btn-primary btn-cta" id="dashboard-rit-kiezen">
                 <span class="btn-cta-icon" aria-hidden="true">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -83,40 +77,52 @@
             </div>
             <div class="ritten-status-section" id="ritten-status-section">
               <h3 class="dashboard-panel-subtitle">Komende en lopende ritten</h3>
-              <ul class="ritten-status-lijst" id="ritten-status-lijst"></ul>
+              <ul class="ritten-status-lijst dashboard-list-compact" id="ritten-status-lijst"></ul>
             </div>
           </div>
 
           <div class="dashboard-panel" id="dashboard-panel-financieel" role="tabpanel" aria-labelledby="tab-dash-financieel" hidden>
-            <div class="kpi-section">
-              <h2 class="dashboard-panel-subtitle">Financieel overzicht</h2>
-              <p class="kpi-intro">Omzet, benzine en winst per periode</p>
-              <div class="kpi-cards">
-                <div class="kpi-card kpi-omzet">
-                  <span class="kpi-label">Omzet</span>
-                  <span class="kpi-value" id="kpi-omzet">€ 0</span>
-                  <span class="kpi-extra" id="kpi-omzet-extra"></span>
-                  <span class="kpi-period" id="kpi-omzet-period">Deze maand</span>
+            <div class="financieel-page">
+              <header class="financieel-hero">
+                <h2 class="financieel-hero-title" id="financieel-hero-heading">Financieel overzicht</h2>
+                <p class="financieel-hero-lead">Cijfers voor de gekozen periode en een week-trend van omzet en winst.</p>
+              </header>
+
+              <div class="financieel-split dashboard-financieel-split">
+                <div class="financieel-col financieel-col--kpis">
+                  <div class="financieel-kpi-grid" role="list">
+                    <article class="financieel-kpi-card financieel-kpi-card--omzet" role="listitem">
+                      <span class="financieel-kpi-accent" aria-hidden="true"></span>
+                      <span class="financieel-kpi-label">Omzet</span>
+                      <span class="financieel-kpi-value" id="kpi-omzet">€ 0</span>
+                      <span class="financieel-kpi-extra" id="kpi-omzet-extra"></span>
+                      <span class="financieel-kpi-period" id="kpi-omzet-period">Deze maand</span>
+                    </article>
+                    <article class="financieel-kpi-card financieel-kpi-card--brandstof" role="listitem">
+                      <span class="financieel-kpi-accent" aria-hidden="true"></span>
+                      <span class="financieel-kpi-label">Benzine</span>
+                      <span class="financieel-kpi-value" id="kpi-brandstof">€ 0</span>
+                      <span class="financieel-kpi-period" id="kpi-brandstof-period">Deze maand</span>
+                    </article>
+                    <article class="financieel-kpi-card financieel-kpi-card--winst" role="listitem">
+                      <span class="financieel-kpi-accent" aria-hidden="true"></span>
+                      <span class="financieel-kpi-label">Winst</span>
+                      <span class="financieel-kpi-value" id="kpi-winst">€ 0</span>
+                      <span class="financieel-kpi-period" id="kpi-winst-period">Deze maand</span>
+                    </article>
+                  </div>
+                  <div class="financieel-period" role="group" aria-label="Periode voor KPI-kaarten">
+                    <button type="button" class="btn-period" data-period="day">Vandaag</button>
+                    <button type="button" class="btn-period" data-period="week">Week</button>
+                    <button type="button" class="btn-period active" data-period="month">Maand</button>
+                  </div>
                 </div>
-                <div class="kpi-card kpi-kosten">
-                  <span class="kpi-label">Benzine</span>
-                  <span class="kpi-value" id="kpi-brandstof">€ 0</span>
-                  <span class="kpi-period" id="kpi-brandstof-period">Deze maand</span>
+
+                <div class="financieel-col financieel-col--chart">
+                  <div class="financial-chart-wrap" id="financial-chart-wrap">
+                    <div class="financial-chart" id="financial-chart" role="img" aria-label=""></div>
+                  </div>
                 </div>
-                <div class="kpi-card kpi-winst">
-                  <span class="kpi-label">Winst</span>
-                  <span class="kpi-value" id="kpi-winst">€ 0</span>
-                  <span class="kpi-period" id="kpi-winst-period">Deze maand</span>
-                </div>
-              </div>
-              <div class="period-toggle" role="group" aria-label="Periode">
-                <button type="button" class="btn-period" data-period="day">Vandaag</button>
-                <button type="button" class="btn-period" data-period="week">Week</button>
-                <button type="button" class="btn-period active" data-period="month">Maand</button>
-              </div>
-              <div class="financial-chart-wrap" id="financial-chart-wrap">
-                <h3 class="chart-title">Omzet en winst per week</h3>
-                <div class="financial-chart" id="financial-chart" role="img" aria-label="Grafiek omzet en winst per week"></div>
               </div>
             </div>
           </div>
@@ -136,142 +142,216 @@
 
       <!-- Pagina: Ritten -->
       <section class="page" id="page-ritten" aria-labelledby="nav-ritten">
-        <div class="ritten-page">
-          <!-- Kolom 1: Overzicht (3 kaarten) -->
-          <aside class="ritten-overzicht">
-            <h2 class="ritten-overzicht-title">Overzicht</h2>
-            <div class="ritten-kaarten">
-              <article class="rit-kaart rit-kaart--komend" id="ritten-blok-komend">
-                <header class="rit-kaart-header">
-                  <span class="rit-kaart-icon" aria-hidden="true">○</span>
-                  <h3 class="rit-kaart-titel">Nog te leveren</h3>
-                </header>
-                <ul class="rit-kaart-lijst" id="ritten-lijst-komend" aria-label="Nog te leveren ritten"></ul>
-                <p class="rit-kaart-leeg" id="ritten-leeg-komend">Geen ritten</p>
-              </article>
-              <article class="rit-kaart rit-kaart--lopend" id="ritten-blok-lopend">
-                <header class="rit-kaart-header">
-                  <span class="rit-kaart-icon" aria-hidden="true">◐</span>
-                  <h3 class="rit-kaart-titel">Onderweg</h3>
-                </header>
-                <ul class="rit-kaart-lijst" id="ritten-lijst-lopend" aria-label="Ritten onderweg"></ul>
-                <p class="rit-kaart-leeg" id="ritten-leeg-lopend">Geen ritten</p>
-              </article>
-              <article class="rit-kaart rit-kaart--voltooid" id="ritten-blok-voltooid">
-                <header class="rit-kaart-header">
-                  <span class="rit-kaart-icon" aria-hidden="true">✓</span>
-                  <h3 class="rit-kaart-titel">Voltooid</h3>
-                </header>
-                <ul class="rit-kaart-lijst" id="ritten-lijst-voltooid" aria-label="Voltooide ritten"></ul>
-                <p class="rit-kaart-leeg" id="ritten-leeg-voltooid">Geen ritten</p>
-              </article>
+        <div class="ritten-toolbar" id="ritten-toolbar">
+          <h2 class="ritten-toolbar-title" id="ritten-toolbar-title">Ritten</h2>
+          <button type="button" class="btn btn-primary btn-block" id="btn-rit-aanmaken">Rit aanmaken</button>
+          <button type="button" class="btn btn-outline btn-block ritten-toolbar-back" id="ritten-back-overzicht" hidden>
+            ← Terug naar overzicht
+          </button>
+          <div class="ritten-toolbar-back-row">
+            <button type="button" class="btn btn-outline ritten-toolbar-back" id="ritten-back-prev-page" hidden>
+              ← Vorige pagina (<span id="ritten-back-prev-label">—</span>)
+            </button>
+          </div>
+          <p class="ritten-toolbar-hint">Terug: overzicht of vorige tab.</p>
+        </div>
+        <div class="ritten-page ritten-page--mode-overzicht" id="ritten-page-root">
+          <!-- Kolom 1: planning-feed (stats + filter + één lijst) -->
+          <aside class="ritten-overzicht" id="ritten-overzicht-aside">
+            <h2 class="ritten-overzicht-title">Planning</h2>
+            <p class="ritten-overzicht-sub">Tik op een getal om te filteren; onderaan de lijst scrollen.</p>
+            <div class="ritten-overzicht-stats" id="ritten-overzicht-stats" aria-label="Aantallen per status"></div>
+            <div class="ritten-overzicht-filters" role="tablist" aria-label="Filter planning">
+              <button type="button" class="ritten-filter-btn active" data-filter="alle" role="tab" aria-selected="true">Alles</button>
+              <button type="button" class="ritten-filter-btn" data-filter="komend" role="tab" aria-selected="false">Open</button>
+              <button type="button" class="ritten-filter-btn" data-filter="lopend" role="tab" aria-selected="false">Onderweg</button>
+              <button type="button" class="ritten-filter-btn" data-filter="voltooid" role="tab" aria-selected="false">Afgerond</button>
+            </div>
+            <div class="ritten-feed-shell">
+              <ul class="ritten-feed" id="ritten-overzicht-feed" aria-live="polite"></ul>
+              <p class="ritten-feed-leeg" id="ritten-feed-leeg" hidden>Geen ritten in dit filter.</p>
             </div>
           </aside>
           <!-- Kolom 2: Nieuwe rit -->
           <div class="ritten-toevoegen">
             <h2 class="ritten-toevoegen-title">Nieuwe rit</h2>
-            <p class="ritten-toevoegen-intro">Kies een bestemming, vul gegevens in en sla op. Elke rit telt 2u30.</p>
-            <div class="rit-stap rit-stap--bestemming">
-              <h3 class="rit-stap-titel">Bestemming</h3>
-              <div class="rit-bestemming-kiezer">
-                <div class="form-row">
-                  <label for="rit-vertrek">Vertrek</label>
-                  <select id="rit-vertrek" class="select">
-                    <option value="">— Kies vertrek —</option>
-                  </select>
+            <p class="ritten-toevoegen-intro">Vertrek → bestemming → gegevens → opslaan (2u30/rit). Route: tab Kaart. Bulk: zijkolom op breed scherm.</p>
+            <div class="ritten-toevoegen-split">
+              <div class="ritten-single-column">
+                <div class="rit-stap rit-stap--bestemming">
+                  <h3 class="rit-stap-titel">Bestemming</h3>
+                  <div class="rit-bestemming-kiezer">
+                    <div class="form-row">
+                      <label for="rit-vertrek">Vertrek</label>
+                      <select id="rit-vertrek" class="select">
+                        <option value="">— Kies vertrek —</option>
+                      </select>
+                    </div>
+                    <div class="form-row">
+                      <label for="rit-bestemming">Bestemming</label>
+                      <select id="rit-bestemming" class="select">
+                        <option value="">— Kies bestemming —</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="rit-berekening-card" id="rit-berekening-card">
+                  <p class="rit-berekening-bestemming" id="rit-selected-destination" hidden></p>
+                  <div class="rit-berekening-grid">
+                    <span class="rit-berekening-label">Afstand</span>
+                    <strong class="rit-berekening-waarde" id="rit-preview-km">0 km</strong>
+                    <span class="rit-berekening-label">Vergoeding</span>
+                    <strong class="rit-berekening-waarde" id="rit-preview">€ 0</strong>
+                    <span class="rit-berekening-label rit-berekening-winst-label" id="rit-label-winst">Geschatte winst</span>
+                    <strong class="rit-berekening-waarde rit-berekening-winst" id="rit-preview-winst">—</strong>
+                  </div>
+                  <p class="info-text info-text--small" id="rit-geen-data">Vul brandstof in (pagina <strong>Berekening</strong>) voor geschatte winst.</p>
+                </div>
+                <form id="form-rit" class="form-rit form-section rit-stap">
+                  <h3 class="rit-stap-titel">Gegevens</h3>
+                  <div class="form-row">
+                    <label for="rit-datum">Datum</label>
+                    <input type="date" id="rit-datum" required />
+                  </div>
+                  <div class="form-row">
+                    <label for="rit-chauffeur">Chauffeur</label>
+                    <select id="rit-chauffeur" class="select" required>
+                      <option value="">— Kies chauffeur —</option>
+                    </select>
+                  </div>
+                  <div class="form-row">
+                    <label for="rit-voertuig">Voertuig</label>
+                    <select id="rit-voertuig" class="select">
+                      <option value="">— Kies voertuig —</option>
+                    </select>
+                  </div>
+                  <div class="form-row">
+                    <label for="rit-km">Afstand (km)</label>
+                    <input type="number" id="rit-km" min="1" step="1" placeholder="bv. 45" required />
+                  </div>
+                  <div id="rit-rendabiliteit" hidden><span id="rit-preview-benzine"></span></div>
+                  <div id="rit-row-benzine" hidden></div>
+                  <div id="rit-row-winst" hidden></div>
+                  <button type="submit" class="btn btn-primary btn-block">Rit opslaan</button>
+                </form>
+              </div>
+              <section class="bulk-import-section form-section" aria-labelledby="bulk-import-title">
+                <h3 class="rit-stap-titel" id="bulk-import-title">Meerdere ritten tegelijk</h3>
+                <p class="form-intro bulk-import-intro">
+                  Plak uit Excel (tab of ;). Wordt als <strong>voltooid</strong> opgeslagen. Koppen optioneel: Datum, Tijd, km, Chauffeur, Voertuig.
+                </p>
+                <div class="form-row form-row--inline bulk-defaults">
+                  <div class="bulk-default-field">
+                    <label for="bulk-default-chauffeur">Standaard chauffeur</label>
+                    <select id="bulk-default-chauffeur" class="select">
+                      <option value="">— Indien kolom ontbreekt —</option>
+                    </select>
+                  </div>
+                  <div class="bulk-default-field">
+                    <label for="bulk-default-voertuig">Standaard voertuig</label>
+                    <select id="bulk-default-voertuig" class="select">
+                      <option value="">— Optioneel —</option>
+                    </select>
+                  </div>
                 </div>
                 <div class="form-row">
-                  <label for="rit-bestemming">Bestemming</label>
-                  <select id="rit-bestemming" class="select">
-                    <option value="">— Kies bestemming —</option>
-                  </select>
+                  <label for="bulk-rit-raw">Ritten (één per regel)</label>
+                  <textarea
+                    id="bulk-rit-raw"
+                    class="input-textarea"
+                    rows="5"
+                    spellcheck="false"
+                    placeholder="2025-03-01	08:30	45	Houdaifa&#10;2025-03-02	14:00	32	Houdaifa	Berlingo"
+                  ></textarea>
                 </div>
-              </div>
+                <div class="bulk-import-actions">
+                  <button type="button" class="btn btn-primary btn-block" id="bulk-rit-import-btn">Controleren &amp; importeren</button>
+                </div>
+                <div class="bulk-import-feedback" id="bulk-rit-feedback" hidden></div>
+              </section>
             </div>
-            <div class="rit-berekening-card" id="rit-berekening-card">
-              <p class="rit-berekening-bestemming" id="rit-selected-destination" hidden></p>
-              <div class="rit-berekening-grid">
-                <span class="rit-berekening-label">Afstand</span>
-                <strong class="rit-berekening-waarde" id="rit-preview-km">0 km</strong>
-                <span class="rit-berekening-label">Vergoeding</span>
-                <strong class="rit-berekening-waarde" id="rit-preview">€ 0</strong>
-                <span class="rit-berekening-label rit-berekening-winst-label" id="rit-label-winst">Geschatte winst</span>
-                <strong class="rit-berekening-waarde rit-berekening-winst" id="rit-preview-winst">—</strong>
-              </div>
-              <p class="info-text info-text--small" id="rit-geen-data">Vul brandstof in (Meer → Brandstof) voor geschatte winst.</p>
-            </div>
-            <form id="form-rit" class="form-rit form-section rit-stap">
-              <h3 class="rit-stap-titel">Gegevens</h3>
-              <div class="form-row">
-                <label for="rit-datum">Datum</label>
-                <input type="date" id="rit-datum" required />
-              </div>
-              <div class="form-row">
-                <label for="rit-chauffeur">Chauffeur</label>
-                <select id="rit-chauffeur" class="select" required>
-                  <option value="">— Kies chauffeur —</option>
-                </select>
-              </div>
-              <div class="form-row">
-                <label for="rit-voertuig">Voertuig</label>
-                <select id="rit-voertuig" class="select">
-                  <option value="">— Kies voertuig —</option>
-                </select>
-              </div>
-              <div class="form-row">
-                <label for="rit-km">Afstand (km)</label>
-                <input type="number" id="rit-km" min="1" step="1" placeholder="bv. 45" required />
-              </div>
-              <div id="rit-rendabiliteit" hidden><span id="rit-preview-benzine"></span></div>
-              <div id="rit-row-benzine" hidden></div>
-              <div id="rit-row-winst" hidden></div>
-              <button type="submit" class="btn btn-primary btn-block">Rit opslaan</button>
-            </form>
           </div>
         </div>
       </section>
 
-      <!-- Pagina: Brandstof -->
-      <section class="page" id="page-brandstof" aria-labelledby="nav-brandstof">
-        <h2 class="page-section-title">Brandstof (tankbeurt)</h2>
-        <p class="form-intro">Standaard: vandaag. Optioneel: foto van tankbon uploaden voor automatische invulling.</p>
-        <div class="form-row">
-          <label for="brandstof-file">Foto tankbon (optioneel)</label>
-          <input type="file" id="brandstof-file" accept="image/*" capture="environment" />
-        </div>
-        <div class="analyse-resultaat" id="brandstof-analyse-resultaat" hidden>
-          <strong>Resultaat:</strong> <span id="brandstof-analyse-text"></span>
-        </div>
-        <form id="form-brandstof" class="form-brandstof form-section">
+      <!-- Pagina: Berekening (brandstof + optimale route) -->
+      <section class="page" id="page-berekening" aria-labelledby="nav-berekening">
+        <p class="page-organisatie-kicker">Organisatieberekening</p>
+        <h2 class="page-section-title">Berekening</h2>
+        <p class="form-intro">Tankbeurten + optimale ritvolgorde.</p>
+
+        <div class="berekening-sectie" id="berekening-brandstof">
+          <h3 class="berekening-sectie-titel">Brandstof (tankbeurt)</h3>
+          <p class="info-text--small berekening-sectie-intro">Vandaag standaard; optioneel foto tankbon.</p>
           <div class="form-row">
-            <label for="brandstof-datum">Datum</label>
-            <input type="date" id="brandstof-datum" required />
+            <label for="brandstof-file">Foto tankbon (optioneel)</label>
+            <input type="file" id="brandstof-file" accept="image/*" capture="environment" />
           </div>
+          <div class="analyse-resultaat" id="brandstof-analyse-resultaat" hidden>
+            <strong>Resultaat:</strong> <span id="brandstof-analyse-text"></span>
+          </div>
+          <form id="form-brandstof" class="form-brandstof form-section">
+            <div class="form-row">
+              <label for="brandstof-datum">Datum</label>
+              <input type="date" id="brandstof-datum" required />
+            </div>
+            <div class="form-row">
+              <label for="brandstof-voertuig">Voertuig</label>
+              <select id="brandstof-voertuig" class="select">
+                <option value="">— Kies voertuig —</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="brandstof-liter">Volume (L) – België</label>
+              <input type="text" id="brandstof-liter" inputmode="decimal" placeholder="42,5" required />
+            </div>
+            <div class="form-row">
+              <label for="brandstof-prijs">Prijs totaal (€)</label>
+              <input type="number" id="brandstof-prijs" min="0" step="0.01" placeholder="85.00" required />
+            </div>
+            <div class="form-row form-row--info">
+              <span class="info-text">Per liter: <strong id="brandstof-per-liter">€ 0</strong></span>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Tankbeurt opslaan</button>
+          </form>
+        </div>
+
+        <div class="berekening-sectie berekening-sectie--route" id="berekening-route">
+          <h3 class="berekening-sectie-titel">Optimale volgorde ritten</h3>
+          <p class="info-text--small berekening-sectie-intro">Startpunt + ritten aanvinken; totaal km incl. lege stukken.</p>
           <div class="form-row">
-            <label for="brandstof-voertuig">Voertuig</label>
-            <select id="brandstof-voertuig" class="select">
-              <option value="">— Kies voertuig —</option>
+            <label for="route-start">Startpunt (waar vertrek je?)</label>
+            <select id="route-start" class="select">
+              <option value="">— Kies startpunt —</option>
             </select>
           </div>
           <div class="form-row">
-            <label for="brandstof-liter">Volume (L) – België</label>
-            <input type="text" id="brandstof-liter" inputmode="decimal" placeholder="42,5" required />
+            <label>Ritten die je wilt doen (meerdere mogelijk, per vertrek)</label>
+            <div class="route-checklist" id="route-checklist"></div>
           </div>
           <div class="form-row">
-            <label for="brandstof-prijs">Prijs totaal (€)</label>
-            <input type="number" id="brandstof-prijs" min="0" step="0.01" placeholder="85.00" required />
+            <button type="button" class="btn btn-primary btn-block" id="route-bereken-btn">Bereken optimale route</button>
           </div>
-          <div class="form-row form-row--info">
-            <span class="info-text">Per liter: <strong id="brandstof-per-liter">€ 0</strong></span>
+          <div class="route-result" id="route-result" hidden>
+            <h4 class="list-title">Beste volgorde</h4>
+            <ol class="route-order-list" id="route-order-list"></ol>
+            <div class="route-totalen" id="route-totalen"></div>
           </div>
-          <button type="submit" class="btn btn-primary btn-block">Tankbeurt opslaan</button>
-        </form>
+          <p class="info-text--small">Met een gratis OpenRouteService API-sleutel worden echte rij-afstanden gebruikt; anders schatting op basis van afstand.</p>
+        </div>
       </section>
 
-      <!-- Pagina: Kaart -->
+      <!-- Pagina: Kaart (organisatieberekening: route visueel) -->
       <section class="page" id="page-kaart" aria-labelledby="nav-kaart">
+        <p class="page-organisatie-kicker">Organisatieberekening · route op kaart</p>
         <h2 class="page-section-title">Ritten op kaart</h2>
-        <p class="form-intro" id="kaart-intro">Kies vertrek en aankomst. De kaart gebruikt OpenStreetMap (gratis). Voor de route-lijn: gratis API-sleutel op <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>.</p>
+        <p class="form-intro" id="kaart-intro">Alleen weergave (rit aanmaken: tab Ritten). OSM-gratis; route-lijn: <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">ORS</a>.</p>
+        <div class="form-row">
+          <label for="kaart-rit-kiezen">Rit uit planning</label>
+          <select id="kaart-rit-kiezen" class="select" aria-describedby="kaart-intro">
+            <option value="">— Kies een opgeslagen rit —</option>
+          </select>
+        </div>
         <div class="form-row">
           <label for="kaart-from">Vertrek</label>
           <select id="kaart-from" class="select">
@@ -284,58 +364,16 @@
             <option value="">— Kies aankomst —</option>
           </select>
         </div>
-        <div class="form-row">
-          <label for="kaart-chauffeur">Chauffeur</label>
-          <select id="kaart-chauffeur" class="select">
-            <option value="">— Kies chauffeur —</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label for="kaart-voertuig">Voertuig</label>
-          <select id="kaart-voertuig" class="select">
-            <option value="">— Kies voertuig —</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <button type="button" class="btn btn-primary btn-block" id="kaart-rit-vandaag-btn" disabled>
-            Rit vandaag toevoegen
-          </button>
-        </div>
         <div class="map-container" id="map-container">
           <div class="map-placeholder" id="map-placeholder">Kies vertrek en aankomst om de kaart te zien.</div>
         </div>
         <p class="info-text--small">Open in <a href="#" id="link-waze" target="_blank" rel="noopener">Waze</a> of <a href="#" id="link-google-nav" target="_blank" rel="noopener">Google Maps</a> voor navigatie.</p>
       </section>
 
-      <!-- Pagina: Optimale route (meerdere ritten, kortste weg) -->
-      <section class="page" id="page-route" aria-labelledby="nav-route">
-        <h2 class="page-section-title">Optimale volgorde ritten</h2>
-        <p class="form-intro">Selecteer de ritten die je wilt doen en je startpunt. We berekenen de meest efficiënte volgorde en de kortste totale afstand (incl. lege km tussen ritten).</p>
-        <div class="form-row">
-          <label for="route-start">Startpunt (waar vertrek je?)</label>
-          <select id="route-start" class="select">
-            <option value="">— Kies startpunt —</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Ritten die je wilt doen (meerdere mogelijk, per vertrek)</label>
-          <div class="route-checklist" id="route-checklist"></div>
-        </div>
-        <div class="form-row">
-          <button type="button" class="btn btn-primary btn-block" id="route-bereken-btn">Bereken optimale route</button>
-        </div>
-        <div class="route-result" id="route-result" hidden>
-          <h3 class="list-title">Beste volgorde</h3>
-          <ol class="route-order-list" id="route-order-list"></ol>
-          <div class="route-totalen" id="route-totalen"></div>
-        </div>
-        <p class="info-text--small">Met een gratis OpenRouteService API-sleutel worden echte rij-afstanden gebruikt; anders schatting op basis van afstand.</p>
-      </section>
-
       <!-- Pagina: Meer (Ziekenhuizen + Gegevens) -->
       <section class="page" id="page-meer" aria-labelledby="nav-meer">
-        <h2 class="page-section-title">Ziekenhuizen zoeken en toevoegen</h2>
-        <p class="form-intro">Zoek een ziekenhuis en voeg toe aan je lijst. Daarna kun je vaste ritten maken tussen twee ziekenhuizen.</p>
+        <h2 class="page-section-title">Ziekenhuizen</h2>
+        <p class="form-intro">Zoeken, toevoegen, vaste ritten koppelen.</p>
         <div class="form-row">
           <label for="zoek-ziekenhuis">Zoek ziekenhuis of adres</label>
           <input type="text" id="zoek-ziekenhuis" placeholder="bv. UZ Leuven, Virga Jesse..." autocomplete="off" />
@@ -344,7 +382,8 @@
         <div id="zoek-resultaat" class="zoek-resultaat" hidden></div>
         <div class="saved-list" id="saved-ziekenhuizen-list">
           <h3 class="list-title">Mijn ziekenhuizen</h3>
-          <ul id="saved-ziekenhuizen"></ul>
+          <ul id="saved-ziekenhuizen" class="saved-ziekenhuizen-ul"></ul>
+          <button type="button" class="btn btn-outline btn-sm btn-block" id="btn-ziekenhuizen-toggle" hidden>Alle tonen</button>
         </div>
         <div class="form-section">
           <h3 class="list-title">Nieuwe vaste rit toevoegen</h3>
@@ -361,7 +400,7 @@
         </div>
 
         <h2 class="page-section-title">Voertuigen</h2>
-        <p class="form-intro">Voeg voertuigen toe om per rit of tankbeurt aan te geven met welk voertuig je reed.</p>
+        <p class="form-intro">Voor ritten en tankbeurten.</p>
         <div class="form-section">
           <div class="form-row form-row--inline">
             <label for="voertuig-naam">Naam voertuig</label>
@@ -403,24 +442,24 @@
         </div>
         <div class="tab-panels">
           <div class="tab-panel active" id="panel-ritten" role="tabpanel">
-            <div class="table-wrap">
-              <table class="data-table">
-                <thead><tr><th>Datum</th><th>Chauffeur</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th>Status</th><th></th></tr></thead>
+            <div class="table-wrap table-wrap--managed">
+              <table class="data-table data-table--compact">
+                <thead><tr><th>Volg. nr.</th><th>Datum</th><th>Chauffeur</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th>Status</th><th></th></tr></thead>
                 <tbody id="tbody-ritten"></tbody>
               </table>
             </div>
           </div>
           <div class="tab-panel" id="panel-brandstof" role="tabpanel">
-            <div class="table-wrap">
-              <table class="data-table">
+            <div class="table-wrap table-wrap--managed">
+              <table class="data-table data-table--compact">
                 <thead><tr><th>Datum</th><th>Voertuig</th><th>L</th><th>€</th><th>€/L</th><th></th></tr></thead>
                 <tbody id="tbody-brandstof"></tbody>
               </table>
             </div>
           </div>
           <div class="tab-panel" id="panel-overig" role="tabpanel">
-            <div class="table-wrap">
-              <table class="data-table">
+            <div class="table-wrap table-wrap--managed">
+              <table class="data-table data-table--compact">
                 <thead><tr><th>Datum</th><th>Omschrijving</th><th>Bedrag</th><th></th></tr></thead>
                 <tbody id="tbody-overig"></tbody>
               </table>
@@ -435,21 +474,17 @@
         <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
         <span class="nav-label">Dashboard</span>
       </button>
-      <button type="button" class="nav-item" data-page="ritten" id="nav-ritten">
+      <button type="button" class="nav-item" data-page="berekening" id="nav-berekening" title="Brandstof en optimale route">
+        <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h5"/></svg></span>
+        <span class="nav-label">Berekening</span>
+      </button>
+      <button type="button" class="nav-item nav-item--center" data-page="ritten" id="nav-ritten" title="Ritten — centraal in de app">
         <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14v-5H5v5z"/><path d="M7 17V9l4 2 4-2v8"/><path d="M5 12H3v4h2v-4zM19 12h2v4h-2v-4z"/></svg></span>
         <span class="nav-label">Ritten</span>
       </button>
-      <button type="button" class="nav-item" data-page="brandstof" id="nav-brandstof">
-        <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16v-6H4v6z"/><path d="M6 20V8l4-4 4 4v12"/><path d="M10 8h4"/></svg></span>
-        <span class="nav-label">Brandstof</span>
-      </button>
-      <button type="button" class="nav-item" data-page="kaart" id="nav-kaart">
+      <button type="button" class="nav-item" data-page="kaart" id="nav-kaart" title="Route op kaart">
         <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6l6-3 8 3 6-3v14l-6 3-8-3-6 3V6z"/><path d="M8 3v14M16 6v14M2 6l6 3 6-3 6 3"/></svg></span>
         <span class="nav-label">Kaart</span>
-      </button>
-      <button type="button" class="nav-item" data-page="route" id="nav-route">
-        <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 5 4-10 2 5h4"/></svg></span>
-        <span class="nav-label">Route</span>
       </button>
       <button type="button" class="nav-item" data-page="meer" id="nav-meer">
         <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.5"/><circle cx="6" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/></svg></span>

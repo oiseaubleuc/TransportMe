@@ -2,10 +2,12 @@
  * Formulieren – ritten, brandstof, overige kosten
  */
 
-import { RIT_DUUR_MINUTEN } from './config.js';
+import { RIT_DUUR_MINUTEN, DEFAULT_CHAUFFEURS } from './config.js';
 import { vergoedingVoorRit, toDateStr, rendabiliteitRit } from './calculations.js';
 import { formatEuro, formatLiter } from './format.js';
-import { getData, saveRitten, saveBrandstof, saveOverig } from './storage.js';
+import { getData, saveRitten, saveBrandstof, saveOverig, getVoertuigen, getPresetRoutes } from './storage.js';
+import { nextVolgordeStart } from './ritVolgorde.js';
+import { parseBulkRittenText, bulkRowsToRitten } from './bulkRitten.js';
 import { parseReceiptText } from './ocr.js';
 
 
@@ -83,9 +85,13 @@ export function initFormRit(onSubmit) {
     const voertuigSel = document.getElementById('rit-voertuig');
     const voertuigId = voertuigSel?.value || '';
     const voertuigName = voertuigSel?.selectedOptions?.[0]?.textContent || '';
+    const bestemmingSel = document.getElementById('rit-bestemming');
+    const presetId = bestemmingSel?.value?.trim() || '';
+    const preset = presetId ? getPresetRoutes().find((p) => p.id === presetId) : null;
     const { ritten } = getData();
-    ritten.push({
+    const rit = {
       id: Date.now(),
+      volgordeNr: nextVolgordeStart(ritten),
       datum,
       tijd,
       km,
@@ -96,23 +102,112 @@ export function initFormRit(onSubmit) {
       chauffeurName,
       status: 'komend',
       duurMinuten: RIT_DUUR_MINUTEN,
-    });
+    };
+    if (preset) {
+      rit.fromId = preset.fromId;
+      rit.toId = preset.toId;
+      rit.fromName = preset.fromName;
+      rit.toName = preset.toName;
+    }
+    ritten.push(rit);
     ritten.sort((a, b) => a.datum.localeCompare(b.datum));
     saveRitten(ritten);
     form.reset();
     datumInput.value = toDateStr(new Date());
     updatePreview();
-    const destEl = document.getElementById('rit-selected-destination');
-    if (destEl) {
-      destEl.textContent = '';
-      destEl.hidden = true;
+    const destClear = document.getElementById('rit-selected-destination');
+    if (destClear) {
+      destClear.textContent = '';
+      destClear.hidden = true;
     }
     const vertrekSel = document.getElementById('rit-vertrek');
-    const bestemmingSel = document.getElementById('rit-bestemming');
-    const ritDestEl = document.getElementById('rit-selected-destination');
     if (vertrekSel) vertrekSel.value = '';
     if (bestemmingSel) bestemmingSel.value = '';
-    if (ritDestEl) { ritDestEl.textContent = ''; ritDestEl.hidden = true; }
+    onSubmit?.();
+  });
+}
+
+function escBulk(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Meerdere ritten plakken (Excel / tekst), als voltooid voor achterstand-invoer */
+export function initBulkRittenImport(onSubmit) {
+  const btn = document.getElementById('bulk-rit-import-btn');
+  const ta = document.getElementById('bulk-rit-raw');
+  const feedback = document.getElementById('bulk-rit-feedback');
+  if (!btn || !ta || !feedback) return;
+
+  function getDefaults() {
+    return {
+      chauffeurs: DEFAULT_CHAUFFEURS,
+      voertuigen: getVoertuigen(),
+      defaultChauffeurId: document.getElementById('bulk-default-chauffeur')?.value?.trim() || '',
+      defaultVoertuigId: document.getElementById('bulk-default-voertuig')?.value?.trim() || '',
+    };
+  }
+
+  btn.addEventListener('click', () => {
+    const text = ta.value;
+    if (!text.trim()) {
+      feedback.hidden = false;
+      feedback.className = 'bulk-import-feedback bulk-import-feedback--warn';
+      feedback.innerHTML = '<p>Plak eerst één of meer regels.</p>';
+      return;
+    }
+
+    const { ok, errors } = parseBulkRittenText(text, getDefaults());
+
+    if (ok.length === 0) {
+      feedback.hidden = false;
+      feedback.className = 'bulk-import-feedback bulk-import-feedback--error';
+      const maxErr = 6;
+      const errSlice = errors.slice(0, maxErr);
+      let errList = errSlice
+        .map(
+          (e) =>
+            `<li>Regel ${e.line}: ${escBulk(e.reason)} <span class="bulk-err-line">${escBulk(e.text)}</span></li>`
+        )
+        .join('');
+      if (errors.length > maxErr) errList += `<li>… +${errors.length - maxErr} andere</li>`;
+      feedback.innerHTML = `<p><strong>Geen ritten geïmporteerd.</strong></p><ul class="bulk-error-list bulk-error-list--compact">${errList}</ul>`;
+      return;
+    }
+
+    const { ritten } = getData();
+    const baseId = Date.now();
+    const nieuw = bulkRowsToRitten(ok, baseId);
+    let v = nextVolgordeStart(ritten);
+    nieuw.forEach((r) => {
+      r.volgordeNr = v;
+      v += 1;
+    });
+    const merged = [...ritten, ...nieuw];
+    merged.sort((a, b) => {
+      const c = a.datum.localeCompare(b.datum);
+      if (c !== 0) return c;
+      return String(a.tijd || '').localeCompare(String(b.tijd || ''));
+    });
+    saveRitten(merged);
+
+    let msg = `<p><strong>${ok.length} rit${ok.length === 1 ? '' : 'ten'} toegevoegd</strong> als voltooid.</p>`;
+    if (errors.length > 0) {
+      const maxErr = 6;
+      const errSlice = errors.slice(0, maxErr);
+      let errList = errSlice.map((e) => `<li>Regel ${e.line}: ${escBulk(e.reason)}</li>`).join('');
+      if (errors.length > maxErr) errList += `<li>… +${errors.length - maxErr} andere</li>`;
+      msg += `<p class="bulk-warn-title">${errors.length} regel(s) overgeslagen:</p><ul class="bulk-error-list bulk-error-list--compact">${errList}</ul>`;
+    }
+    feedback.hidden = false;
+    feedback.className =
+      errors.length > 0 ? 'bulk-import-feedback bulk-import-feedback--warn' : 'bulk-import-feedback bulk-import-feedback--ok';
+    feedback.innerHTML = msg;
+    if (errors.length === 0) ta.value = '';
     onSubmit?.();
   });
 }

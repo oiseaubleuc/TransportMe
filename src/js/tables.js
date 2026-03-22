@@ -4,7 +4,8 @@
 
 import { getData, saveRitten, saveBrandstof, saveOverig } from './storage.js';
 import { vergoedingVoorRit, getWeekKey, getWeekLabel, isRitVoltooid } from './calculations.js';
-import { formatEuro, formatLiter } from './format.js';
+import { formatEuro, formatLiter, formatDatumKort } from './format.js';
+import { UI_COMPACT } from './config.js';
 
 function escapeHtml(str) {
   if (str == null) return '';
@@ -23,7 +24,7 @@ export function renderRitten(onRender) {
 
   if (ritten.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="7" class="empty-state">Nog geen ritten. Voeg een rit toe boven.</td></tr>';
+      '<tr><td colspan="8" class="empty-state">Nog geen ritten. Voeg een rit toe boven.</td></tr>';
     return;
   }
 
@@ -40,32 +41,44 @@ export function renderRitten(onRender) {
     if (!byWeek[key]) byWeek[key] = [];
     byWeek[key].push(r);
   });
-  const weekKeys = Object.keys(byWeek).sort().reverse();
-  weekKeys.forEach((key) => {
+  const allWeekKeys = Object.keys(byWeek).sort().reverse();
+  allWeekKeys.forEach((key) => {
     byWeek[key].sort((a, b) => b.datum.localeCompare(a.datum));
   });
+  const weekKeys = allWeekKeys.slice(0, UI_COMPACT.rittenTabelWeken);
+  const wekenVerborgen = allWeekKeys.length - weekKeys.length;
 
-  const statusLabel = (s) => (s === 'komend' ? 'Komend' : s === 'lopend' ? 'Lopend' : s === 'voltooid' ? 'Voltooid' : '—');
+  const statusLabel = (s) => (s === 'komend' ? 'Kom.' : s === 'lopend' ? 'Lop.' : s === 'voltooid' ? 'Volt.' : '—');
   let html = '';
+  if (wekenVerborgen > 0) {
+    html += `<tr class="week-header week-header--note"><td colspan="8"><span class="compact-table-note">${wekenVerborgen} oudere week${wekenVerborgen > 1 ? 'en' : ''} niet getoond · laatste ${UI_COMPACT.rittenTabelWeken} weken</span></td></tr>`;
+  }
+  const perWeek = UI_COMPACT.rittenPerWeekInTabel;
   weekKeys.forEach((key) => {
     const weekRitten = byWeek[key];
     const label = getWeekLabel(weekRitten[0].datum);
-    html += `<tr class="week-header"><td colspan="7"><strong>${escapeHtml(label)}</strong></td></tr>`;
-    weekRitten.forEach(
+    html += `<tr class="week-header"><td colspan="8"><strong>${escapeHtml(label)}</strong></td></tr>`;
+    const rows = weekRitten.slice(0, perWeek);
+    rows.forEach(
       (r) =>
         (html += `<tr>
-          <td>${escapeHtml(r.datum)}</td>
+          <td class="num">${r.volgordeNr != null ? escapeHtml(String(r.volgordeNr)) : '—'}</td>
+          <td>${escapeHtml(formatDatumKort(r.datum))}</td>
           <td>${escapeHtml(r.chauffeurName || '—')}</td>
           <td>${escapeHtml(r.voertuigName || '—')}</td>
           <td class="num">${r.km} km</td>
           <td class="num">${formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km))}</td>
           <td>${statusLabel(r.status)}</td>
-          <td><button type="button" class="btn btn-danger btn-delete-rit" data-id="${r.id}">Verwijder</button></td>
+          <td><button type="button" class="btn btn-danger btn-icon-del btn-delete-rit" data-id="${r.id}" title="Verwijderen" aria-label="Verwijder rit">×</button></td>
         </tr>`)
     );
+    const rest = weekRitten.length - rows.length;
+    if (rest > 0) {
+      html += `<tr class="table-row-compact-note"><td colspan="8">+${rest} in deze week</td></tr>`;
+    }
   });
   html += `<tr class="total-row">
-    <td colspan="3"><strong>Totaal voltooide (${voltooide.length} rit${voltooide.length === 1 ? '' : 'ten'})</strong></td>
+    <td colspan="4"><strong>Totaal voltooide (${voltooide.length} rit${voltooide.length === 1 ? '' : 'ten'})</strong></td>
     <td class="num"><strong>${totaalKm} km</strong></td>
     <td class="num"><strong>${formatEuro(totaalVergoeding)}</strong></td>
     <td colspan="2"></td>
@@ -103,12 +116,12 @@ export function renderBrandstof(onRender) {
       .map(
         (b) =>
           `<tr>
-            <td>${escapeHtml(b.datum)}</td>
+            <td>${escapeHtml(formatDatumKort(b.datum))}</td>
             <td>${escapeHtml(b.voertuigName || '—')}</td>
             <td class="num">${formatLiter(b.liter)}</td>
             <td class="num">${formatEuro(b.prijs)}</td>
             <td class="num">${formatEuro(b.prijs / b.liter)}</td>
-            <td><button type="button" class="btn btn-danger btn-delete-brandstof" data-id="${b.id}">Verwijder</button></td>
+            <td><button type="button" class="btn btn-danger btn-icon-del btn-delete-brandstof" data-id="${b.id}" title="Verwijderen" aria-label="Verwijder tankbeurt">×</button></td>
           </tr>`
       )
       .join('') +
@@ -148,10 +161,10 @@ export function renderOverig(onRender) {
       .map(
         (o) =>
           `<tr>
-            <td>${escapeHtml(o.datum)}</td>
+            <td>${escapeHtml(formatDatumKort(o.datum))}</td>
             <td>${escapeHtml(o.omschrijving)}</td>
             <td class="num">${formatEuro(o.bedrag)}</td>
-            <td><button type="button" class="btn btn-danger btn-delete-overig" data-id="${o.id}">Verwijder</button></td>
+            <td><button type="button" class="btn btn-danger btn-icon-del btn-delete-overig" data-id="${o.id}" title="Verwijderen" aria-label="Verwijder kost">×</button></td>
           </tr>`
       )
       .join('') +

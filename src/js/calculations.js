@@ -166,7 +166,8 @@ export function getWeeklyFinancials(weeksBack = 8) {
     const winst = omzet - brandstofKosten - overigeKosten;
     const weekNum = getISOWeek(weekStart).week;
     const label = `W${weekNum} ${weekStart.getDate()} ${maanden.split(' ')[weekStart.getMonth()]}`;
-    result.unshift({ label, omzet, brandstofKosten, overigeKosten, winst });
+    const shortLabel = `W${weekNum}`;
+    result.unshift({ label, shortLabel, omzet, brandstofKosten, overigeKosten, winst });
   }
   return result;
 }

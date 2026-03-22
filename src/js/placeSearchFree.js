@@ -17,7 +17,7 @@ export async function searchPlaces(query) {
   const params = new URLSearchParams({
     q,
     format: 'json',
-    limit: '8',
+    limit: '5',
     addressdetails: '1',
   });
 
@@ -63,11 +63,13 @@ export function initPlaceSearchFree(inputId, resultsContainerId, onPlaceSelect) 
 
   function showResults(places) {
     container.innerHTML = places
-      .map(
-        (p) =>
+      .map((p) => {
+        const addr = p.address.length > 72 ? `${p.address.slice(0, 69)}…` : p.address;
+        return (
           `<button type="button" class="place-search-item" data-name="${escapeAttr(p.name)}" data-address="${escapeAttr(p.address)}" data-lat="${p.lat}" data-lng="${p.lng}">` +
-          `<strong>${escapeHtml(p.name)}</strong><br/><span class="place-search-address">${escapeHtml(p.address)}</span></button>`
-      )
+          `<strong>${escapeHtml(p.name)}</strong><span class="place-search-address">${escapeHtml(addr)}</span></button>`
+        );
+      })
       .join('');
     container.hidden = false;
 

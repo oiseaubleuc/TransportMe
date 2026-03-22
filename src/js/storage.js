@@ -10,6 +10,7 @@ import {
   PROFILES,
   DATA_RETENTION_DAYS,
 } from './config.js';
+import { backfillMissingVolgordeNrs } from './ritVolgorde.js';
 
 const VALID_PROFILE_IDS = new Set(PROFILES.map((p) => p.id));
 
@@ -27,10 +28,10 @@ function profileKey(baseKey) {
   return `${baseKey}_${getCurrentProfileId()}`;
 }
 
-/** Eénmalige migratie: bestaande data zonder profiel-suffix naar huidig profiel (houdaifa) */
+/** Eénmalige migratie: bestaande data zonder profiel-suffix naar eerste profiel (legacy default) */
 function migrateLegacyToProfile() {
   const profileId = getCurrentProfileId();
-  if (profileId !== 'houdaifa') return;
+  if (profileId !== PROFILES[0].id) return;
   const rKey = profileKey(STORAGE_KEYS.ritten);
   if (localStorage.getItem(rKey) != null) return;
   const legacy = localStorage.getItem(STORAGE_KEYS.ritten);
@@ -50,10 +51,10 @@ function migrateLegacyToProfile() {
   }
 }
 
-/** Eénmalig: data van profiel «test» samenvoegen in houdaifa (zelfde browser) */
+/** Eénmalig: data van profiel «test» samenvoegen in eerste profiel (zelfde browser) */
 function mergeTestProfileIntoHoudaifaOnce() {
   if (localStorage.getItem(STORAGE_KEYS.mergedTestProfile)) return;
-  const h = 'houdaifa';
+  const h = PROFILES[0].id;
   const t = 'test';
   function pair(base) {
     const rawH = localStorage.getItem(`${base}_${h}`);
@@ -121,7 +122,12 @@ function applyRetentionAndPersist(ritten, brandstof, overig) {
 export function getData() {
   migrateLegacyToProfile();
   mergeTestProfileIntoHoudaifaOnce();
-  const ritten = JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.ritten)) || '[]');
+  let ritten = JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.ritten)) || '[]');
+  const bf = backfillMissingVolgordeNrs(ritten);
+  if (bf.changed) {
+    ritten = bf.ritten;
+    saveRitten(ritten);
+  }
   const brandstof = JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.brandstof)) || '[]');
   const overig = JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.overig)) || '[]');
   const pruned = applyRetentionAndPersist(ritten, brandstof, overig);
