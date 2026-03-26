@@ -2,12 +2,37 @@
  * Dashboard – KPI-kaarten, vandaag-overzicht, rit-selectie CTA, kilometerteller, grafiek, komende/lopende ritten
  */
 
-import { PERIOD_LABELS, UI_COMPACT } from './config.js';
+import { PERIOD_LABELS, UI_COMPACT, PROFILES } from './config.js';
 import { totalenVoorPeriode, kmTotalen, vergoedingVoorRit, isInDay, getWeeklyFinancials, isRitVoltooid } from './calculations.js';
 import { formatEuro } from './format.js';
 import { getData, saveRitten } from './storage.js';
 
 let currentPeriod = 'month';
+
+function escapeHtml(str) {
+  return String(str)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function toISODate(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function startOfWeekMonday(d) {
+  const dt = new Date(d);
+  dt.setHours(0, 0, 0, 0);
+  const day = dt.getDay(); // 0=Sun
+  const diff = day === 0 ? -6 : 1 - day; // shift to Monday
+  dt.setDate(dt.getDate() + diff);
+  return dt;
+}
 
 export function getCurrentPeriod() {
   return currentPeriod;
@@ -59,6 +84,41 @@ export function updateVandaagSummary() {
       lijstEl.innerHTML = html;
     }
   }
+}
+
+/** Beschikbaarheid per dag (volgende 7 dagen) op dashboard */
+export function updateBeschikbaarheidWeek() {
+  const lijstEl = document.getElementById('dashboard-beschikbaarheid-lijst');
+  if (!lijstEl) return;
+
+  const { planning } = getData();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  // Toon 7 dagen vanaf vandaag (incl. vandaag)
+  const start = today;
+
+  let html = '';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const dateISO = toISODate(d);
+    const monthKey = dateISO.slice(0, 7);
+
+    const beschikbareNamen = PROFILES.filter((p) => planning?.[p.id]?.[monthKey]?.[dateISO]).map((p) => p.name);
+    const label = d.toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+
+    const namesHtml =
+      beschikbareNamen.length > 0
+        ? beschikbareNamen.map((n) => `<span class="beschikbaarheid-pill">${escapeHtml(n)}</span>`).join(' ')
+        : '<span class="beschikbaarheid-none">—</span>';
+
+    html += `<li class="dashboard-beschikbaarheid-item">
+      <span class="dashboard-beschikbaarheid-day">${escapeHtml(label)}</span>
+      <span class="dashboard-beschikbaarheid-names">${namesHtml}</span>
+    </li>`;
+  }
+
+  lijstEl.innerHTML = html;
 }
 
 function formatChartAxisEuro(n) {

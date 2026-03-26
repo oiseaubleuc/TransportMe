@@ -135,10 +135,29 @@ export function getData() {
     ritten: pruned.ritten,
     brandstof: pruned.brandstof,
     overig: pruned.overig,
+    planning: getPlanningAvailability(),
     ziekenhuizen: getZiekenhuizen(),
     presetRoutes: getPresetRoutes(),
     voertuigen: getVoertuigen(),
   };
+}
+
+/** Maandelijkse beschikbaarheden per profiel.
+ *  Structuur: { [profileId]: { [monthKey: 'YYYY-MM']: { [dateISO: 'YYYY-MM-DD']: true } } }
+ */
+export function getPlanningAvailability() {
+  const raw = localStorage.getItem(STORAGE_KEYS.planning);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function savePlanningAvailability(planning) {
+  localStorage.setItem(STORAGE_KEYS.planning, JSON.stringify(planning || {}));
 }
 
 function ensureDefaultVoertuigen() {

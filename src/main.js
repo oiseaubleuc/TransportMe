@@ -3,7 +3,7 @@
  * Mobielvriendelijk: navigatie, vaste ritten, berekening (brandstof + route), kaart, ziekenhuizen
  */
 
-import { updateKPI, updateKmTeller, updateVandaagSummary, initPeriodToggle, syncPeriodButtons, updateFinancialChart, updateRittenStatusLijst, updateRitMelding } from './js/dashboard.js';
+import { updateKPI, updateKmTeller, updateVandaagSummary, initPeriodToggle, syncPeriodButtons, updateFinancialChart, updateRittenStatusLijst, updateRitMelding, updateBeschikbaarheidWeek } from './js/dashboard.js';
 import { initFormRit, initFormBrandstof, initFormOverig, initBulkRittenImport, setAlleDatumsVandaag } from './js/forms.js';
 import { renderAllTables } from './js/tables.js';
 import { DEFAULT_CHAUFFEURS, UI_COMPACT } from './js/config.js';
@@ -17,6 +17,8 @@ import {
   saveVoertuigen,
   getCurrentProfileId,
   setCurrentProfileId,
+  getPlanningAvailability,
+  savePlanningAvailability,
 } from './js/storage.js';
 import { PROFILES } from './js/config.js';
 import { vergoedingVoorRit, geschatteAfstandKm, isRitVoltooid } from './js/calculations.js';
@@ -54,6 +56,7 @@ function refresh() {
   updateKPI();
   updateKmTeller();
   updateVandaagSummary();
+  updateBeschikbaarheidWeek();
   updateFinancialChart();
   updateRitMelding(refresh);
   updateRittenStatusLijst(refresh);
@@ -146,6 +149,7 @@ function updateRittenToolbar() {
 
 /** Filter op tab Ritten: planning-feed (stats + chips) */
 let rittenOverzichtFilter = 'alle';
+let rittenOverzichtZoek = '';
 
 function initRittenPageControls() {
   document.getElementById('btn-rit-aanmaken')?.addEventListener('click', () => setRittenSubview('aanmaken'));
@@ -157,6 +161,7 @@ function initRittenPageControls() {
     if (document.getElementById('page-ritten')?.classList.contains('active')) updateRittenToolbar();
   });
   initRittenOverzichtDelegation();
+  initRittenOverzichtZoek();
 }
 
 function initRittenOverzichtDelegation() {
@@ -170,6 +175,27 @@ function initRittenOverzichtDelegation() {
     if (!f) return;
     rittenOverzichtFilter = f;
     renderRittenStatusPagina();
+  });
+}
+
+function initRittenOverzichtZoek() {
+  const input = document.getElementById('ritten-overzicht-zoek');
+  const clearBtn = document.getElementById('ritten-overzicht-zoek-clear');
+  if (!input || !clearBtn || input.dataset.overzichtZoekInited) return;
+  input.dataset.overzichtZoekInited = '1';
+
+  input.value = rittenOverzichtZoek;
+
+  input.addEventListener('input', () => {
+    rittenOverzichtZoek = input.value.trim();
+    renderRittenStatusPagina();
+  });
+
+  clearBtn.addEventListener('click', () => {
+    rittenOverzichtZoek = '';
+    input.value = '';
+    renderRittenStatusPagina();
+    input.focus();
   });
 }
 
@@ -239,6 +265,123 @@ function initMeerZiekenhuizenToggle() {
       ziekenhuizenLijstUitgeklapt = !ziekenhuizenLijstUitgeklapt;
       refresh();
     }
+  });
+}
+
+// --- Beschikbaarheid / Planning (maandelijks) ---
+function getMonthKeyFromDate(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${yyyy}-${mm}`;
+}
+
+function isoDateFromYMD(yyyy, mm01, dd) {
+  const mm = String(mm01).padStart(2, '0');
+  const ddStr = String(dd).padStart(2, '0');
+  return `${yyyy}-${mm}-${ddStr}`;
+}
+
+function getDaysInMonth(yyyy, mm01) {
+  // mm01: 1-12
+  return new Date(yyyy, mm01, 0).getDate();
+}
+
+function renderPlanningMonth() {
+  const monthInput = document.getElementById('planning-maand');
+  const daysEl = document.getElementById('planning-days');
+  if (!monthInput || !daysEl) return;
+
+  const monthKey = monthInput.value || getMonthKeyFromDate(new Date());
+  monthInput.value = monthKey;
+
+  const [yyyyStr, mmStr] = monthKey.split('-');
+  const yyyy = Number(yyyyStr);
+  const mm01 = Number(mmStr);
+  if (!Number.isFinite(yyyy) || !Number.isFinite(mm01)) return;
+
+  const planning = getPlanningAvailability();
+  const daysInMonth = getDaysInMonth(yyyy, mm01);
+
+  const rows = [];
+  for (let dd = 1; dd <= daysInMonth; dd++) {
+    const dateISO = isoDateFromYMD(yyyy, mm01, dd);
+    const d = new Date(yyyy, mm01 - 1, dd);
+    const label = d.toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+
+    const profileButtons = PROFILES.map((p) => {
+      const available = Boolean(planning?.[p.id]?.[monthKey]?.[dateISO]);
+      return `<button type="button"
+          class="planning-av-toggle ${available ? 'planning-av-toggle--on' : ''}"
+          data-profile-id="${escapeHtml(p.id)}"
+          data-date-iso="${escapeHtml(dateISO)}"
+          aria-pressed="${available ? 'true' : 'false'}"
+        >
+          ${available ? '✓' : '—'}
+        </button>`;
+    }).join('');
+
+    rows.push(`<div class="planning-day-row">
+      <span class="planning-day-label">${escapeHtml(label)}</span>
+      ${profileButtons}
+    </div>`);
+  }
+
+  daysEl.innerHTML = rows.join('');
+}
+
+function initPlanningAvailabilityTab() {
+  const monthInput = document.getElementById('planning-maand');
+  const daysEl = document.getElementById('planning-days');
+  if (!monthInput || !daysEl) return;
+
+  renderPlanningMonth();
+
+  monthInput.addEventListener('change', () => {
+    renderPlanningMonth();
+    updateBeschikbaarheidWeek();
+  });
+
+  daysEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.planning-av-toggle');
+    if (!btn) return;
+    const profileId = btn.dataset.profileId;
+    const dateISO = btn.dataset.dateIso;
+    if (!profileId || !dateISO) return;
+
+    const monthKey = dateISO.slice(0, 7);
+    const planning = getPlanningAvailability();
+
+    const currentlyOn = btn.getAttribute('aria-pressed') === 'true';
+    const nextOn = !currentlyOn;
+
+    if (nextOn) {
+      if (!planning[profileId]) planning[profileId] = {};
+      if (!planning[profileId][monthKey]) planning[profileId][monthKey] = {};
+      planning[profileId][monthKey][dateISO] = true;
+    } else {
+      const month = planning?.[profileId]?.[monthKey];
+      if (month) {
+        delete month[dateISO];
+        if (Object.keys(month).length === 0) delete planning[profileId][monthKey];
+      }
+    }
+
+    savePlanningAvailability(planning);
+    renderPlanningMonth();
+    updateBeschikbaarheidWeek();
+  });
+
+  document.getElementById('planning-reset-maand')?.addEventListener('click', () => {
+    const monthKey = monthInput.value || getMonthKeyFromDate(new Date());
+    const planning = getPlanningAvailability();
+
+    PROFILES.forEach((p) => {
+      if (planning?.[p.id]?.[monthKey]) delete planning[p.id][monthKey];
+    });
+
+    savePlanningAvailability(planning);
+    renderPlanningMonth();
+    updateBeschikbaarheidWeek();
   });
 }
 
@@ -621,6 +764,32 @@ function renderRittenStatusPagina() {
     feedRows = voltooid.map((rit) => ({ rit, status: 'voltooid' }));
   }
 
+  const zoekRaw = rittenOverzichtZoek.trim();
+  const zoek = zoekRaw.toLowerCase();
+  const heeftZoek = zoek.length > 0;
+
+  if (heeftZoek) {
+    feedRows = feedRows.filter(({ rit: r, status }) => {
+      const tijdDisplay = status === 'voltooid' ? r.voltooidTijd || r.tijd : r.tijd;
+      const datumTijd = formatDatumKort(r.datum, tijdDisplay);
+      const haystack = [
+        r.chauffeurName,
+        r.voertuigName,
+        r.fromName,
+        r.toName,
+        datumTijd,
+        r.volgordeNr,
+        r.km,
+        r.vergoeding,
+        r.status,
+      ]
+        .filter((x) => x !== null && x !== undefined && String(x).trim() !== '')
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(zoek);
+    });
+  }
+
   const ul = document.getElementById('ritten-overzicht-feed');
   const leeg = document.getElementById('ritten-feed-leeg');
   const max = UI_COMPACT.rittenFeedMax;
@@ -629,7 +798,12 @@ function renderRittenStatusPagina() {
   if (feedRows.length === 0) {
     ul.innerHTML = '';
     ul.hidden = true;
-    if (leeg) leeg.hidden = false;
+    if (leeg) {
+      leeg.hidden = false;
+      leeg.textContent = heeftZoek ? `Geen resultaten voor “${zoekRaw}”.` : 'Geen ritten in dit filter.';
+    }
+    const shell = document.getElementById('ritten-overzicht-feed-shell');
+    if (shell) shell.scrollTo({ top: 0, behavior: 'auto' });
     return;
   }
   ul.hidden = false;
@@ -639,7 +813,8 @@ function renderRittenStatusPagina() {
   const meer = feedRows.length - tonen.length;
 
   let html = tonen
-    .map(({ rit: r, status }) => {
+    .map(({ rit: r, status }, idx) => {
+      const isMatch = heeftZoek && idx === 0;
       const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0);
       const tijdDisplay = status === 'voltooid' ? r.voltooidTijd || r.tijd : r.tijd;
       const datumTijd = formatDatumKort(r.datum, tijdDisplay);
@@ -652,7 +827,7 @@ function renderRittenStatusPagina() {
         r.fromName && r.toName
           ? `<div class="ritten-feed-route">${escapeHtml(r.fromName)} → ${escapeHtml(r.toName)}</div>`
           : '';
-      return `<li class="ritten-feed-item ritten-feed-item--${status}">
+      return `<li class="ritten-feed-item ritten-feed-item--${status}${isMatch ? ' ritten-feed-item--match' : ''}">
         <div class="ritten-feed-row1">
           ${nr ? `<span class="ritten-feed-numwrap">${nr}</span>` : ''}
           <span class="ritten-feed-datum">${escapeHtml(datumTijd)}</span>
@@ -668,6 +843,15 @@ function renderRittenStatusPagina() {
     html += `<li class="ritten-feed-more" aria-hidden="true">+${meer} meer · beperkte weergave</li>`;
   }
   ul.innerHTML = html;
+
+  const shell = document.getElementById('ritten-overzicht-feed-shell');
+  if (shell) shell.scrollTo({ top: 0, behavior: 'auto' });
+  if (heeftZoek) {
+    const matchEl = ul.querySelector('.ritten-feed-item--match');
+    if (matchEl) {
+      requestAnimationFrame(() => matchEl.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    }
+  }
 }
 
 function renderVoertuigen() {
@@ -978,6 +1162,7 @@ function init() {
   initFormOverig(refresh);
   initZiekenhuizen();
   initTabs();
+  initPlanningAvailabilityTab();
   refresh();
 }
 

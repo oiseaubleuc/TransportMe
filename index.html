@@ -63,6 +63,10 @@
                 </div>
               </div>
               <ul class="dashboard-vandaag-lijst dashboard-list-compact" id="ritten-vandaag-lijst" aria-label="Ritten vandaag"></ul>
+              <div class="dashboard-beschikbaarheid-section" id="dashboard-beschikbaarheid-section">
+                <h3 class="dashboard-panel-subtitle">Beschikbaarheid (volgende 7 dagen)</h3>
+                <ul class="dashboard-beschikbaarheid-lijst" id="dashboard-beschikbaarheid-lijst" aria-label="Beschikbaarheid per dag"></ul>
+              </div>
             </div>
             <div class="dashboard-rit-melding" id="dashboard-rit-melding" hidden>
               <p class="dashboard-rit-melding-text">Rit via kaart — bevestigen?</p>
@@ -166,6 +170,17 @@
           <aside class="ritten-overzicht" id="ritten-overzicht-aside">
             <h2 class="ritten-overzicht-title">Planning</h2>
             <p class="ritten-overzicht-sub">Tik op een getal om te filteren; onderaan de lijst scrollen.</p>
+            <div class="ritten-zoek-row" role="search">
+              <label class="ritten-zoek-label" for="ritten-overzicht-zoek">Zoeken</label>
+              <input
+                type="search"
+                id="ritten-overzicht-zoek"
+                class="ritten-zoek-input"
+                placeholder="Chauffeur, voertuig, ziekenhuis, datum…"
+                autocomplete="off"
+              />
+              <button type="button" id="ritten-overzicht-zoek-clear" class="ritten-zoek-clear" aria-label="Zoek leegmaken">×</button>
+            </div>
             <div class="ritten-overzicht-stats" id="ritten-overzicht-stats" aria-label="Aantallen per status"></div>
             <div class="ritten-overzicht-filters" role="tablist" aria-label="Filter planning">
               <button type="button" class="ritten-filter-btn active" data-filter="alle" role="tab" aria-selected="true">Alles</button>
@@ -173,7 +188,7 @@
               <button type="button" class="ritten-filter-btn" data-filter="lopend" role="tab" aria-selected="false">Onderweg</button>
               <button type="button" class="ritten-filter-btn" data-filter="voltooid" role="tab" aria-selected="false">Afgerond</button>
             </div>
-            <div class="ritten-feed-shell">
+            <div class="ritten-feed-shell" id="ritten-overzicht-feed-shell">
               <ul class="ritten-feed" id="ritten-overzicht-feed" aria-live="polite"></ul>
               <p class="ritten-feed-leeg" id="ritten-feed-leeg" hidden>Geen ritten in dit filter.</p>
             </div>
@@ -445,6 +460,7 @@
           <button type="button" class="tab active" role="tab" data-tab="ritten" id="tab-ritten">Ritten</button>
           <button type="button" class="tab" role="tab" data-tab="brandstof" id="tab-brandstof">Brandstof</button>
           <button type="button" class="tab" role="tab" data-tab="overig" id="tab-overig">Overige</button>
+          <button type="button" class="tab" role="tab" data-tab="planning" id="tab-planning">Planning</button>
         </div>
         <div class="tab-panels">
           <div class="tab-panel active" id="panel-ritten" role="tabpanel">
@@ -469,6 +485,25 @@
                 <thead><tr><th>Datum</th><th>Omschrijving</th><th>Bedrag</th><th></th></tr></thead>
                 <tbody id="tbody-overig"></tbody>
               </table>
+            </div>
+          </div>
+          <div class="tab-panel" id="panel-planning" role="tabpanel">
+            <div class="planning-availability">
+              <h3 class="list-title">Beschikbaarheid (maandelijks)</h3>
+              <p class="form-intro">Vink per dag aan wie beschikbaar is. Het dashboard toont dit voor de volgende 7 dagen.</p>
+              <div class="form-row">
+                <label for="planning-maand">Maand</label>
+                <input type="month" id="planning-maand" />
+              </div>
+              <div class="planning-grid-head" role="row">
+                <span class="planning-col planning-col--day">Dag</span>
+                <span class="planning-col planning-col--profile">Houdaifa</span>
+                <span class="planning-col planning-col--profile">Amine</span>
+              </div>
+              <div class="planning-days" id="planning-days" aria-label="Beschikbaarheden per dag"></div>
+              <button type="button" id="planning-reset-maand" class="btn btn-outline btn-block btn-sm">
+                Reset maand
+              </button>
             </div>
           </div>
         </div>

@@ -12,6 +12,7 @@ export const STORAGE_KEYS = {
   ritten: 'transporteur_ritten',
   brandstof: 'transporteur_brandstof',
   overig: 'transporteur_overig',
+  planning: 'transporteur_planning_beschikbaarheid',
   ziekenhuizen: 'transporteur_ziekenhuizen',
   presetRoutes: 'transporteur_preset_routes',
   voertuigen: 'transporteur_voertuigen',
