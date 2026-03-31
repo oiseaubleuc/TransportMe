@@ -5,6 +5,7 @@
 import {
   STORAGE_KEYS,
   DEFAULT_ZIEKENHUIZEN,
+  PRESET_ANCHOR_ZIEKENHUIZEN,
   DEFAULT_PRESET_ROUTES,
   DEFAULT_VOERTUIGEN,
   PROFILES,
@@ -104,6 +105,17 @@ function keptInRollingWindow(datumStr) {
   return t >= retentionCutoffMs();
 }
 
+/** Eénmalig: zet alle teller-data (ritten/brandstof/overig) op nul voor elk profiel */
+function resetAllCountersOnce() {
+  if (localStorage.getItem(STORAGE_KEYS.resetAllCountersV1)) return;
+  PROFILES.forEach((p) => {
+    localStorage.setItem(`${STORAGE_KEYS.ritten}_${p.id}`, '[]');
+    localStorage.setItem(`${STORAGE_KEYS.brandstof}_${p.id}`, '[]');
+    localStorage.setItem(`${STORAGE_KEYS.overig}_${p.id}`, '[]');
+  });
+  localStorage.setItem(STORAGE_KEYS.resetAllCountersV1, '1');
+}
+
 /** Ritten, brandstof en overig: enkel laatste DATA_RETENTION_DAGEN bewaren */
 function applyRetentionAndPersist(ritten, brandstof, overig) {
   const fR = ritten.filter((r) => keptInRollingWindow(r.datum));
@@ -122,6 +134,7 @@ function applyRetentionAndPersist(ritten, brandstof, overig) {
 export function getData() {
   migrateLegacyToProfile();
   mergeTestProfileIntoHoudaifaOnce();
+  resetAllCountersOnce();
   let ritten = JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.ritten)) || '[]');
   const bf = backfillMissingVolgordeNrs(ritten);
   if (bf.changed) {
@@ -207,9 +220,15 @@ function ensureDefaultZiekenhuizen() {
     return DEFAULT_ZIEKENHUIZEN;
   }
   const stored = JSON.parse(raw);
+  // Oude versies konden een heel grote OSM-lijst inladen; trim eenmalig hard terug.
+  if (Array.isArray(stored) && stored.length > 120) {
+    localStorage.setItem(STORAGE_KEYS.ziekenhuizen, JSON.stringify(DEFAULT_ZIEKENHUIZEN));
+    return DEFAULT_ZIEKENHUIZEN;
+  }
+
   const merged = [...stored];
   let changed = false;
-  for (const d of DEFAULT_ZIEKENHUIZEN) {
+  for (const d of PRESET_ANCHOR_ZIEKENHUIZEN) {
     const idx = merged.findIndex((m) => m.id === d.id);
     if (idx === -1) {
       merged.push(d);

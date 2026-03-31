@@ -121,6 +121,37 @@ export function updateBeschikbaarheidWeek() {
   lijstEl.innerHTML = html;
 }
 
+/** Financieel-tab: per profiel aantal + lijst uitgevoerde ritten */
+export function updateFinancieelProfielOverzicht() {
+  const countEl = document.getElementById('fin-profiel-ritten-count');
+  const listEl = document.getElementById('fin-profiel-ritten-lijst');
+  if (!countEl || !listEl) return;
+
+  const { ritten } = getData();
+  const uitgevoerd = ritten
+    .filter((r) => isRitVoltooid(r))
+    .sort((a, b) => (b.datum + (b.tijd || '')).localeCompare(a.datum + (a.tijd || '')));
+
+  countEl.textContent = String(uitgevoerd.length);
+
+  if (uitgevoerd.length === 0) {
+    listEl.innerHTML = '<li class="financieel-profiel-rit-item financieel-profiel-rit-item--empty">Nog geen uitgevoerde ritten.</li>';
+    return;
+  }
+
+  const tonen = uitgevoerd.slice(0, 12);
+  listEl.innerHTML = tonen
+    .map((r) => {
+      const bon = r.bonnummer ? `Bon ${escapeHtml(r.bonnummer)}` : 'Bon —';
+      const route = r.fromName && r.toName ? `${escapeHtml(r.fromName)} → ${escapeHtml(r.toName)}` : 'Route niet ingevuld';
+      return `<li class="financieel-profiel-rit-item">
+        <span class="financieel-profiel-rit-top">${bon} · ${escapeHtml(formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km || 0)))}</span>
+        <span class="financieel-profiel-rit-meta">${escapeHtml(r.datum || '—')} · ${r.km || 0} km · ${route}</span>
+      </li>`;
+    })
+    .join('');
+}
+
 function formatChartAxisEuro(n) {
   const v = Math.round(Number(n));
   if (!Number.isFinite(v)) return '€0';

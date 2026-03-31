@@ -3,8 +3,8 @@
  * Mobielvriendelijk: navigatie, vaste ritten, berekening (brandstof + route), kaart, ziekenhuizen
  */
 
-import { updateKPI, updateKmTeller, updateVandaagSummary, initPeriodToggle, syncPeriodButtons, updateFinancialChart, updateRittenStatusLijst, updateRitMelding, updateBeschikbaarheidWeek } from './js/dashboard.js';
-import { initFormRit, initFormBrandstof, initFormOverig, initBulkRittenImport, setAlleDatumsVandaag } from './js/forms.js';
+import { updateKPI, updateKmTeller, updateVandaagSummary, initPeriodToggle, syncPeriodButtons, updateFinancialChart, updateRittenStatusLijst, updateRitMelding, updateBeschikbaarheidWeek, updateFinancieelProfielOverzicht } from './js/dashboard.js';
+import { initFormRit, initFormBrandstof, initFinancieelTicketImport, initFormOverig, initBulkRittenImport, setAlleDatumsVandaag } from './js/forms.js';
 import { renderAllTables } from './js/tables.js';
 import { DEFAULT_CHAUFFEURS, UI_COMPACT } from './js/config.js';
 import {
@@ -57,6 +57,7 @@ function refresh() {
   updateKmTeller();
   updateVandaagSummary();
   updateBeschikbaarheidWeek();
+  updateFinancieelProfielOverzicht();
   updateFinancialChart();
   updateRitMelding(refresh);
   updateRittenStatusLijst(refresh);
@@ -77,6 +78,7 @@ function refresh() {
 // --- Paginanavigatie + vorige tab (o.a. Ritten) ---
 const TAB_LABELS = {
   dashboard: 'Dashboard',
+  financieel: 'Financieel',
   berekening: 'Berekening',
   ritten: 'Ritten',
   kaart: 'Kaart',
@@ -396,32 +398,33 @@ function renderVasteRitten() {
   const hospitals = getZiekenhuizen();
   const getHospital = (id) => hospitals.find((h) => h.id === id);
 
-  // Unieke vertrekken (fromId) met label fromName, gesorteerd op naam
-  const vertrekMap = new Map();
-  presets.forEach((p) => {
-    if (!vertrekMap.has(p.fromId)) vertrekMap.set(p.fromId, p.fromName || p.fromId);
-  });
-  const vertrekIds = [...vertrekMap.entries()].sort((a, b) => (a[1] || '').localeCompare(b[1] || ''));
+  // Vertrek en aankomst zijn vrij te kiezen uit alle ziekenhuizen.
+  const hospitalsSorted = [...hospitals].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
   vertrekSelect.innerHTML = '<option value="">— Kies vertrek —</option>';
-  vertrekIds.forEach(([id, name]) => {
+  hospitalsSorted.forEach((h) => {
     const opt = document.createElement('option');
-    opt.value = id;
-    opt.textContent = name;
+    opt.value = h.id;
+    opt.textContent = h.name;
     vertrekSelect.appendChild(opt);
   });
 
   function vulBestemming() {
     const fromId = vertrekSelect.value;
     bestemmingSelect.innerHTML = '<option value="">— Kies bestemming —</option>';
-    if (!fromId) return;
-    const voorVertrek = presets.filter((p) => p.fromId === fromId).sort((a, b) => (a.toName || '').localeCompare(b.toName || ''));
-    voorVertrek.forEach((p) => {
+    if (!fromId) {
+      bestemmingSelect.disabled = true;
+      return;
+    }
+    bestemmingSelect.disabled = false;
+    hospitalsSorted
+      .filter((h) => h.id !== fromId)
+      .forEach((h) => {
       const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = p.defaultKm != null ? `${p.toName} (${p.defaultKm} km)` : p.toName;
+      opt.value = h.id;
+      opt.textContent = h.name;
       bestemmingSelect.appendChild(opt);
-    });
+      });
   }
 
   vertrekSelect.addEventListener('change', () => {
@@ -434,26 +437,29 @@ function renderVasteRitten() {
   });
 
   bestemmingSelect.addEventListener('change', async () => {
-    const presetId = bestemmingSelect.value;
-    const preset = presets.find((p) => p.id === presetId);
+    const fromId = vertrekSelect.value;
+    const toId = bestemmingSelect.value;
+    const from = getHospital(fromId);
+    const to = getHospital(toId);
     const destEl = document.getElementById('rit-selected-destination');
-    if (!preset) {
+    if (!from || !to) {
       if (destEl) destEl.hidden = true;
       kmInput.value = '';
       kmInput.dispatchEvent(new Event('input'));
       return;
     }
     if (destEl) {
-      destEl.textContent = `${preset.fromName} → ${preset.toName}`;
+      destEl.textContent = `${from.name} → ${to.name}`;
       destEl.hidden = false;
     }
-    if (preset.defaultKm != null) {
+    const preset =
+      presets.find((p) => p.fromId === fromId && p.toId === toId) ||
+      presets.find((p) => p.fromId === toId && p.toId === fromId);
+    if (preset?.defaultKm != null) {
       kmInput.value = preset.defaultKm;
       kmInput.dispatchEvent(new Event('input'));
       return;
     }
-    const from = getHospital(preset.fromId);
-    const to = getHospital(preset.toId);
     if (from?.lat != null && to?.lat != null) {
       if (hasOpenRouteApiKey()) {
         try {
@@ -545,8 +551,14 @@ function initMapIfNeeded() {
   const toSelect = document.getElementById('kaart-to');
   const ritKiezen = document.getElementById('kaart-rit-kiezen');
   const container = document.getElementById('map-container');
+  const routeLabelEl = document.getElementById('kaart-route-label');
+  const routeKmEl = document.getElementById('kaart-route-km');
+  const routeSourceEl = document.getElementById('kaart-route-source');
+  const fitBtn = document.getElementById('kaart-fit-route');
   const hasORS = hasOpenRouteApiKey();
   const hospitals = getZiekenhuizen();
+  let currentFrom = null;
+  let currentTo = null;
 
   function getSelectedFromTo() {
     const fromId = fromSelect?.value;
@@ -559,6 +571,8 @@ function initMapIfNeeded() {
 
   function updateMapAndLinks() {
     const { from, to } = getSelectedFromTo();
+    currentFrom = from;
+    currentTo = to;
     setNavigationLinks(from, to);
 
     if (!container) return;
@@ -578,10 +592,31 @@ function initMapIfNeeded() {
       map.on('remove', () => ro.disconnect());
       setTimeout(() => map.resize(), 150);
     }
-    if (hasBoth && hasORS && map) {
+    if (!hasBoth) {
+      if (routeLabelEl) routeLabelEl.textContent = '—';
+      if (routeKmEl) routeKmEl.textContent = '— km';
+      if (routeSourceEl) routeSourceEl.textContent = 'Schatting';
+      return;
+    }
+
+    if (routeLabelEl) routeLabelEl.textContent = `${from.name || 'Vertrek'} → ${to.name || 'Aankomst'}`;
+
+    if (hasORS && map) {
       getRouteDistanceORS(from, to)
-        .then(({ geometry }) => addRouteToMapLibreMap(map, geometry))
-        .catch(() => {});
+        .then(({ km, geometry }) => {
+          addRouteToMapLibreMap(map, geometry);
+          if (routeKmEl) routeKmEl.textContent = `${km || 0} km`;
+          if (routeSourceEl) routeSourceEl.textContent = 'ORS (exact)';
+        })
+        .catch(() => {
+          const km = geschatteAfstandKm(from, to);
+          if (routeKmEl) routeKmEl.textContent = `${km || 0} km`;
+          if (routeSourceEl) routeSourceEl.textContent = 'Schatting';
+        });
+    } else {
+      const km = geschatteAfstandKm(from, to);
+      if (routeKmEl) routeKmEl.textContent = `${km || 0} km`;
+      if (routeSourceEl) routeSourceEl.textContent = 'Schatting';
     }
   }
 
@@ -604,6 +639,10 @@ function initMapIfNeeded() {
       if (!fromOk || !toOk) return;
       fromSelect.value = r.fromId;
       toSelect.value = r.toId;
+      updateMapAndLinks();
+    });
+    fitBtn?.addEventListener('click', () => {
+      if (!currentFrom || !currentTo) return;
       updateMapAndLinks();
     });
   }
@@ -654,7 +693,7 @@ function renderSavedZiekenhuizen() {
 
 function fillVoertuigDropdowns() {
   const voertuigen = getVoertuigen();
-  ['rit-voertuig', 'brandstof-voertuig', 'bulk-default-voertuig'].forEach((id) => {
+  ['rit-voertuig', 'brandstof-voertuig', 'fin-ticket-voertuig', 'bulk-default-voertuig'].forEach((id) => {
     const sel = document.getElementById(id);
     if (!sel) return;
     sel.innerHTML = '<option value="">— Kies voertuig —</option>';
@@ -777,6 +816,7 @@ function renderRittenStatusPagina() {
         r.voertuigName,
         r.fromName,
         r.toName,
+        r.bonnummer,
         datumTijd,
         r.volgordeNr,
         r.km,
@@ -1159,6 +1199,7 @@ function init() {
   initFormRit(afterRitFormSaved);
   initBulkRittenImport(refresh);
   initFormBrandstof(refresh);
+  initFinancieelTicketImport(refresh);
   initFormOverig(refresh);
   initZiekenhuizen();
   initTabs();

@@ -24,7 +24,7 @@ export function renderRitten(onRender) {
 
   if (ritten.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="8" class="empty-state">Nog geen ritten. Voeg een rit toe boven.</td></tr>';
+      '<tr><td colspan="9" class="empty-state">Nog geen ritten. Voeg een rit toe boven.</td></tr>';
     return;
   }
 
@@ -51,18 +51,19 @@ export function renderRitten(onRender) {
   const statusLabel = (s) => (s === 'komend' ? 'Kom.' : s === 'lopend' ? 'Lop.' : s === 'voltooid' ? 'Volt.' : '—');
   let html = '';
   if (wekenVerborgen > 0) {
-    html += `<tr class="week-header week-header--note"><td colspan="8"><span class="compact-table-note">${wekenVerborgen} oudere week${wekenVerborgen > 1 ? 'en' : ''} niet getoond · laatste ${UI_COMPACT.rittenTabelWeken} weken</span></td></tr>`;
+    html += `<tr class="week-header week-header--note"><td colspan="9"><span class="compact-table-note">${wekenVerborgen} oudere week${wekenVerborgen > 1 ? 'en' : ''} niet getoond · laatste ${UI_COMPACT.rittenTabelWeken} weken</span></td></tr>`;
   }
   const perWeek = UI_COMPACT.rittenPerWeekInTabel;
   weekKeys.forEach((key) => {
     const weekRitten = byWeek[key];
     const label = getWeekLabel(weekRitten[0].datum);
-    html += `<tr class="week-header"><td colspan="8"><strong>${escapeHtml(label)}</strong></td></tr>`;
+    html += `<tr class="week-header"><td colspan="9"><strong>${escapeHtml(label)}</strong></td></tr>`;
     const rows = weekRitten.slice(0, perWeek);
     rows.forEach(
       (r) =>
         (html += `<tr>
           <td class="num">${r.volgordeNr != null ? escapeHtml(String(r.volgordeNr)) : '—'}</td>
+          <td>${escapeHtml(r.bonnummer || '—')}</td>
           <td>${escapeHtml(formatDatumKort(r.datum))}</td>
           <td>${escapeHtml(r.chauffeurName || '—')}</td>
           <td>${escapeHtml(r.voertuigName || '—')}</td>
@@ -74,11 +75,11 @@ export function renderRitten(onRender) {
     );
     const rest = weekRitten.length - rows.length;
     if (rest > 0) {
-      html += `<tr class="table-row-compact-note"><td colspan="8">+${rest} in deze week</td></tr>`;
+      html += `<tr class="table-row-compact-note"><td colspan="9">+${rest} in deze week</td></tr>`;
     }
   });
   html += `<tr class="total-row">
-    <td colspan="4"><strong>Totaal voltooide (${voltooide.length} rit${voltooide.length === 1 ? '' : 'ten'})</strong></td>
+    <td colspan="5"><strong>Totaal voltooide (${voltooide.length} rit${voltooide.length === 1 ? '' : 'ten'})</strong></td>
     <td class="num"><strong>${totaalKm} km</strong></td>
     <td class="num"><strong>${formatEuro(totaalVergoeding)}</strong></td>
     <td colspan="2"></td>

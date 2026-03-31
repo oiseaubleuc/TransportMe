@@ -41,7 +41,6 @@
           </div>
           <nav class="dashboard-nav" role="tablist" aria-label="Dashboard secties">
             <button type="button" class="dashboard-nav-btn active" role="tab" id="tab-dash-vandaag" aria-selected="true" data-dashboard-tab="vandaag">Vandaag</button>
-            <button type="button" class="dashboard-nav-btn" role="tab" id="tab-dash-financieel" aria-selected="false" data-dashboard-tab="financieel">Financieel</button>
             <button type="button" class="dashboard-nav-btn" role="tab" id="tab-dash-km" aria-selected="false" data-dashboard-tab="km">Kilometers</button>
           </nav>
 
@@ -75,65 +74,9 @@
                 <button type="button" class="btn btn-outline" id="dashboard-rit-melding-nee">Nee</button>
               </div>
             </div>
-            <div class="dashboard-cta-card">
-              <h3 class="dashboard-cta-title">Nieuwe rit</h3>
-              <p class="dashboard-cta-text">Direct invoeren na oproep.</p>
-              <button type="button" class="btn btn-primary btn-cta" id="dashboard-rit-kiezen">
-                <span class="btn-cta-icon" aria-hidden="true">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                </span>
-                Rit kiezen
-              </button>
-            </div>
             <div class="ritten-status-section" id="ritten-status-section">
               <h3 class="dashboard-panel-subtitle">Komende en lopende ritten</h3>
               <ul class="ritten-status-lijst dashboard-list-compact" id="ritten-status-lijst"></ul>
-            </div>
-          </div>
-
-          <div class="dashboard-panel" id="dashboard-panel-financieel" role="tabpanel" aria-labelledby="tab-dash-financieel" hidden>
-            <div class="financieel-page">
-              <header class="financieel-hero">
-                <h2 class="financieel-hero-title" id="financieel-hero-heading">Financieel overzicht</h2>
-                <p class="financieel-hero-lead">Cijfers voor de gekozen periode en een week-trend van omzet en winst.</p>
-              </header>
-
-              <div class="financieel-split dashboard-financieel-split">
-                <div class="financieel-col financieel-col--kpis">
-                  <div class="financieel-kpi-grid" role="list">
-                    <article class="financieel-kpi-card financieel-kpi-card--omzet" role="listitem">
-                      <span class="financieel-kpi-accent" aria-hidden="true"></span>
-                      <span class="financieel-kpi-label">Omzet</span>
-                      <span class="financieel-kpi-value" id="kpi-omzet">€ 0</span>
-                      <span class="financieel-kpi-extra" id="kpi-omzet-extra"></span>
-                      <span class="financieel-kpi-period" id="kpi-omzet-period">Deze maand</span>
-                    </article>
-                    <article class="financieel-kpi-card financieel-kpi-card--brandstof" role="listitem">
-                      <span class="financieel-kpi-accent" aria-hidden="true"></span>
-                      <span class="financieel-kpi-label">Benzine</span>
-                      <span class="financieel-kpi-value" id="kpi-brandstof">€ 0</span>
-                      <span class="financieel-kpi-period" id="kpi-brandstof-period">Deze maand</span>
-                    </article>
-                    <article class="financieel-kpi-card financieel-kpi-card--winst" role="listitem">
-                      <span class="financieel-kpi-accent" aria-hidden="true"></span>
-                      <span class="financieel-kpi-label">Winst</span>
-                      <span class="financieel-kpi-value" id="kpi-winst">€ 0</span>
-                      <span class="financieel-kpi-period" id="kpi-winst-period">Deze maand</span>
-                    </article>
-                  </div>
-                  <div class="financieel-period" role="group" aria-label="Periode voor KPI-kaarten">
-                    <button type="button" class="btn-period" data-period="day">Vandaag</button>
-                    <button type="button" class="btn-period" data-period="week">Week</button>
-                    <button type="button" class="btn-period active" data-period="month">Maand</button>
-                  </div>
-                </div>
-
-                <div class="financieel-col financieel-col--chart">
-                  <div class="financial-chart-wrap" id="financial-chart-wrap">
-                    <div class="financial-chart" id="financial-chart" role="img" aria-label=""></div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -144,6 +87,93 @@
                 <div class="km-card"><span class="km-label">Vandaag</span><span class="km-value" id="km-day">0 km</span></div>
                 <div class="km-card"><span class="km-label">Deze week</span><span class="km-value" id="km-week">0 km</span></div>
                 <div class="km-card"><span class="km-label">Deze maand</span><span class="km-value" id="km-month">0 km</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pagina: Financieel -->
+      <section class="page" id="page-financieel" aria-labelledby="nav-financieel">
+        <div class="financieel-page">
+          <header class="financieel-hero">
+            <h2 class="financieel-hero-title" id="financieel-hero-heading">Financieel overzicht</h2>
+            <p class="financieel-hero-lead">Cijfers voor de gekozen periode en een week-trend van omzet en winst.</p>
+          </header>
+
+          <div class="financieel-split dashboard-financieel-split">
+            <div class="financieel-col financieel-col--kpis">
+              <div class="financieel-kpi-grid" role="list">
+                <article class="financieel-kpi-card financieel-kpi-card--omzet" role="listitem">
+                  <span class="financieel-kpi-accent" aria-hidden="true"></span>
+                  <span class="financieel-kpi-label">Omzet</span>
+                  <span class="financieel-kpi-value" id="kpi-omzet">€ 0</span>
+                  <span class="financieel-kpi-extra" id="kpi-omzet-extra"></span>
+                  <span class="financieel-kpi-period" id="kpi-omzet-period">Deze maand</span>
+                </article>
+                <article class="financieel-kpi-card financieel-kpi-card--brandstof" role="listitem">
+                  <span class="financieel-kpi-accent" aria-hidden="true"></span>
+                  <span class="financieel-kpi-label">Benzine</span>
+                  <span class="financieel-kpi-value" id="kpi-brandstof">€ 0</span>
+                  <span class="financieel-kpi-period" id="kpi-brandstof-period">Deze maand</span>
+                </article>
+                <article class="financieel-kpi-card financieel-kpi-card--winst" role="listitem">
+                  <span class="financieel-kpi-accent" aria-hidden="true"></span>
+                  <span class="financieel-kpi-label">Winst</span>
+                  <span class="financieel-kpi-value" id="kpi-winst">€ 0</span>
+                  <span class="financieel-kpi-period" id="kpi-winst-period">Deze maand</span>
+                </article>
+              </div>
+              <div class="financieel-period" role="group" aria-label="Periode voor KPI-kaarten">
+                <button type="button" class="btn-period" data-period="day">Vandaag</button>
+                <button type="button" class="btn-period" data-period="week">Week</button>
+                <button type="button" class="btn-period active" data-period="month">Maand</button>
+              </div>
+              <section class="financieel-profiel-overzicht">
+                <h3 class="financieel-ticket-title">Uitgevoerde ritten (huidig profiel)</h3>
+                <p class="financieel-ticket-intro"><strong id="fin-profiel-ritten-count">0</strong> ritten uitgevoerd.</p>
+                <ul class="financieel-profiel-ritten-lijst" id="fin-profiel-ritten-lijst"></ul>
+              </section>
+              <section class="financieel-ticket-import">
+                <h3 class="financieel-ticket-title">Tanktickets als kosten importeren</h3>
+                <p class="financieel-ticket-intro">Upload foto van een ticket of vul handmatig in. Opslaan gaat direct naar brandstofkosten van dit profiel.</p>
+                <div class="form-row">
+                  <label for="fin-ticket-file">Foto tankticket (optioneel)</label>
+                  <input type="file" id="fin-ticket-file" accept="image/*" capture="environment" />
+                </div>
+                <div class="analyse-resultaat" id="fin-ticket-result-wrap" hidden>
+                  <strong>Resultaat:</strong> <span id="fin-ticket-result-text"></span>
+                </div>
+                <div class="financieel-ticket-grid">
+                  <div class="form-row">
+                    <label for="fin-ticket-datum">Datum</label>
+                    <input type="date" id="fin-ticket-datum" />
+                  </div>
+                  <div class="form-row">
+                    <label for="fin-ticket-voertuig">Voertuig</label>
+                    <select id="fin-ticket-voertuig" class="select">
+                      <option value="">— Kies voertuig —</option>
+                    </select>
+                  </div>
+                  <div class="form-row">
+                    <label for="fin-ticket-liter">Volume (L)</label>
+                    <input type="text" id="fin-ticket-liter" inputmode="decimal" placeholder="42,5" />
+                  </div>
+                  <div class="form-row">
+                    <label for="fin-ticket-prijs">Prijs totaal (€)</label>
+                    <input type="number" id="fin-ticket-prijs" min="0" step="0.01" placeholder="85.00" />
+                  </div>
+                </div>
+                <div class="financieel-ticket-actions">
+                  <span class="info-text">Per liter: <strong id="fin-ticket-per-liter">€ 0</strong></span>
+                  <button type="button" id="fin-ticket-save" class="btn btn-primary">Opslaan als brandstofkost</button>
+                </div>
+              </section>
+            </div>
+
+            <div class="financieel-col financieel-col--chart">
+              <div class="financial-chart-wrap" id="financial-chart-wrap">
+                <div class="financial-chart" id="financial-chart" role="img" aria-label=""></div>
               </div>
             </div>
           </div>
@@ -245,6 +275,10 @@
                     <select id="rit-voertuig" class="select">
                       <option value="">— Kies voertuig —</option>
                     </select>
+                  </div>
+                  <div class="form-row">
+                    <label for="rit-bonnummer">Bonnummer</label>
+                    <input type="text" id="rit-bonnummer" placeholder="bv. 2025-000123" required />
                   </div>
                   <div class="form-row">
                     <label for="rit-km">Afstand (km)</label>
@@ -385,10 +419,29 @@
             <option value="">— Kies aankomst —</option>
           </select>
         </div>
+        <div class="kaart-summary" id="kaart-summary">
+          <div class="kaart-summary-item">
+            <span class="kaart-summary-label">Route</span>
+            <strong class="kaart-summary-value" id="kaart-route-label">—</strong>
+          </div>
+          <div class="kaart-summary-item">
+            <span class="kaart-summary-label">Afstand</span>
+            <strong class="kaart-summary-value" id="kaart-route-km">— km</strong>
+          </div>
+          <div class="kaart-summary-item">
+            <span class="kaart-summary-label">Bron</span>
+            <strong class="kaart-summary-value" id="kaart-route-source">Schatting</strong>
+          </div>
+        </div>
+        <div class="kaart-actions">
+          <button type="button" class="btn btn-outline btn-sm" id="kaart-fit-route">Pas kaart aan</button>
+          <a href="#" id="link-waze" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Open Waze</a>
+          <a href="#" id="link-google-nav" target="_blank" rel="noopener" class="btn btn-primary btn-sm">Open Google Maps</a>
+        </div>
         <div class="map-container" id="map-container">
           <div class="map-placeholder" id="map-placeholder">Kies vertrek en aankomst om de kaart te zien.</div>
         </div>
-        <p class="info-text--small">Open in <a href="#" id="link-waze" target="_blank" rel="noopener">Waze</a> of <a href="#" id="link-google-nav" target="_blank" rel="noopener">Google Maps</a> voor navigatie.</p>
+        <p class="info-text--small">Tip: kies een rit uit planning voor snelle weergave, of selecteer vertrek en aankomst handmatig.</p>
       </section>
 
       <!-- Pagina: Meer (Ziekenhuizen + Gegevens) -->
@@ -466,7 +519,7 @@
           <div class="tab-panel active" id="panel-ritten" role="tabpanel">
             <div class="table-wrap table-wrap--managed">
               <table class="data-table data-table--compact">
-                <thead><tr><th>Volg. nr.</th><th>Datum</th><th>Chauffeur</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Volg. nr.</th><th>Bonnr.</th><th>Datum</th><th>Chauffeur</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th>Status</th><th></th></tr></thead>
                 <tbody id="tbody-ritten"></tbody>
               </table>
             </div>
@@ -514,6 +567,10 @@
       <button type="button" class="nav-item active" data-page="dashboard" id="nav-dashboard" aria-current="page">
         <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
         <span class="nav-label">Dashboard</span>
+      </button>
+      <button type="button" class="nav-item" data-page="financieel" id="nav-financieel" title="Financieel overzicht">
+        <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 7-7"/><path d="M14 9h5v5"/></svg></span>
+        <span class="nav-label">Financieel</span>
       </button>
       <button type="button" class="nav-item" data-page="berekening" id="nav-berekening" title="Brandstof en optimale route">
         <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h5"/></svg></span>

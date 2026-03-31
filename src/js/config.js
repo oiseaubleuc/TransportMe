@@ -2,8 +2,6 @@
  * Configuratie – vergoeding, storage keys, vaste ritten
  */
 
-import ZIEKENHUIZEN_VLAANDEREN from '../data/ziekenhuizen-vlaanderen.json';
-
 export const OPSTART_PREMIE = 15;
 export const VERGOEDING_PER_20KM = 25;
 export const KM_SCHIJF = 20;
@@ -19,12 +17,15 @@ export const STORAGE_KEYS = {
   currentProfile: 'transporteur_current_profile',
   /** Eénmalig: Test-profiel is samengevoegd in houdaifa */
   mergedTestProfile: 'transporteur_merged_test_to_houdaifa_v1',
+  /** Eénmalig: teller-reset gevraagd door business (ritten/brandstof/overig op nul) */
+  resetAllCountersV1: 'transporteur_reset_all_counters_v1',
 };
 
 /** Profielen (zelfstandigen): elk eigen dataset ritten / brandstof / overig in localStorage */
 export const PROFILES = [
   { id: 'houdaifa', name: 'Houdaifa' },
   { id: 'amine', name: 'Amine' },
+  { id: 'frederik', name: 'Frederik' },
 ];
 
 /** Ritten, brandstof en overige kosten: max. bewaard (rolling window, dagen) */
@@ -58,6 +59,7 @@ export const RIT_DUUR_MINUTEN = 150;
 export const DEFAULT_CHAUFFEURS = [
   { id: 'chauffeur-houdaifa', naam: 'Houdaifa' },
   { id: 'chauffeur-amine', naam: 'Amine' },
+  { id: 'chauffeur-frederik', naam: 'Frederik' },
   { id: 'chauffeur-student1', naam: 'Student1' },
 ];
 
@@ -95,8 +97,8 @@ export const PRESET_ANCHOR_ZIEKENHUIZEN = [
   { id: 'sint-truiden', name: 'Sint-Truiden', address: 'Sint-Truiden', lat: 50.8158, lng: 5.1863 },
 ];
 
-/** OSM amenity=hospital binnen Vlaanderen; bron: scripts/fetch-ziekenhuizen-vlaanderen.mjs (ODbL) */
-export const DEFAULT_ZIEKENHUIZEN = [...PRESET_ANCHOR_ZIEKENHUIZEN, ...ZIEKENHUIZEN_VLAANDEREN];
+/** Beperkte, herkenbare standaardlijst (geen volledige OSM-massa) */
+export const DEFAULT_ZIEKENHUIZEN = [...PRESET_ANCHOR_ZIEKENHUIZEN];
 
 /** Vaste ritten uit ritten_vergoeding_v2.xlsx (29 ritten, km en namen zoals in Excel) */
 export const DEFAULT_PRESET_ROUTES = [

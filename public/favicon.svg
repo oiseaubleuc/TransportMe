@@ -1,20 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Transporteur">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Transporteur truck">
   <defs>
-    <linearGradient id="g" x1="12%" y1="8%" x2="88%" y2="92%">
+    <linearGradient id="bg" x1="12%" y1="8%" x2="88%" y2="92%">
       <stop offset="0%" stop-color="#7a9f2e"/>
       <stop offset="100%" stop-color="#4d6619"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="108" fill="url(#g)"/>
-  <!-- Route: twee punten + bocht (leesbaar op klein formaat) -->
-  <path
-    d="M118 288c0-62 50-112 112-112h52c44 0 80 36 80 80s-36 80-80 80h-40"
-    fill="none"
-    stroke="#f5f5f0"
-    stroke-width="40"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <circle cx="118" cy="288" r="46" fill="#f5f5f0"/>
-  <circle cx="342" cy="336" r="46" fill="#f5f5f0"/>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <g fill="#f5f5f0">
+    <!-- truck body -->
+    <rect x="108" y="210" width="230" height="112" rx="24"/>
+    <!-- cabin -->
+    <path d="M338 232h52c10 0 18 4 24 12l28 34c4 5 6 11 6 17v27h-110V232z"/>
+    <!-- window -->
+    <path d="M356 246h38c4 0 8 2 11 5l19 23h-68V246z" fill="#6f8f2c"/>
+    <!-- bumper bar -->
+    <rect x="114" y="322" width="334" height="18" rx="8"/>
+    <!-- wheels -->
+    <circle cx="184" cy="352" r="36"/>
+    <circle cx="374" cy="352" r="36"/>
+  </g>
+  <g fill="#365114">
+    <circle cx="184" cy="352" r="16"/>
+    <circle cx="374" cy="352" r="16"/>
+  </g>
 </svg>

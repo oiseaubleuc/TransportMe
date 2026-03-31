@@ -326,20 +326,21 @@ body {
 .map-container {
   position: relative;
   width: 100%;
-  min-height: min(280px, 50dvh);
-  height: clamp(220px, 58vmin, 480px);
-  max-height: min(520px, 70dvh);
+  min-height: min(320px, 58dvh);
+  height: clamp(280px, 62vmin, 560px);
+  max-height: min(640px, 78dvh);
   background: var(--surface2);
   border-radius: var(--radius);
   overflow: hidden;
   margin-bottom: 0.75rem;
   border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
 }
 
 @media (min-width: 768px) {
   .map-container {
-    min-height: 300px;
-    height: clamp(280px, 48vmin, 520px);
+    min-height: 360px;
+    height: clamp(340px, 52vmin, 620px);
   }
 }
 
@@ -386,6 +387,52 @@ body {
   font-size: 0.9rem;
   padding: 1rem;
   text-align: center;
+}
+
+.kaart-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.kaart-summary-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  min-width: 0;
+}
+
+.kaart-summary-label {
+  display: block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.15rem;
+}
+
+.kaart-summary-value {
+  display: block;
+  font-size: 0.83rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kaart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+
+.kaart-actions .btn {
+  flex: 1 1 10rem;
+  text-align: center;
+  text-decoration: none;
 }
 
 /* Select */
@@ -1154,6 +1201,91 @@ body {
   .financieel-period .btn-period.active {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 0 0 1px color-mix(in srgb, var(--accent) 40%, var(--border));
   }
+}
+
+.financieel-ticket-import {
+  margin-top: 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface2) 38%, transparent);
+}
+
+.financieel-ticket-title {
+  margin: 0 0 0.3rem 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.financieel-ticket-intro {
+  margin: 0 0 0.7rem 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.financieel-ticket-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.45rem 0.75rem;
+}
+
+@media (min-width: 560px) {
+  .financieel-ticket-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.financieel-ticket-actions {
+  margin-top: 0.45rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.financieel-profiel-overzicht {
+  margin-top: 0.9rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.financieel-profiel-ritten-lijst {
+  list-style: none;
+  margin: 0.4rem 0 0 0;
+  padding: 0;
+  max-height: 10.5rem;
+  overflow-y: auto;
+}
+
+.financieel-profiel-rit-item {
+  border-bottom: 1px solid var(--border);
+  padding: 0.4rem 0;
+  font-size: 0.8rem;
+}
+
+.financieel-profiel-rit-item:last-child {
+  border-bottom: none;
+}
+
+.financieel-profiel-rit-top {
+  display: block;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.financieel-profiel-rit-meta {
+  display: block;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+
+.financieel-profiel-rit-item--empty {
+  color: var(--text-muted);
+  border-bottom: none;
 }
 
 /* Grafiekkaart */
