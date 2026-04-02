@@ -1,5 +1,6 @@
 /**
- * Opslag – localStorage: ritten, brandstof, overig (zelfstandige dataset) + rolling retentie
+ * Opslag – localStorage per profiel: ritten, brandstof, overig, ziekenhuizen, preset-routes,
+ * voertuigen, factuur; planning en live-beschikbaarheid als gedeelde maps met profileId-keys.
  */
 
 import {
@@ -140,6 +141,34 @@ function profileKey(baseKey) {
   return `${baseKey}_${getCurrentProfileId()}`;
 }
 
+function profileStorageKey(baseKey, profileId) {
+  const pid = VALID_PROFILE_IDS.has(profileId) ? profileId : PROFILES[0].id;
+  return `${baseKey}_${pid}`;
+}
+
+/**
+ * Eénmalig: oude globale sleutels voor ziekenhuizen, preset-routes en voertuigen
+ * kopiëren naar elke profiel-sleutel (zelfde startdata), daarna globale sleutels verwijderen.
+ */
+function migrateGlobalListsToPerProfileOnce() {
+  if (localStorage.getItem(STORAGE_KEYS.migrateListsPerProfileV1)) return;
+  const legacyZ = localStorage.getItem(STORAGE_KEYS.ziekenhuizen);
+  const legacyP = localStorage.getItem(STORAGE_KEYS.presetRoutes);
+  const legacyV = localStorage.getItem(STORAGE_KEYS.voertuigen);
+  for (const p of PROFILES) {
+    const zk = profileStorageKey(STORAGE_KEYS.ziekenhuizen, p.id);
+    const pk = profileStorageKey(STORAGE_KEYS.presetRoutes, p.id);
+    const vk = profileStorageKey(STORAGE_KEYS.voertuigen, p.id);
+    if (legacyZ != null && localStorage.getItem(zk) == null) localStorage.setItem(zk, legacyZ);
+    if (legacyP != null && localStorage.getItem(pk) == null) localStorage.setItem(pk, legacyP);
+    if (legacyV != null && localStorage.getItem(vk) == null) localStorage.setItem(vk, legacyV);
+  }
+  if (legacyZ != null) localStorage.removeItem(STORAGE_KEYS.ziekenhuizen);
+  if (legacyP != null) localStorage.removeItem(STORAGE_KEYS.presetRoutes);
+  if (legacyV != null) localStorage.removeItem(STORAGE_KEYS.voertuigen);
+  localStorage.setItem(STORAGE_KEYS.migrateListsPerProfileV1, '1');
+}
+
 /** Eénmalige migratie: bestaande data zonder profiel-suffix naar eerste profiel (legacy default) */
 function migrateLegacyToProfile() {
   const profileId = getCurrentProfileId();
@@ -250,6 +279,7 @@ function applyRetentionAndPersist(ritten, brandstof, overig) {
 
 export function getData() {
   migrateLegacyToProfile();
+  migrateGlobalListsToPerProfileOnce();
   mergeTestProfileIntoHoudaifaOnce();
   resetAllCountersOnce();
   cleanupDataOnce();
@@ -297,16 +327,22 @@ export function savePlanningAvailability(planning) {
 }
 
 function ensureDefaultVoertuigen() {
-  const raw = localStorage.getItem(STORAGE_KEYS.voertuigen);
+  const key = profileKey(STORAGE_KEYS.voertuigen);
+  const raw = localStorage.getItem(key);
   if (!raw) {
-    localStorage.setItem(STORAGE_KEYS.voertuigen, JSON.stringify(DEFAULT_VOERTUIGEN));
+    localStorage.setItem(key, JSON.stringify(DEFAULT_VOERTUIGEN));
     return DEFAULT_VOERTUIGEN;
   }
   const stored = JSON.parse(raw);
   const merged = [...stored];
+  let changed = false;
   for (const d of DEFAULT_VOERTUIGEN) {
-    if (!merged.some((m) => m.id === d.id)) merged.push(d);
+    if (!merged.some((m) => m.id === d.id)) {
+      merged.push(d);
+      changed = true;
+    }
   }
+  if (changed) localStorage.setItem(key, JSON.stringify(merged));
   return merged;
 }
 
@@ -315,7 +351,7 @@ export function getVoertuigen() {
 }
 
 export function saveVoertuigen(voertuigen) {
-  localStorage.setItem(STORAGE_KEYS.voertuigen, JSON.stringify(voertuigen));
+  localStorage.setItem(profileKey(STORAGE_KEYS.voertuigen), JSON.stringify(voertuigen));
 }
 
 export function saveRitten(ritten) {
@@ -346,15 +382,16 @@ function routePairExists(routes, fromId, toId) {
 }
 
 function ensureDefaultZiekenhuizen() {
-  const raw = localStorage.getItem(STORAGE_KEYS.ziekenhuizen);
+  const key = profileKey(STORAGE_KEYS.ziekenhuizen);
+  const raw = localStorage.getItem(key);
   if (!raw) {
-    localStorage.setItem(STORAGE_KEYS.ziekenhuizen, JSON.stringify(DEFAULT_ZIEKENHUIZEN));
+    localStorage.setItem(key, JSON.stringify(DEFAULT_ZIEKENHUIZEN));
     return DEFAULT_ZIEKENHUIZEN;
   }
   const stored = JSON.parse(raw);
   // Oude versies konden een heel grote OSM-lijst inladen; trim eenmalig hard terug.
   if (Array.isArray(stored) && stored.length > 120) {
-    localStorage.setItem(STORAGE_KEYS.ziekenhuizen, JSON.stringify(DEFAULT_ZIEKENHUIZEN));
+    localStorage.setItem(key, JSON.stringify(DEFAULT_ZIEKENHUIZEN));
     return DEFAULT_ZIEKENHUIZEN;
   }
 
@@ -373,14 +410,15 @@ function ensureDefaultZiekenhuizen() {
       }
     }
   }
-  if (changed) localStorage.setItem(STORAGE_KEYS.ziekenhuizen, JSON.stringify(merged));
+  if (changed) localStorage.setItem(key, JSON.stringify(merged));
   return merged;
 }
 
 function ensureDefaultPresetRoutes() {
-  const raw = localStorage.getItem(STORAGE_KEYS.presetRoutes);
+  const key = profileKey(STORAGE_KEYS.presetRoutes);
+  const raw = localStorage.getItem(key);
   if (!raw) {
-    localStorage.setItem(STORAGE_KEYS.presetRoutes, JSON.stringify(DEFAULT_PRESET_ROUTES));
+    localStorage.setItem(key, JSON.stringify(DEFAULT_PRESET_ROUTES));
     return DEFAULT_PRESET_ROUTES;
   }
   const stored = JSON.parse(raw);
@@ -400,7 +438,7 @@ function ensureDefaultPresetRoutes() {
       }
     }
   }
-  if (changed) localStorage.setItem(STORAGE_KEYS.presetRoutes, JSON.stringify(merged));
+  if (changed) localStorage.setItem(key, JSON.stringify(merged));
   return merged;
 }
 
@@ -409,7 +447,7 @@ export function getZiekenhuizen() {
 }
 
 export function saveZiekenhuizen(ziekenhuizen) {
-  localStorage.setItem(STORAGE_KEYS.ziekenhuizen, JSON.stringify(ziekenhuizen));
+  localStorage.setItem(profileKey(STORAGE_KEYS.ziekenhuizen), JSON.stringify(ziekenhuizen));
 }
 
 export function getPresetRoutes() {
@@ -417,7 +455,7 @@ export function getPresetRoutes() {
 }
 
 export function savePresetRoutes(routes) {
-  localStorage.setItem(STORAGE_KEYS.presetRoutes, JSON.stringify(routes));
+  localStorage.setItem(profileKey(STORAGE_KEYS.presetRoutes), JSON.stringify(routes));
 }
 
 function readLiveAvailabilityMap() {

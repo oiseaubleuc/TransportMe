@@ -24,6 +24,8 @@ export const STORAGE_KEYS = {
   resetAllCountersV1: 'transporteur_reset_all_counters_v1',
   /** Eénmalig: data opgeschoond en naar nieuw schema gebracht */
   dataCleanupV2: 'transporteur_data_cleanup_v2',
+  /** Eénmalig: ziekenhuizen / preset-routes / voertuigen van globaal naar per profiel */
+  migrateListsPerProfileV1: 'transporteur_migrate_lists_per_profile_v1',
   /** Live aanwezigheidsstatus (vervalt automatisch) */
   liveAvailability: 'transporteur_live_availability_v1',
   /** Factuurgegevens + logo per profiel (Meer-tab) */
