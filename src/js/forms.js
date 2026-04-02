@@ -9,6 +9,47 @@ import { getData, saveRitten, saveBrandstof, saveOverig, getVoertuigen, getZieke
 import { nextVolgordeStart } from './ritVolgorde.js';
 import { parseReceiptText } from './ocr.js';
 
+function ritOpslaanModus() {
+  const el = document.querySelector('input[name="rit-opslaan-modus"]:checked');
+  return el?.value === 'meerdere' ? 'meerdere' : 'een';
+}
+
+function boxWeightForRow(boxen) {
+  if (boxen == null || boxen === '') return 1;
+  const b = Number.parseInt(String(boxen), 10);
+  if (Number.isFinite(b) && b > 0) return b;
+  return 1;
+}
+
+/** surplus = totaal km − n (min. 1 km per rit); verdeel surplus naar gewichten */
+function splitKmWeightedAtLeastOne(totalKm, weights) {
+  const n = weights.length;
+  if (n === 0) return [];
+  const sum = weights.reduce((a, b) => a + b, 0) || n;
+  const surplus = totalKm - n;
+  if (surplus < 0) return null;
+  const parts = weights.map((w) => 1 + Math.round((surplus * w) / sum));
+  const drift = totalKm - parts.reduce((a, b) => a + b, 0);
+  parts[parts.length - 1] += drift;
+  return parts;
+}
+
+function splitEuroCents(totalEuro, weights) {
+  const sum = weights.reduce((a, b) => a + b, 0) || weights.length;
+  const totalCents = Math.round(totalEuro * 100);
+  let acc = 0;
+  const out = [];
+  for (let i = 0; i < weights.length; i++) {
+    if (i === weights.length - 1) out.push((totalCents - acc) / 100);
+    else {
+      const c = Math.round((totalCents * weights[i]) / sum);
+      out.push(c / 100);
+      acc += c;
+    }
+  }
+  return out;
+}
+
 function isPdfFile(file) {
   if (!file) return false;
   const t = String(file.type || '').toLowerCase();
@@ -53,6 +94,32 @@ export function initFormRit(onSubmit) {
   if (!form || !datumInput) return;
 
   datumInput.value = toDateStr(new Date());
+  const achterafCb = document.getElementById('rit-achteraf');
+  const tijdRow = document.getElementById('rit-tijd-row');
+  const tijdInput = document.getElementById('rit-tijd');
+
+  function getEffectiveRitTijd() {
+    if (achterafCb?.checked && tijdInput?.value) {
+      const m = String(tijdInput.value).trim().match(/^(\d{1,2}):(\d{2})$/);
+      if (m) {
+        const h = Number(m[1]);
+        const min = Number(m[2]);
+        if (h >= 0 && h <= 23 && min >= 0 && min <= 59) {
+          return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+        }
+      }
+    }
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  }
+
+  function syncAchterafRow() {
+    if (tijdRow) tijdRow.hidden = !achterafCb?.checked;
+    updatePreview();
+  }
+  achterafCb?.addEventListener('change', syncAchterafRow);
+  tijdInput?.addEventListener('input', () => updatePreview());
+
   const artikelLijst = document.getElementById('rit-artikelen-lijst');
   const artikelAddBtn = document.getElementById('rit-artikel-add');
 
@@ -78,6 +145,7 @@ export function initFormRit(onSubmit) {
           artikelLijst.innerHTML = artikelRowTemplate('', '', false);
           bindArtikelEvents();
         }
+        syncRitOpslaanModusHint();
       };
     });
   }
@@ -86,13 +154,37 @@ export function initFormRit(onSubmit) {
     if (!artikelLijst) return;
     artikelLijst.insertAdjacentHTML('beforeend', artikelRowTemplate('', '', true));
     bindArtikelEvents();
+    syncRitOpslaanModusHint();
   });
   bindArtikelEvents();
 
+  const modusHint = document.getElementById('rit-opslaan-modus-hint');
+  function syncRitOpslaanModusHint() {
+    if (!modusHint || !artikelLijst) return;
+    const rows = artikelLijst.querySelectorAll('.rit-artikel-row');
+    let totaalBoxen = 0;
+    rows.forEach((row) => {
+      const raw = row.querySelector('.rit-artikel-boxen')?.value;
+      totaalBoxen += boxWeightForRow(raw);
+    });
+    const meerdereRegels = rows.length > 1;
+    const veelBoxen = rows.length === 1 && totaalBoxen > 1;
+    if (meerdereRegels || veelBoxen) {
+      modusHint.textContent =
+        'Tip: meerdere regels of meerdere boxen op één regel? Kies «Meerdere ritten» om vergoeding en km naar boxen te verdelen (min. 1 km per rit).';
+    } else {
+      modusHint.textContent =
+        'Één rit: alle regels op dezelfde rit. Meerdere ritten: per regel een aparte rit; vergoeding en km worden verdeeld volgens het aantal boxen (of gelijk als boxen leeg).';
+    }
+  }
+  artikelLijst?.addEventListener('input', (e) => {
+    if (e.target?.classList?.contains('rit-artikel-boxen')) syncRitOpslaanModusHint();
+  });
+  syncRitOpslaanModusHint();
+
   function updatePreview() {
     const km = parseFloat(kmInput?.value) || 0;
-    const now = new Date();
-    const tijd = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const tijd = getEffectiveRitTijd();
     if (preview) preview.textContent = formatEuro(vergoedingVoorRit(km, tijd));
     if (previewKm) previewKm.textContent = km ? `${Math.round(km)} km` : '0 km';
 
@@ -149,9 +241,17 @@ export function initFormRit(onSubmit) {
       return;
     }
     if (!datum || !km || km < 1 || !chauffeurId) return;
-    const now = new Date();
-    const tijd = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const vergoeding = vergoedingVoorRit(km, tijd);
+    const achteraf = Boolean(achterafCb?.checked);
+    if (achteraf) {
+      const tv = tijdInput?.value?.trim() || '';
+      if (!tv) {
+        alert('Vink «Achteraf ingevoerd» uit, of vul het uur van de rit in.');
+        return;
+      }
+    }
+    const modus = ritOpslaanModus();
+    const tijd = getEffectiveRitTijd();
+    const vergoedingTotaal = vergoedingVoorRit(km, tijd);
     const voertuigSel = document.getElementById('rit-voertuig');
     const voertuigId = voertuigSel?.value || '';
     const voertuigName = voertuigSel?.selectedOptions?.[0]?.textContent || '';
@@ -163,33 +263,80 @@ export function initFormRit(onSubmit) {
     const from = fromId ? ziekenhuizen.find((h) => h.id === fromId) : null;
     const to = toId ? ziekenhuizen.find((h) => h.id === toId) : null;
     const { ritten } = getData();
-    const rit = {
-      id: Date.now(),
-      volgordeNr: nextVolgordeStart(ritten),
+
+    const baseRit = {
       datum,
       tijd,
-      km,
-      vergoeding,
       voertuigId,
       voertuigName,
       chauffeurId,
       chauffeurName,
-      bonnummer,
-      bestelArtikelen,
-      status: 'komend',
+      status: achteraf ? 'voltooid' : 'komend',
       duurMinuten: RIT_DUUR_MINUTEN,
     };
+    if (achteraf) baseRit.voltooidTijd = tijd;
     if (from && to) {
-      rit.fromId = from.id;
-      rit.toId = to.id;
-      rit.fromName = from.name;
-      rit.toName = to.name;
+      baseRit.fromId = from.id;
+      baseRit.toId = to.id;
+      baseRit.fromName = from.name;
+      baseRit.toName = to.name;
     }
-    ritten.push(rit);
+
+    let rijenVoorSplit = bestelArtikelen;
+    if (modus === 'meerdere' && bestelArtikelen.length === 1) {
+      const ene = bestelArtikelen[0];
+      const n = boxWeightForRow(ene.boxen);
+      if (n > 1) {
+        rijenVoorSplit = Array.from({ length: n }, () => ({
+          bonnummer: ene.bonnummer,
+          boxen: 1,
+        }));
+      }
+    }
+
+    const splitInMeerdereRitten = modus === 'meerdere' && rijenVoorSplit.length > 1;
+    if (splitInMeerdereRitten) {
+      const weights = rijenVoorSplit.map((a) => boxWeightForRow(a.boxen));
+      const kmParts = splitKmWeightedAtLeastOne(km, weights);
+      if (!kmParts) {
+        alert(
+          `Voor ${rijenVoorSplit.length} ritten zijn minstens ${rijenVoorSplit.length} km nodig (minimaal 1 km per rit).`
+        );
+        return;
+      }
+      const euroParts = splitEuroCents(vergoedingTotaal, weights);
+      let volgorde = nextVolgordeStart(ritten);
+      const tBase = Date.now();
+      rijenVoorSplit.forEach((art, i) => {
+        ritten.push({
+          ...baseRit,
+          id: tBase + i,
+          volgordeNr: volgorde++,
+          km: kmParts[i],
+          vergoeding: euroParts[i],
+          bonnummer: art.bonnummer,
+          bestelArtikelen: [{ bonnummer: art.bonnummer, boxen: art.boxen }],
+        });
+      });
+    } else {
+      ritten.push({
+        ...baseRit,
+        id: Date.now(),
+        volgordeNr: nextVolgordeStart(ritten),
+        km,
+        vergoeding: vergoedingTotaal,
+        bonnummer,
+        bestelArtikelen,
+      });
+    }
+
     ritten.sort((a, b) => a.datum.localeCompare(b.datum));
     saveRitten(ritten);
     form.reset();
     datumInput.value = toDateStr(new Date());
+    if (achterafCb) achterafCb.checked = false;
+    if (tijdInput) tijdInput.value = '';
+    if (tijdRow) tijdRow.hidden = true;
     updatePreview();
     const destClear = document.getElementById('rit-selected-destination');
     if (destClear) {

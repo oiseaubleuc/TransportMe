@@ -1,14 +1,17 @@
 /**
  * Transporteur – hoofdingang
- * Mobielvriendelijk: navigatie, vaste ritten, berekening (brandstof + route), kaart, ziekenhuizen
+ * Mobielvriendelijk: navigatie, vaste ritten, kost (brandstof), kaart, ziekenhuizen
  */
 
 import { updateKPI, updateVandaagSummary, initPeriodToggle, syncPeriodButtons, updateFinancialChart, updateRittenStatusLijst, updateRitMelding, updateBeschikbaarheidWeek, updateFinancieelProfielOverzicht } from './js/dashboard.js';
 import { initFormRit, initFormBrandstof, initFinancieelTicketImport, initFormOverig, setAlleDatumsVandaag } from './js/forms.js';
+import { initFinancieelFactuur, refreshFinancieelFactuurSelects } from './js/financieelFactuur.js';
+import { initFactuurGegevensMeer, syncFactuurGegevensFormFromStorage } from './js/factuurGegevensMeer.js';
 import { renderAllTables } from './js/tables.js';
 import { DEFAULT_CHAUFFEURS, UI_COMPACT } from './js/config.js';
 import {
   getData,
+  saveRitten,
   getZiekenhuizen,
   saveZiekenhuizen,
   getPresetRoutes,
@@ -26,9 +29,8 @@ import { PROFILES } from './js/config.js';
 import { vergoedingVoorRit, geschatteAfstandKm, isRitVoltooid } from './js/calculations.js';
 import { formatEuro, formatDatumTijd, formatDatumKort } from './js/format.js';
 import { initPlaceSearchFree } from './js/placeSearchFree.js';
-import { getRouteDistanceORS, hasOpenRouteApiKey, getDistanceMatrixORS } from './js/ors.js';
+import { getRouteDistanceORS, hasOpenRouteApiKey } from './js/ors.js';
 import { showMapLibreMap, addRouteToMapLibreMap } from './js/mapLibre.js';
-import { buildDistanceMatrix, computeOptimalOrder } from './js/routeOptimization.js';
 
 /** Ziekenhuizenlijst Meer: uitgeklapt = volledige lijst */
 let ziekenhuizenLijstUitgeklapt = false;
@@ -89,6 +91,8 @@ function refresh() {
   updateVandaagSummary();
   updateBeschikbaarheidWeek();
   updateFinancieelProfielOverzicht();
+  refreshFinancieelFactuurSelects();
+  syncFactuurGegevensFormFromStorage();
   updateFinancialChart();
   updateRitMelding(refresh);
   updateRittenStatusLijst(refresh);
@@ -102,15 +106,13 @@ function refresh() {
   renderKaartSelect();
   fillKaartRitDropdown();
   fillNewRouteDropdowns();
-  renderRouteChecklist();
-  fillRouteStartDropdown();
 }
 
 // --- Paginanavigatie + vorige tab (o.a. Ritten) ---
 const TAB_LABELS = {
   dashboard: 'Dashboard',
   financieel: 'Financieel',
-  berekening: 'Berekening',
+  kost: 'Kost',
   ritten: 'Ritten',
   kaart: 'Kaart',
   meer: 'Meer',
@@ -195,6 +197,7 @@ function initRittenPageControls() {
   });
   initRittenOverzichtDelegation();
   initRittenOverzichtZoek();
+  initHandmatigAfrondenPanel();
 }
 
 function initRittenOverzichtDelegation() {
@@ -202,6 +205,34 @@ function initRittenOverzichtDelegation() {
   if (!aside || aside.dataset.overzichtDeleg) return;
   aside.dataset.overzichtDeleg = '1';
   aside.addEventListener('click', (e) => {
+    const startBtn = e.target.closest('.ritten-feed-btn-start');
+    if (startBtn) {
+      e.preventDefault();
+      const id = startBtn.getAttribute('data-rit-id');
+      const { ritten } = getData();
+      const rit = findRitById(ritten, id);
+      if (rit?.status === 'komend') {
+        rit.status = 'lopend';
+        saveRitten(ritten);
+        refresh();
+      }
+      return;
+    }
+    const afrondenBtn = e.target.closest('.ritten-feed-btn-afronden');
+    if (afrondenBtn) {
+      e.preventDefault();
+      const id = afrondenBtn.getAttribute('data-rit-id');
+      const { ritten } = getData();
+      const rit = findRitById(ritten, id);
+      if (rit && (rit.status === 'komend' || rit.status === 'lopend')) {
+        const now = new Date();
+        rit.status = 'voltooid';
+        rit.voltooidTijd = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        saveRitten(ritten);
+        refresh();
+      }
+      return;
+    }
     const filterBtn = e.target.closest('.ritten-filter-btn[data-filter]');
     const statTile = e.target.closest('.ritten-stat-tile[data-filter]');
     const f = filterBtn?.dataset.filter || statTile?.dataset.filter;
@@ -251,7 +282,6 @@ function showPage(pageId, options = {}) {
     updateRittenToolbar();
   }
   if (pageId === 'kaart') initMapIfNeeded();
-  if (pageId === 'berekening') initRoutePageIfNeeded();
   if (pageId === 'dashboard') {
     updateVandaagSummary();
     updateRitMelding(refresh);
@@ -596,6 +626,75 @@ function escapeHtml(str) {
   if (str == null) return '';
   const s = String(str);
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function findRitById(ritten, idVal) {
+  if (idVal == null || idVal === '') return undefined;
+  const sid = String(idVal);
+  return ritten.find((r) => String(r.id) === sid);
+}
+
+function handmatigAfrondenLabel(rit) {
+  const st = rit.status === 'lopend' ? 'Onderweg' : 'Open';
+  const nr = rit.volgordeNr != null ? `#${rit.volgordeNr} · ` : '';
+  return `${nr}${formatDatumKort(rit.datum, rit.tijd)} · ${rit.km || 0} km · ${st}`;
+}
+
+function updateRittenHandmatigAfrondenSelect(ritten) {
+  const sel = document.getElementById('ritten-handmatig-select');
+  if (!sel) return;
+  const prev = sel.value;
+  const open = ritten
+    .filter((r) => r.status === 'komend' || r.status === 'lopend')
+    .slice()
+    .sort((a, b) => {
+      const da = `${a.datum || ''}${a.tijd || ''}`;
+      const db = `${b.datum || ''}${b.tijd || ''}`;
+      return db.localeCompare(da);
+    });
+  if (open.length === 0) {
+    sel.innerHTML = '<option value="">Geen open of onderweg ritten</option>';
+    sel.disabled = true;
+    return;
+  }
+  sel.disabled = false;
+  sel.innerHTML =
+    '<option value="">— Kies rit —</option>' +
+    open
+      .map(
+        (r) =>
+          `<option value="${escapeHtml(String(r.id))}">${escapeHtml(handmatigAfrondenLabel(r))}</option>`
+      )
+      .join('');
+  if (prev && open.some((r) => String(r.id) === prev)) sel.value = prev;
+}
+
+function initHandmatigAfrondenPanel() {
+  const btn = document.getElementById('ritten-handmatig-opslaan');
+  if (!btn || btn.dataset.inited) return;
+  btn.dataset.inited = '1';
+  btn.addEventListener('click', () => {
+    const sel = document.getElementById('ritten-handmatig-select');
+    const tijdEl = document.getElementById('ritten-handmatig-tijd');
+    if (!sel?.value) return;
+    const { ritten } = getData();
+    const rit = findRitById(ritten, sel.value);
+    if (!rit || (rit.status !== 'komend' && rit.status !== 'lopend')) {
+      refresh();
+      return;
+    }
+    const tRaw = tijdEl?.value?.trim();
+    rit.status = 'voltooid';
+    if (tRaw) {
+      rit.voltooidTijd = tRaw.length >= 5 ? tRaw.slice(0, 5) : tRaw;
+    } else {
+      const now = new Date();
+      rit.voltooidTijd = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    }
+    saveRitten(ritten);
+    if (tijdEl) tijdEl.value = '';
+    refresh();
+  });
 }
 
 // --- Kaart ---
@@ -982,7 +1081,10 @@ function renderRittenStatusPagina() {
   const ul = document.getElementById('ritten-overzicht-feed');
   const leeg = document.getElementById('ritten-feed-leeg');
   const max = UI_COMPACT.rittenFeedMax;
-  if (!ul) return;
+  if (!ul) {
+    updateRittenHandmatigAfrondenSelect(ritten);
+    return;
+  }
 
   if (feedRows.length === 0) {
     ul.innerHTML = '';
@@ -993,6 +1095,7 @@ function renderRittenStatusPagina() {
     }
     const shell = document.getElementById('ritten-overzicht-feed-shell');
     if (shell) shell.scrollTo({ top: 0, behavior: 'auto' });
+    updateRittenHandmatigAfrondenSelect(ritten);
     return;
   }
   ul.hidden = false;
@@ -1016,6 +1119,13 @@ function renderRittenStatusPagina() {
         r.fromName && r.toName
           ? `<div class="ritten-feed-route">${escapeHtml(r.fromName)} → ${escapeHtml(r.toName)}</div>`
           : '';
+      const idAttr = escapeHtml(String(r.id));
+      const acties =
+        status === 'voltooid'
+          ? ''
+          : status === 'lopend'
+            ? `<div class="ritten-feed-actions"><button type="button" class="btn btn-small btn-primary ritten-feed-btn-afronden" data-rit-id="${idAttr}">Afronden</button></div>`
+            : `<div class="ritten-feed-actions"><button type="button" class="btn btn-small ritten-feed-btn-start" data-rit-id="${idAttr}">Start rit</button><button type="button" class="btn btn-small btn-primary ritten-feed-btn-afronden" data-rit-id="${idAttr}">Afronden</button></div>`;
       return `<li class="ritten-feed-item ritten-feed-item--${status}${isMatch ? ' ritten-feed-item--match' : ''}">
         <div class="ritten-feed-row1">
           ${nr ? `<span class="ritten-feed-numwrap">${nr}</span>` : ''}
@@ -1025,6 +1135,7 @@ function renderRittenStatusPagina() {
         <div class="ritten-feed-row2">${r.km || 0} km · ${formatEuro(verg)}</div>
         ${routeHint}
         <div class="ritten-feed-meta">${escapeHtml(meta)}</div>
+        ${acties}
       </li>`;
     })
     .join('');
@@ -1041,6 +1152,7 @@ function renderRittenStatusPagina() {
       requestAnimationFrame(() => matchEl.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     }
   }
+  updateRittenHandmatigAfrondenSelect(ritten);
 }
 
 function renderVoertuigen() {
@@ -1094,155 +1206,6 @@ function fillNewRouteDropdowns() {
   const opts = list.map((h) => `<option value="${h.id}">${escapeHtml(h.name)}</option>`).join('');
   fromSelect.innerHTML = '<option value="">— Van —</option>' + opts;
   toSelect.innerHTML = '<option value="">— Naar —</option>' + opts;
-}
-
-// --- Optimale route (meerdere ritten, kortste volgorde) ---
-function renderRouteChecklist() {
-  const container = document.getElementById('route-checklist');
-  if (!container) return;
-  const presets = getPresetRoutes();
-  const hospitals = getZiekenhuizen();
-  const hospitalIds = new Set(hospitals.map((h) => h.id));
-  const valid = presets
-    .filter((p) => p.fromId && p.toId && hospitalIds.has(p.fromId) && hospitalIds.has(p.toId))
-    .sort((a, b) => {
-      const aa = `${pSafe(a.fromName, a.fromId)} ${pSafe(a.toName, a.toId)}`;
-      const bb = `${pSafe(b.fromName, b.fromId)} ${pSafe(b.toName, b.toId)}`;
-      return aa.localeCompare(bb);
-    });
-  const verborgen = presets.length - valid.length;
-
-  if (valid.length === 0) {
-    container.innerHTML =
-      '<p class="route-checklist-empty">Geen geldige ritten in de checklist. Voeg eerst ziekenhuizen/vaste ritten toe.</p>';
-    return;
-  }
-
-  let html = '';
-  if (verborgen > 0) {
-    html += `<div class="route-checklist-note">${verborgen} route${verborgen > 1 ? 's' : ''} verborgen (locatie ontbreekt in je ziekenhuislijst).</div>`;
-  }
-  html += valid
-    .map((p) => {
-      const from = pSafe(p.fromName, p.fromId);
-      const to = pSafe(p.toName, p.toId);
-      return `<label class="route-checklist-item">
-        <input type="checkbox" class="route-rit-cb" data-preset-id="${p.id}" />
-        <span class="route-checklist-route">${escapeHtml(from)} → ${escapeHtml(to)}</span>
-        <span class="route-checklist-km">${p.defaultKm != null ? p.defaultKm + ' km' : '?'}</span>
-      </label>`;
-    })
-    .join('');
-  container.innerHTML = html;
-}
-
-function pSafe(name, fallback) {
-  return name && String(name).trim() ? name : fallback || '—';
-}
-
-function fillRouteStartDropdown() {
-  const select = document.getElementById('route-start');
-  if (!select) return;
-  const list = getZiekenhuizen();
-  const opts = list.map((h) => `<option value="${h.id}">${escapeHtml(h.name)}</option>`).join('');
-  select.innerHTML = '<option value="">— Kies startpunt —</option>' + opts;
-}
-
-let routePageInited = false;
-
-function initRoutePageIfNeeded() {
-  const btn = document.getElementById('route-bereken-btn');
-  if (!btn || routePageInited) return;
-  routePageInited = true;
-
-  btn.addEventListener('click', async () => {
-    const startSelect = document.getElementById('route-start');
-    const startId = startSelect?.value;
-    if (!startId) {
-      alert('Kies een startpunt.');
-      return;
-    }
-    const checked = document.querySelectorAll('.route-rit-cb:checked');
-    const selectedPresetIds = Array.from(checked).map((el) => el.dataset.presetId);
-    if (selectedPresetIds.length === 0) {
-      alert('Selecteer minstens één rit.');
-      return;
-    }
-
-    const presets = getPresetRoutes();
-    const hospitals = getZiekenhuizen();
-    const hospitalIds = new Set(hospitals.map((h) => h.id));
-    const selectedRitten = selectedPresetIds
-      .map((id) => presets.find((p) => p.id === id))
-      .filter((p) => p && p.fromId && p.toId && hospitalIds.has(p.fromId) && hospitalIds.has(p.toId));
-    if (selectedRitten.length === 0) {
-      alert('De geselecteerde ritten zijn niet geldig voor de huidige ziekenhuislijst.');
-      return;
-    }
-
-    const allIds = new Set([startId]);
-    selectedRitten.forEach((r) => {
-      allIds.add(r.fromId);
-      allIds.add(r.toId);
-    });
-    const locations = Array.from(allIds)
-      .map((id) => hospitals.find((h) => h.id === id))
-      .filter((h) => h && h.lat != null && h.lng != null);
-
-    if (locations.length === 0) {
-      alert('Geen geldige locaties met coördinaten.');
-      return;
-    }
-
-    const locationIndexById = {};
-    locations.forEach((loc, i) => {
-      locationIndexById[loc.id] = i;
-    });
-    const startIndex = locationIndexById[startId] ?? 0;
-
-    btn.disabled = true;
-    btn.textContent = 'Bezig…';
-
-    try {
-      const matrixFn = hasOpenRouteApiKey()
-        ? (locs) => getDistanceMatrixORS(locs.map((l) => ({ lat: l.lat, lng: l.lng })))
-        : null;
-      const distMatrix = await buildDistanceMatrix(
-        locations.map((l) => ({ id: l.id, lat: l.lat, lng: l.lng })),
-        matrixFn
-      );
-
-      const result = computeOptimalOrder(
-        startIndex,
-        selectedRitten,
-        locations,
-        distMatrix,
-        locationIndexById
-      );
-
-      const orderList = document.getElementById('route-order-list');
-      const totalenEl = document.getElementById('route-totalen');
-      const resultBlock = document.getElementById('route-result');
-      if (orderList) {
-        orderList.innerHTML = result.order
-          .map(
-            (r, i) =>
-              `<li>${i + 1}. ${escapeHtml(r.fromName)} → ${escapeHtml(r.toName)}${r.defaultKm != null ? ' (' + r.defaultKm + ' km)' : ''}</li>`
-          )
-          .join('');
-      }
-      if (totalenEl) {
-        totalenEl.innerHTML =
-          `Ritten: <strong>${result.totalRitKm} km</strong> · Lege km: <strong>${result.totalConnectingKm} km</strong> · Totaal: <strong>${result.totalKm} km</strong>`;
-      }
-      if (resultBlock) resultBlock.hidden = false;
-    } catch (e) {
-      alert('Berekenen mislukt. ' + (e.message || e));
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Bereken optimale route';
-    }
-  });
 }
 
 function initZiekenhuizen() {
@@ -1368,6 +1331,8 @@ function init() {
   initDashboardTabs();
   initFormRit(afterRitFormSaved);
   initFormBrandstof(refresh);
+  initFinancieelFactuur();
+  initFactuurGegevensMeer();
   initFinancieelTicketImport(refresh);
   initFormOverig(refresh);
   initZiekenhuizen();

@@ -76,7 +76,11 @@ export function renderRitten(onRender) {
           <td class="num">${r.km} km</td>
           <td class="num">${formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km, r.tijd))}</td>
           <td>${statusLabel(r.status)}</td>
-          <td><button type="button" class="btn btn-danger btn-icon-del btn-delete-rit" data-id="${r.id}" title="Verwijderen" aria-label="Verwijder rit">×</button></td>
+          <td class="rit-actions-cell">${
+            r.status === 'komend' || r.status === 'lopend'
+              ? `<button type="button" class="btn btn-small btn-primary btn-rit-afronden-tabel" data-id="${r.id}" title="Rit afronden" aria-label="Rit afronden">Klaar</button>`
+              : ''
+          }<button type="button" class="btn btn-danger btn-icon-del btn-delete-rit" data-id="${r.id}" title="Verwijderen" aria-label="Verwijder rit">×</button></td>
         </tr>`)
     );
     const rest = weekRitten.length - rows.length;
@@ -93,11 +97,25 @@ export function renderRitten(onRender) {
 
   tbody.innerHTML = html;
 
+  tbody.querySelectorAll('.btn-rit-afronden-tabel').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idRaw = btn.dataset.id;
+      const { ritten } = getData();
+      const rit = ritten.find((r) => String(r.id) === String(idRaw));
+      if (!rit || (rit.status !== 'komend' && rit.status !== 'lopend')) return;
+      rit.status = 'voltooid';
+      const now = new Date();
+      rit.voltooidTijd = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      saveRitten(ritten);
+      onRender?.();
+    });
+  });
+
   tbody.querySelectorAll('.btn-delete-rit').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const id = Number(btn.dataset.id);
+      const idRaw = btn.dataset.id;
       const { ritten } = getData();
-      saveRitten(ritten.filter((r) => r.id !== id));
+      saveRitten(ritten.filter((r) => String(r.id) !== String(idRaw)));
       onRender?.();
     });
   });

@@ -127,6 +127,30 @@
                 <p class="financieel-ticket-intro"><strong id="fin-profiel-ritten-count">0</strong> ritten uitgevoerd.</p>
                 <ul class="financieel-profiel-ritten-lijst" id="fin-profiel-ritten-lijst"></ul>
               </section>
+              <section class="financieel-factuur-section" aria-labelledby="fin-factuur-heading">
+                <h3 class="financieel-ticket-title" id="fin-factuur-heading">Factuur (PDF)</h3>
+                <p class="financieel-ticket-intro">
+                  Download een PDF op basis van <strong>voltooide</strong> ritten van dit profiel. Logo, adres, IBAN en klantgegevens stel je in onder <strong>Meer → Factuur &amp; logo</strong> (per profiel).
+                </p>
+                <div class="financieel-factuur-grid">
+                  <div class="form-row">
+                    <label for="fin-factuur-datum">Factuur per dag</label>
+                    <input type="date" id="fin-factuur-datum" class="input-date" />
+                    <button type="button" class="btn btn-primary btn-block" id="fin-factuur-download-dag">
+                      PDF downloaden (alle ritten die dag)
+                    </button>
+                  </div>
+                  <div class="form-row">
+                    <label for="fin-factuur-bon">Factuur per bestelbon</label>
+                    <select id="fin-factuur-bon" class="select">
+                      <option value="">— Kies bestelbon —</option>
+                    </select>
+                    <button type="button" class="btn btn-outline btn-block" id="fin-factuur-download-bon">
+                      PDF downloaden (bon)
+                    </button>
+                  </div>
+                </div>
+              </section>
               <section class="financieel-ticket-import">
                 <h3 class="financieel-ticket-title">Tanktickets als kosten importeren</h3>
                 <p class="financieel-ticket-intro">Upload foto van een ticket of vul handmatig in. Opslaan gaat direct naar brandstofkosten van dit profiel.</p>
@@ -211,6 +235,21 @@
               <button type="button" class="ritten-filter-btn" data-filter="lopend" role="tab" aria-selected="false">Onderweg</button>
               <button type="button" class="ritten-filter-btn" data-filter="voltooid" role="tab" aria-selected="false">Afgerond</button>
             </div>
+            <details class="ritten-handmatig-card">
+              <summary class="ritten-handmatig-summary">Handmatig afronden</summary>
+              <p class="ritten-handmatig-hint">
+                Vergeten op <strong>Klaar</strong> te drukken of zie je een rit niet in de lijst? Kies de rit hier en sla afgerond op. Optioneel: stel de aankomsttijd in.
+              </p>
+              <div class="form-row">
+                <label for="ritten-handmatig-select">Rit</label>
+                <select id="ritten-handmatig-select" class="select" disabled></select>
+              </div>
+              <div class="form-row">
+                <label for="ritten-handmatig-tijd">Aankomsttijd (optioneel)</label>
+                <input type="time" id="ritten-handmatig-tijd" />
+              </div>
+              <button type="button" class="btn btn-primary btn-block" id="ritten-handmatig-opslaan">Opslaan als afgerond</button>
+            </details>
             <div class="ritten-feed-shell" id="ritten-overzicht-feed-shell">
               <ul class="ritten-feed" id="ritten-overzicht-feed" aria-live="polite"></ul>
               <p class="ritten-feed-leeg" id="ritten-feed-leeg" hidden>Geen ritten in dit filter.</p>
@@ -248,13 +287,23 @@
                     <span class="rit-berekening-label rit-berekening-winst-label" id="rit-label-winst">Geschatte winst</span>
                     <strong class="rit-berekening-waarde rit-berekening-winst" id="rit-preview-winst">—</strong>
                   </div>
-                  <p class="info-text info-text--small" id="rit-geen-data">Vul brandstof in (pagina <strong>Berekening</strong>) voor geschatte winst.</p>
+                  <p class="info-text info-text--small" id="rit-geen-data">Vul brandstof in (pagina <strong>Kost</strong>) voor geschatte winst.</p>
                 </div>
                 <form id="form-rit" class="form-rit form-section rit-stap">
                   <h3 class="rit-stap-titel">Gegevens</h3>
                   <div class="form-row">
                     <label for="rit-datum">Datum</label>
                     <input type="date" id="rit-datum" required />
+                  </div>
+                  <div class="form-row rit-achteraf-row">
+                    <label class="rit-achteraf-label">
+                      <input type="checkbox" id="rit-achteraf" />
+                      <span>Achteraf ingevoerd (rit is al gereden — wordt meteen als afgerond bewaard)</span>
+                    </label>
+                  </div>
+                  <div class="form-row" id="rit-tijd-row" hidden>
+                    <label for="rit-tijd">Uur van de rit (voor vergoeding / nachttarief)</label>
+                    <input type="time" id="rit-tijd" step="60" />
                   </div>
                   <div class="form-row">
                     <label for="rit-chauffeur">Chauffeur</label>
@@ -280,6 +329,22 @@
                       <button type="button" class="rit-artikel-add-link" id="rit-artikel-add">+ artikel toevoegen</button>
                     </div>
                   </div>
+                  <div class="form-row rit-opslaan-modus-row">
+                    <span class="rit-opslaan-modus-label" id="rit-opslaan-modus-label">Opslaan als</span>
+                    <div class="rit-opslaan-modus" role="radiogroup" aria-labelledby="rit-opslaan-modus-label">
+                      <label class="rit-opslaan-optie">
+                        <input type="radio" name="rit-opslaan-modus" value="een" checked />
+                        <span>Één rit</span>
+                      </label>
+                      <label class="rit-opslaan-optie">
+                        <input type="radio" name="rit-opslaan-modus" value="meerdere" />
+                        <span>Meerdere ritten</span>
+                      </label>
+                    </div>
+                    <p class="info-text info-text--small rit-opslaan-modus-hint" id="rit-opslaan-modus-hint">
+                      Één rit: alle regels op dezelfde rit. Meerdere ritten: per regel een aparte rit; vergoeding en km worden verdeeld volgens het aantal boxen (of gelijk als boxen leeg).
+                    </p>
+                  </div>
                   <div class="form-row">
                     <label for="rit-km">Afstand (km)</label>
                     <input type="number" id="rit-km" min="1" step="1" placeholder="bv. 45" required />
@@ -294,11 +359,11 @@
         </div>
       </section>
 
-      <!-- Pagina: Berekening (brandstof + optimale route) -->
-      <section class="page" id="page-berekening" aria-labelledby="nav-berekening">
-        <p class="page-organisatie-kicker">Organisatieberekening</p>
-        <h2 class="page-section-title">Berekening</h2>
-        <p class="form-intro">Tankbeurten + optimale ritvolgorde.</p>
+      <!-- Pagina: Kost (brandstof / tankbeurt) -->
+      <section class="page" id="page-kost" aria-labelledby="nav-kost">
+        <p class="page-organisatie-kicker">Kosten</p>
+        <h2 class="page-section-title">Kost</h2>
+        <p class="form-intro">Tankbeurten en brandstofkosten bijhouden.</p>
 
         <div class="berekening-sectie" id="berekening-brandstof">
           <h3 class="berekening-sectie-titel">Brandstof (tankbeurt)</h3>
@@ -335,35 +400,11 @@
             <button type="submit" class="btn btn-primary btn-block">Tankbeurt opslaan</button>
           </form>
         </div>
-
-        <div class="berekening-sectie berekening-sectie--route" id="berekening-route">
-          <h3 class="berekening-sectie-titel">Optimale volgorde ritten</h3>
-          <p class="info-text--small berekening-sectie-intro">Startpunt + ritten aanvinken; totaal km incl. lege stukken.</p>
-          <div class="form-row">
-            <label for="route-start">Startpunt (waar vertrek je?)</label>
-            <select id="route-start" class="select">
-              <option value="">— Kies startpunt —</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label>Ritten die je wilt doen (meerdere mogelijk, per vertrek)</label>
-            <div class="route-checklist" id="route-checklist"></div>
-          </div>
-          <div class="form-row">
-            <button type="button" class="btn btn-primary btn-block" id="route-bereken-btn">Bereken optimale route</button>
-          </div>
-          <div class="route-result" id="route-result" hidden>
-            <h4 class="list-title">Beste volgorde</h4>
-            <ol class="route-order-list" id="route-order-list"></ol>
-            <div class="route-totalen" id="route-totalen"></div>
-          </div>
-          <p class="info-text--small">Met een gratis OpenRouteService API-sleutel worden echte rij-afstanden gebruikt; anders schatting op basis van afstand.</p>
-        </div>
       </section>
 
-      <!-- Pagina: Kaart (organisatieberekening: route visueel) -->
+      <!-- Pagina: Kaart -->
       <section class="page" id="page-kaart" aria-labelledby="nav-kaart">
-        <p class="page-organisatie-kicker">Organisatieberekening · route op kaart</p>
+        <p class="page-organisatie-kicker">Route op kaart</p>
         <h2 class="page-section-title">Ritten op kaart</h2>
         <p class="form-intro" id="kaart-intro">Alleen weergave (rit aanmaken: tab Ritten). OSM-gratis; route-lijn: <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">ORS</a>.</p>
         <div class="form-row">
@@ -422,6 +463,7 @@
         <nav class="meer-section-nav" aria-label="Spring naar sectie">
           <a class="meer-section-nav-link" href="#meer-locaties">Locaties</a>
           <a class="meer-section-nav-link" href="#meer-voertuigen">Voertuigen</a>
+          <a class="meer-section-nav-link" href="#meer-factuur">Factuur &amp; logo</a>
           <a class="meer-section-nav-link" href="#meer-kosten">Kosten</a>
           <a class="meer-section-nav-link" href="#meer-gegevens">Tabellen &amp; planning</a>
         </nav>
@@ -483,6 +525,87 @@
           </div>
         </section>
 
+        <section class="meer-section" id="meer-factuur" aria-labelledby="meer-factuur-title">
+          <div class="meer-section-head">
+            <h3 class="meer-section-title" id="meer-factuur-title">Factuur &amp; logo</h3>
+            <p class="meer-section-desc">
+              Gegevens voor PDF-facturen (Financieel-tab). Opgeslagen per geselecteerd profiel bovenaan het dashboard.
+            </p>
+          </div>
+          <div class="meer-section-body meer-factuur-body">
+            <div class="meer-factuur-logo-row">
+              <div class="form-row">
+                <label for="fg-logo-file">Logo (PNG, JPG …)</label>
+                <input type="file" id="fg-logo-file" accept="image/*" class="input-file" />
+                <button type="button" class="btn btn-outline btn-sm" id="fg-logo-wissen">Logo wissen</button>
+              </div>
+              <div class="meer-factuur-logo-preview-wrap">
+                <img id="fg-logo-preview" class="meer-factuur-logo-preview" alt="Factuurlogo" width="96" height="96" hidden />
+              </div>
+            </div>
+            <div class="meer-factuur-grid">
+              <div class="form-row">
+                <label for="fg-bedrijfsnaam">Bedrijfsnaam (Van)</label>
+                <input type="text" id="fg-bedrijfsnaam" placeholder="bv. HohoSolutions" autocomplete="organization" />
+              </div>
+              <div class="form-row">
+                <label for="fg-adres-straat">Straat en nummer</label>
+                <input type="text" id="fg-adres-straat" placeholder="Koloniënstraat 11" autocomplete="street-address" />
+              </div>
+              <div class="form-row">
+                <label for="fg-adres-pc-stad">Postcode en gemeente</label>
+                <input type="text" id="fg-adres-pc-stad" placeholder="1000 Brussel" />
+              </div>
+              <div class="form-row">
+                <label for="fg-land">Land</label>
+                <input type="text" id="fg-land" placeholder="België" />
+              </div>
+              <div class="form-row">
+                <label for="fg-btw">BTW-nummer</label>
+                <input type="text" id="fg-btw" placeholder="BE0123456789" autocomplete="off" />
+              </div>
+              <div class="form-row">
+                <label for="fg-rek-naam">Rekeninghouder</label>
+                <input type="text" id="fg-rek-naam" autocomplete="name" />
+              </div>
+              <div class="form-row">
+                <label for="fg-iban">IBAN</label>
+                <input type="text" id="fg-iban" placeholder="BE00 0000 0000 0000" autocomplete="off" />
+              </div>
+              <div class="form-row">
+                <label for="fg-email">E-mail (voet factuur)</label>
+                <input type="email" id="fg-email" autocomplete="email" />
+              </div>
+              <div class="form-row">
+                <label for="fg-tel">Telefoon (voet factuur)</label>
+                <input type="tel" id="fg-tel" autocomplete="tel" />
+              </div>
+              <div class="form-row meer-factuur-span-2">
+                <label for="fg-klant-naam">Standaard klant (Aan)</label>
+                <input type="text" id="fg-klant-naam" placeholder="Naam op factuur" />
+              </div>
+              <div class="form-row meer-factuur-span-2">
+                <label for="fg-klant-adres">Adres klant</label>
+                <input type="text" id="fg-klant-adres" placeholder="Straat, postcode, stad" />
+              </div>
+              <div class="form-row">
+                <label for="fg-klant-land">Land klant</label>
+                <input type="text" id="fg-klant-land" placeholder="België" />
+              </div>
+              <div class="form-row">
+                <label for="fg-verval-dagen">Vervaldagen na factuurdatum</label>
+                <input type="number" id="fg-verval-dagen" min="0" max="365" step="1" />
+              </div>
+              <div class="form-row meer-factuur-span-full">
+                <label for="fg-btw-tekst">BTW-vrijstellingsregel (onder tabel)</label>
+                <textarea id="fg-btw-tekst" class="input-textarea input-textarea--compact" rows="2"></textarea>
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary" id="fg-factuur-opslaan">Factuurgegevens opslaan</button>
+            <p class="info-text info-text--small" id="fg-factuur-save-hint" hidden>Opgeslagen voor dit profiel.</p>
+          </div>
+        </section>
+
         <section class="meer-section" id="meer-kosten" aria-labelledby="meer-kosten-title">
           <div class="meer-section-head">
             <h3 class="meer-section-title" id="meer-kosten-title">Overige kosten</h3>
@@ -523,7 +646,7 @@
               <div class="tab-panel active" id="panel-ritten" role="tabpanel">
                 <div class="table-wrap table-wrap--managed">
                   <table class="data-table data-table--compact">
-                    <thead><tr><th>Volg. nr.</th><th>Bonnr.</th><th>Datum</th><th>Chauffeur</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th>Status</th><th></th></tr></thead>
+                    <thead><tr><th>Volg. nr.</th><th>Bonnr.</th><th>Datum</th><th>Chauffeur</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th>Status</th><th>Acties</th></tr></thead>
                     <tbody id="tbody-ritten"></tbody>
                   </table>
                 </div>
@@ -584,9 +707,9 @@
         <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 7-7"/><path d="M14 9h5v5"/></svg></span>
         <span class="nav-label">Financieel</span>
       </button>
-      <button type="button" class="nav-item" data-page="berekening" id="nav-berekening" title="Brandstof en optimale route">
+      <button type="button" class="nav-item" data-page="kost" id="nav-kost" title="Brandstof en tankbeurten">
         <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h5"/></svg></span>
-        <span class="nav-label">Berekening</span>
+        <span class="nav-label">Kost</span>
       </button>
       <button type="button" class="nav-item nav-item--center" data-page="ritten" id="nav-ritten" title="Ritten — centraal in de app">
         <span class="nav-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14v-5H5v5z"/><path d="M7 17V9l4 2 4-2v8"/><path d="M5 12H3v4h2v-4zM19 12h2v4h-2v-4z"/></svg></span>

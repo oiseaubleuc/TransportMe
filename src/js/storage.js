@@ -457,3 +457,73 @@ export function setLiveAvailabilityStatus(profileId, active) {
   else delete map[profileId];
   writeLiveAvailabilityMap(map);
 }
+
+const DEFAULT_FACTUUR_GEGEVENS = {
+  logoDataUrl: '',
+  bedrijfsnaam: '',
+  adresStraat: '',
+  adresPostcodeStad: '',
+  land: 'België',
+  btwNummer: '',
+  rekeninghouder: '',
+  iban: '',
+  email: '',
+  telefoon: '',
+  klantNaam: '',
+  klantAdres: '',
+  klantLand: 'België',
+  btwVrijstellingTekst:
+    'Bijzondere vrijstellingsregeling kleine ondernemingen - btw niet van toepassing',
+  vervalDagen: 30,
+};
+
+function mergeFactuurGegevens(raw) {
+  const o = raw && typeof raw === 'object' ? raw : {};
+  const n = Number(o.vervalDagen);
+  return {
+    ...DEFAULT_FACTUUR_GEGEVENS,
+    ...o,
+    vervalDagen: Number.isFinite(n) && n >= 0 ? Math.min(365, Math.floor(n)) : DEFAULT_FACTUUR_GEGEVENS.vervalDagen,
+  };
+}
+
+export function getFactuurGegevens(profileId = getCurrentProfileId()) {
+  let pid = profileId;
+  if (!VALID_PROFILE_IDS.has(pid)) pid = PROFILES[0].id;
+  const key = `${STORAGE_KEYS.factuurGegevens}_${pid}`;
+  try {
+    return mergeFactuurGegevens(JSON.parse(localStorage.getItem(key) || '{}'));
+  } catch {
+    return mergeFactuurGegevens({});
+  }
+}
+
+export function saveFactuurGegevens(partial, profileId = getCurrentProfileId()) {
+  if (!VALID_PROFILE_IDS.has(profileId)) return;
+  const cur = getFactuurGegevens(profileId);
+  const next = mergeFactuurGegevens({ ...cur, ...partial });
+  const key = `${STORAGE_KEYS.factuurGegevens}_${profileId}`;
+  localStorage.setItem(key, JSON.stringify(next));
+}
+
+/**
+ * Volgende factuurcode voor dit jaar (bv. 2026-006). Telt op bij elke succesvolle PDF.
+ */
+export function nextFactuurVolgNummer(profileId = getCurrentProfileId()) {
+  if (!VALID_PROFILE_IDS.has(profileId)) profileId = PROFILES[0].id;
+  const year = new Date().getFullYear();
+  const key = `${STORAGE_KEYS.factuurTeller}_${profileId}`;
+  let map = {};
+  try {
+    map = JSON.parse(localStorage.getItem(key) || '{}');
+    if (!map || typeof map !== 'object') map = {};
+  } catch {
+    map = {};
+  }
+  const yk = String(year);
+  const n = (Number(map[yk]) || 0) + 1;
+  map[yk] = n;
+  localStorage.setItem(key, JSON.stringify(map));
+  const padded = String(n).padStart(3, '0');
+  return { year, volgNummer: n, factuurCode: `${year}-${padded}`, orderDisplay: padded };
+}

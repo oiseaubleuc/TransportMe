@@ -26,6 +26,10 @@ export const STORAGE_KEYS = {
   dataCleanupV2: 'transporteur_data_cleanup_v2',
   /** Live aanwezigheidsstatus (vervalt automatisch) */
   liveAvailability: 'transporteur_live_availability_v1',
+  /** Factuurgegevens + logo per profiel (Meer-tab) */
+  factuurGegevens: 'transporteur_factuur_gegevens',
+  /** Oplopend factuurnummer per jaar per profiel: { "2026": 5 } */
+  factuurTeller: 'transporteur_factuur_teller',
 };
 
 /** Live status "beschikbaar": vervalt automatisch na 6 uur */

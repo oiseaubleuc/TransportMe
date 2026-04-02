@@ -125,7 +125,7 @@ body {
   display: block;
 }
 
-/* Organisatieberekening: pagina Berekening, Kaart, … */
+/* Pagina Kost, Kaart: kicker bovenaan */
 .page-organisatie-kicker {
   margin: 0 0 0.35rem 0;
   font-size: 0.7rem;
@@ -149,12 +149,6 @@ body {
 
 .berekening-sectie:first-of-type {
   margin-top: 0.5rem;
-}
-
-.berekening-sectie--route {
-  margin-top: 2rem;
-  padding-top: 1.75rem;
-  border-top: 1px solid var(--border);
 }
 
 .berekening-sectie-titel {
@@ -534,118 +528,6 @@ body {
 .btn-block {
   width: 100%;
   margin-top: 0.25rem;
-}
-
-/* Optimale route pagina – checklist */
-.route-checklist {
-  max-height: 11rem;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.route-checklist-note {
-  padding: 0.45rem 0.75rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  background: color-mix(in srgb, var(--surface2) 72%, transparent);
-  border-bottom: 1px solid var(--border);
-}
-
-.route-checklist-empty {
-  margin: 0;
-  padding: 0.8rem;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.route-checklist-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 1rem;
-  cursor: pointer;
-  font-size: 0.9rem;
-  border-bottom: 1px solid var(--border);
-  transition: background 0.15s;
-}
-
-.route-checklist-item:last-child {
-  border-bottom: none;
-}
-
-.route-checklist-item:hover {
-  background: color-mix(in srgb, var(--text) 5%, transparent);
-}
-
-.route-checklist-item input[type="checkbox"] {
-  width: 1.1rem;
-  height: 1.1rem;
-  flex-shrink: 0;
-}
-
-.route-checklist-route {
-  flex: 1;
-  min-width: 0;
-}
-
-.route-checklist-km {
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-}
-
-.route-result {
-  margin-top: 1.5rem;
-  padding: 1.25rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.route-order-list {
-  margin: 0 0 1.25rem 0;
-  padding-left: 0;
-  list-style: none;
-  counter-reset: route-step;
-}
-
-.route-order-list li {
-  position: relative;
-  padding: 0.6rem 0 0.6rem 2.5rem;
-  margin-bottom: 0.25rem;
-  border-bottom: 1px solid var(--border);
-  counter-increment: route-step;
-}
-
-.route-order-list li:last-child {
-  border-bottom: none;
-}
-
-.route-order-list li::before {
-  position: absolute;
-  left: 0;
-  top: 0.5rem;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--bg);
-  font-size: 0.75rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  content: counter(route-step);
-}
-
-.route-totalen {
-  padding: 1rem;
-  background: var(--surface2);
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 0.95rem;
 }
 
 .table-wrap {
@@ -1229,6 +1111,34 @@ body {
   .financieel-period .btn-period.active {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 0 0 1px color-mix(in srgb, var(--accent) 40%, var(--border));
   }
+}
+
+.financieel-factuur-section {
+  margin-top: 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface2));
+}
+
+.financieel-factuur-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 560px) {
+  .financieel-factuur-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.financieel-factuur-grid .form-row {
+  margin-bottom: 0;
+}
+
+.financieel-factuur-grid .btn {
+  margin-top: 0.5rem;
 }
 
 .financieel-ticket-import {
@@ -1920,6 +1830,49 @@ body {
   font-weight: 600;
 }
 
+.ritten-handmatig-card {
+  margin: 0.65rem 0 0.5rem;
+  padding: 0.5rem 0.65rem;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+}
+
+.ritten-handmatig-summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style-position: outside;
+}
+
+.ritten-handmatig-hint {
+  margin: 0.5rem 0 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.ritten-handmatig-card .form-row {
+  margin-bottom: 0.5rem;
+}
+
+.ritten-handmatig-card .btn-block {
+  margin-top: 0.35rem;
+}
+
+.ritten-feed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+  align-items: center;
+}
+
+.ritten-feed-actions .btn-small {
+  min-height: 2.5rem;
+  padding: 0.4rem 0.75rem;
+}
+
 .ritten-feed-shell {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -2023,6 +1976,22 @@ body {
   color: var(--text-muted);
   font-size: 0.76rem;
   margin-top: 0.2rem;
+}
+
+.data-table .rit-actions-cell {
+  text-align: right;
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.data-table .rit-actions-cell .btn-small {
+  min-height: 2.25rem;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.data-table .rit-actions-cell .btn-icon-del {
+  vertical-align: middle;
 }
 
 .ritten-feed-more {
@@ -2207,7 +2176,7 @@ body {
   color: var(--text-muted);
 }
 
-/* Berekening direct zichtbaar na keuze bestemming */
+/* Vergoeding direct zichtbaar na keuze bestemming */
 .rit-berekening-card {
   margin-bottom: 1.5rem;
   padding: 1.25rem;
@@ -2340,6 +2309,71 @@ body {
 
 .rit-artikel-add-link:hover {
   color: var(--accent);
+}
+
+.rit-achteraf-row {
+  margin-bottom: 0.15rem;
+}
+
+.rit-achteraf-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.rit-achteraf-label input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.rit-opslaan-modus-row .rit-opslaan-modus-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.rit-opslaan-modus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.rit-opslaan-optie {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.85rem;
+  cursor: pointer;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rit-opslaan-optie:has(input:checked) {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.rit-opslaan-optie input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.rit-opslaan-modus-hint {
+  margin: 0;
 }
 
 .form-row--info {
@@ -2495,6 +2529,56 @@ body {
   color: var(--text-muted);
   line-height: 1.45;
   max-width: 42rem;
+}
+
+.meer-factuur-body .input-textarea--compact {
+  min-height: 3.5rem;
+  resize: vertical;
+}
+
+.meer-factuur-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.meer-factuur-span-full {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 560px) {
+  .meer-factuur-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .meer-factuur-span-2 {
+    grid-column: span 2;
+  }
+}
+
+.meer-factuur-logo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.meer-factuur-logo-preview-wrap {
+  flex-shrink: 0;
+}
+
+.meer-factuur-logo-preview {
+  display: block;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  object-fit: contain;
+  background: var(--surface2);
+  max-width: 120px;
+  max-height: 120px;
 }
 
 .meer-section-body > *:last-child {

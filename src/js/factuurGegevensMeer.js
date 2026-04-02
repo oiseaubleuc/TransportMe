@@ -1,0 +1,151 @@
+/**
+ * Meer-tab: factuurgegevens + logo (per profiel).
+ */
+
+import { getFactuurGegevens, saveFactuurGegevens } from './storage.js';
+
+const MAX_LOGO_CHARS = 450000;
+
+function $(id) {
+  return document.getElementById(id);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result || ''));
+    r.onerror = () => reject(new Error('Lezen mislukt'));
+    r.readAsDataURL(file);
+  });
+}
+
+export function syncFactuurGegevensFormFromStorage() {
+  const S = getFactuurGegevens();
+  const prev = $('fg-logo-preview');
+  if (prev) {
+    if (S.logoDataUrl) {
+      prev.src = S.logoDataUrl;
+      prev.hidden = false;
+    } else {
+      prev.removeAttribute('src');
+      prev.hidden = true;
+    }
+  }
+  const map = [
+    ['fg-bedrijfsnaam', S.bedrijfsnaam],
+    ['fg-adres-straat', S.adresStraat],
+    ['fg-adres-pc-stad', S.adresPostcodeStad],
+    ['fg-land', S.land],
+    ['fg-btw', S.btwNummer],
+    ['fg-rek-naam', S.rekeninghouder],
+    ['fg-iban', S.iban],
+    ['fg-email', S.email],
+    ['fg-tel', S.telefoon],
+    ['fg-klant-naam', S.klantNaam],
+    ['fg-klant-adres', S.klantAdres],
+    ['fg-klant-land', S.klantLand],
+    ['fg-verval-dagen', String(S.vervalDagen ?? 30)],
+    ['fg-btw-tekst', S.btwVrijstellingTekst],
+  ];
+  for (const [id, val] of map) {
+    const el = $(id);
+    if (el) el.value = val ?? '';
+  }
+}
+
+export function initFactuurGegevensMeer() {
+  const fileInp = $('fg-logo-file');
+  const btnClear = $('fg-logo-wissen');
+  const btnSave = $('fg-factuur-opslaan');
+
+  fileInp?.addEventListener('change', async () => {
+    const f = fileInp.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith('image/')) {
+      alert('Kies een afbeeldingsbestand (PNG, JPG, …).');
+      fileInp.value = '';
+      return;
+    }
+    try {
+      let dataUrl = await readFileAsDataUrl(f);
+      if (dataUrl.length > MAX_LOGO_CHARS) {
+        dataUrl = await downscaleDataUrl(dataUrl, 400, 0.82);
+      }
+      if (dataUrl.length > MAX_LOGO_CHARS) {
+        alert('Logo is te groot na verkleinen. Kies een kleiner bestand.');
+        fileInp.value = '';
+        return;
+      }
+      saveFactuurGegevens({ logoDataUrl: dataUrl });
+      syncFactuurGegevensFormFromStorage();
+    } catch (e) {
+      console.error(e);
+      alert('Logo kon niet worden geladen.');
+    }
+    fileInp.value = '';
+  });
+
+  btnClear?.addEventListener('click', () => {
+    saveFactuurGegevens({ logoDataUrl: '' });
+    syncFactuurGegevensFormFromStorage();
+  });
+
+  btnSave?.addEventListener('click', () => {
+    const verval = Number.parseInt($('fg-verval-dagen')?.value, 10);
+    saveFactuurGegevens({
+      bedrijfsnaam: $('fg-bedrijfsnaam')?.value?.trim() || '',
+      adresStraat: $('fg-adres-straat')?.value?.trim() || '',
+      adresPostcodeStad: $('fg-adres-pc-stad')?.value?.trim() || '',
+      land: $('fg-land')?.value?.trim() || 'België',
+      btwNummer: $('fg-btw')?.value?.trim() || '',
+      rekeninghouder: $('fg-rek-naam')?.value?.trim() || '',
+      iban: $('fg-iban')?.value?.trim() || '',
+      email: $('fg-email')?.value?.trim() || '',
+      telefoon: $('fg-tel')?.value?.trim() || '',
+      klantNaam: $('fg-klant-naam')?.value?.trim() || '',
+      klantAdres: $('fg-klant-adres')?.value?.trim() || '',
+      klantLand: $('fg-klant-land')?.value?.trim() || 'België',
+      vervalDagen: Number.isFinite(verval) && verval >= 0 ? verval : 30,
+      btwVrijstellingTekst: $('fg-btw-tekst')?.value?.trim() || '',
+    });
+    syncFactuurGegevensFormFromStorage();
+    const ok = $('fg-factuur-save-hint');
+    if (ok) {
+      ok.hidden = false;
+      setTimeout(() => {
+        ok.hidden = true;
+      }, 2500);
+    }
+  });
+
+  syncFactuurGegevensFormFromStorage();
+}
+
+/** Verklein base64-afbeelding voor localStorage-limiet. */
+function downscaleDataUrl(dataUrl, maxSide, jpegQuality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let { width, height } = img;
+        const scale = Math.min(1, maxSide / Math.max(width, height));
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', jpegQuality));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => reject(new Error('Afbeelding'));
+    img.src = dataUrl;
+  });
+}

@@ -422,9 +422,9 @@ export function updateRittenStatusLijst(onUpdate) {
   lijst.innerHTML = html;
   lijst.querySelectorAll('.btn-start-rit').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const id = Number(btn.closest('[data-id]')?.dataset.id);
+      const idRaw = btn.closest('[data-id]')?.dataset.id;
       const rittenList = getData().ritten;
-      const rit = rittenList.find((r) => r.id === id);
+      const rit = rittenList.find((r) => String(r.id) === String(idRaw));
       if (rit) {
         rit.status = 'lopend';
         saveRitten(rittenList);
@@ -434,9 +434,9 @@ export function updateRittenStatusLijst(onUpdate) {
   });
   lijst.querySelectorAll('.btn-voltooid-rit').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const id = Number(btn.closest('[data-id]')?.dataset.id);
+      const idRaw = btn.closest('[data-id]')?.dataset.id;
       const rittenList = getData().ritten;
-      const rit = rittenList.find((r) => r.id === id);
+      const rit = rittenList.find((r) => String(r.id) === String(idRaw));
       if (rit) {
         rit.status = 'voltooid';
         const now = new Date();
