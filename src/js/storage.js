@@ -470,8 +470,15 @@ const DEFAULT_FACTUUR_GEGEVENS = {
   email: '',
   telefoon: '',
   klantNaam: '',
+  klantBedrijfsnaam: '',
+  klantContactpersoon: '',
+  klantBtw: '',
   klantAdres: '',
   klantLand: 'België',
+  /** Zet aan om op de PDF 21%/… btw op ritbedragen te tonen en te betalen te verhogen */
+  factuurBtwAanrekenen: false,
+  /** Percentage (0–100), typisch 6, 12 of 21 */
+  factuurBtwTarief: 21,
   btwVrijstellingTekst:
     'Bijzondere vrijstellingsregeling kleine ondernemingen - btw niet van toepassing',
   vervalDagen: 30,
@@ -480,11 +487,18 @@ const DEFAULT_FACTUUR_GEGEVENS = {
 function mergeFactuurGegevens(raw) {
   const o = raw && typeof raw === 'object' ? raw : {};
   const n = Number(o.vervalDagen);
-  return {
+  const tarief = Number(o.factuurBtwTarief);
+  const merged = {
     ...DEFAULT_FACTUUR_GEGEVENS,
     ...o,
     vervalDagen: Number.isFinite(n) && n >= 0 ? Math.min(365, Math.floor(n)) : DEFAULT_FACTUUR_GEGEVENS.vervalDagen,
+    factuurBtwAanrekenen: Boolean(o.factuurBtwAanrekenen),
+    factuurBtwTarief: Number.isFinite(tarief) ? Math.min(100, Math.max(0, tarief)) : DEFAULT_FACTUUR_GEGEVENS.factuurBtwTarief,
   };
+  const bedrijf = String(merged.klantBedrijfsnaam || '').trim();
+  const legacyNaam = String(merged.klantNaam || '').trim();
+  if (!bedrijf && legacyNaam) merged.klantBedrijfsnaam = legacyNaam;
+  return merged;
 }
 
 export function getFactuurGegevens(profileId = getCurrentProfileId()) {

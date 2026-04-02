@@ -130,7 +130,7 @@
               <section class="financieel-factuur-section" aria-labelledby="fin-factuur-heading">
                 <h3 class="financieel-ticket-title" id="fin-factuur-heading">Factuur (PDF)</h3>
                 <p class="financieel-ticket-intro">
-                  Download een PDF op basis van <strong>voltooide</strong> ritten van dit profiel. Logo, adres, IBAN en klantgegevens stel je in onder <strong>Meer → Factuur &amp; logo</strong> (per profiel).
+                  Download een PDF op basis van <strong>voltooide</strong> ritten. Klant (bedrijf, persoon, adres, BTW) en of je <strong>btw doorrekent</strong>, stel je in onder <strong>Meer → Factuur &amp; logo</strong> (per profiel).
                 </p>
                 <div class="financieel-factuur-grid">
                   <div class="form-row">
@@ -529,7 +529,7 @@
           <div class="meer-section-head">
             <h3 class="meer-section-title" id="meer-factuur-title">Factuur &amp; logo</h3>
             <p class="meer-section-desc">
-              Gegevens voor PDF-facturen (Financieel-tab). Opgeslagen per geselecteerd profiel bovenaan het dashboard.
+              Gegevens voor PDF-facturen (Financieel-tab). Vul je <strong>klant</strong> handmatig in (bedrijf, contactpersoon, adres, klant-BTW) en kies of je <strong>BTW doorrekent</strong> op de factuur. Opgeslagen per profiel.
             </p>
           </div>
           <div class="meer-section-body meer-factuur-body">
@@ -580,24 +580,52 @@
                 <label for="fg-tel">Telefoon (voet factuur)</label>
                 <input type="tel" id="fg-tel" autocomplete="tel" />
               </div>
-              <div class="form-row meer-factuur-span-2">
-                <label for="fg-klant-naam">Standaard klant (Aan)</label>
-                <input type="text" id="fg-klant-naam" placeholder="Naam op factuur" />
+              <div class="form-row meer-factuur-span-full">
+                <p class="info-text info-text--small meer-factuur-klant-intro">
+                  <strong>Klant op de factuur (Aan)</strong> — volledig handmatig; verschijnt op elke PDF.
+                </p>
+              </div>
+              <div class="form-row">
+                <label for="fg-klant-bedrijf">Bedrijfsnaam klant</label>
+                <input type="text" id="fg-klant-bedrijf" placeholder="Naam organisatie op factuur" autocomplete="organization" />
+              </div>
+              <div class="form-row">
+                <label for="fg-klant-persoon">Contactpersoon (optioneel)</label>
+                <input type="text" id="fg-klant-persoon" placeholder="Naam persoon t.a.v." autocomplete="name" />
+              </div>
+              <div class="form-row">
+                <label for="fg-klant-btw">BTW-nummer klant (optioneel)</label>
+                <input type="text" id="fg-klant-btw" placeholder="BE0…" autocomplete="off" />
               </div>
               <div class="form-row meer-factuur-span-2">
                 <label for="fg-klant-adres">Adres klant</label>
-                <input type="text" id="fg-klant-adres" placeholder="Straat, postcode, stad" />
+                <input type="text" id="fg-klant-adres" placeholder="Straat, nummer, postcode, gemeente" autocomplete="street-address" />
               </div>
               <div class="form-row">
                 <label for="fg-klant-land">Land klant</label>
                 <input type="text" id="fg-klant-land" placeholder="België" />
+              </div>
+              <div class="form-row meer-factuur-span-2 factuur-btw-keuze">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="fg-factuur-btw-aanrekenen" />
+                  BTW aanrekenen op deze facturen (ritbedragen worden als <strong>excl. btw</strong> beschouwd; totaal = excl. + btw)
+                </label>
+              </div>
+              <div class="form-row meer-factuur-span-2 factuur-btw-tarief-wrap" id="fg-factuur-btw-tarief-wrap" hidden>
+                <label for="fg-factuur-btw-tarief">BTW-tarief</label>
+                <select id="fg-factuur-btw-tarief" class="select">
+                  <option value="21">21 %</option>
+                  <option value="12">12 %</option>
+                  <option value="6">6 %</option>
+                  <option value="0">0 %</option>
+                </select>
               </div>
               <div class="form-row">
                 <label for="fg-verval-dagen">Vervaldagen na factuurdatum</label>
                 <input type="number" id="fg-verval-dagen" min="0" max="365" step="1" />
               </div>
               <div class="form-row meer-factuur-span-full">
-                <label for="fg-btw-tekst">BTW-vrijstellingsregel (onder tabel)</label>
+                <label for="fg-btw-tekst">BTW-vrijstellingsregel (onder tabel, alleen zonder “BTW aanrekenen”)</label>
                 <textarea id="fg-btw-tekst" class="input-textarea input-textarea--compact" rows="2"></textarea>
               </div>
             </div>

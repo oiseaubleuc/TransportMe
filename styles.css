@@ -2536,6 +2536,24 @@ body {
   resize: vertical;
 }
 
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-weight: 500;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.checkbox-label input[type='checkbox'] {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.meer-factuur-klant-intro {
+  margin: 0;
+}
+
 .meer-factuur-grid {
   display: grid;
   grid-template-columns: 1fr;

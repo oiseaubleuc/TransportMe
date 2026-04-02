@@ -41,22 +41,36 @@ export function syncFactuurGegevensFormFromStorage() {
     ['fg-iban', S.iban],
     ['fg-email', S.email],
     ['fg-tel', S.telefoon],
-    ['fg-klant-naam', S.klantNaam],
+    ['fg-klant-bedrijf', S.klantBedrijfsnaam || S.klantNaam],
+    ['fg-klant-persoon', S.klantContactpersoon],
+    ['fg-klant-btw', S.klantBtw],
     ['fg-klant-adres', S.klantAdres],
     ['fg-klant-land', S.klantLand],
     ['fg-verval-dagen', String(S.vervalDagen ?? 30)],
     ['fg-btw-tekst', S.btwVrijstellingTekst],
+    ['fg-factuur-btw-tarief', String(S.factuurBtwTarief ?? 21)],
   ];
   for (const [id, val] of map) {
     const el = $(id);
-    if (el) el.value = val ?? '';
+    if (el && 'value' in el) el.value = val ?? '';
   }
+  const cb = $('fg-factuur-btw-aanrekenen');
+  if (cb) cb.checked = Boolean(S.factuurBtwAanrekenen);
+  syncFactuurBtwTariefVisibility();
+}
+
+function syncFactuurBtwTariefVisibility() {
+  const cb = $('fg-factuur-btw-aanrekenen');
+  const wrap = $('fg-factuur-btw-tarief-wrap');
+  if (wrap) wrap.hidden = !cb?.checked;
 }
 
 export function initFactuurGegevensMeer() {
   const fileInp = $('fg-logo-file');
   const btnClear = $('fg-logo-wissen');
   const btnSave = $('fg-factuur-opslaan');
+
+  $('fg-factuur-btw-aanrekenen')?.addEventListener('change', syncFactuurBtwTariefVisibility);
 
   fileInp?.addEventListener('change', async () => {
     const f = fileInp.files?.[0];
@@ -92,6 +106,9 @@ export function initFactuurGegevensMeer() {
 
   btnSave?.addEventListener('click', () => {
     const verval = Number.parseInt($('fg-verval-dagen')?.value, 10);
+    const klantBedrijf = $('fg-klant-bedrijf')?.value?.trim() || '';
+    const btwTariefRaw = Number.parseFloat($('fg-factuur-btw-tarief')?.value || '21');
+    const btwTarief = Number.isFinite(btwTariefRaw) ? Math.min(100, Math.max(0, btwTariefRaw)) : 21;
     saveFactuurGegevens({
       bedrijfsnaam: $('fg-bedrijfsnaam')?.value?.trim() || '',
       adresStraat: $('fg-adres-straat')?.value?.trim() || '',
@@ -102,9 +119,14 @@ export function initFactuurGegevensMeer() {
       iban: $('fg-iban')?.value?.trim() || '',
       email: $('fg-email')?.value?.trim() || '',
       telefoon: $('fg-tel')?.value?.trim() || '',
-      klantNaam: $('fg-klant-naam')?.value?.trim() || '',
+      klantBedrijfsnaam: klantBedrijf,
+      klantNaam: klantBedrijf,
+      klantContactpersoon: $('fg-klant-persoon')?.value?.trim() || '',
+      klantBtw: $('fg-klant-btw')?.value?.trim() || '',
       klantAdres: $('fg-klant-adres')?.value?.trim() || '',
       klantLand: $('fg-klant-land')?.value?.trim() || 'België',
+      factuurBtwAanrekenen: Boolean($('fg-factuur-btw-aanrekenen')?.checked),
+      factuurBtwTarief: btwTarief,
       vervalDagen: Number.isFinite(verval) && verval >= 0 ? verval : 30,
       btwVrijstellingTekst: $('fg-btw-tekst')?.value?.trim() || '',
     });

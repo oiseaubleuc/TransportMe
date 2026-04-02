@@ -67,10 +67,16 @@ export async function generateFactuurPdfBlob(opts) {
   const pageW = 210;
   const M = { x: 15, x2: pageW - 15, w: pageW - 30 };
 
-  let subtotaal = 0;
-  for (const r of regels) subtotaal += Number(r.totaal) || 0;
+  const btwAanrekenen = Boolean(S.factuurBtwAanrekenen);
+  const btwPctRaw = Number(S.factuurBtwTarief);
+  const btwPct = btwAanrekenen && Number.isFinite(btwPctRaw) ? Math.min(100, Math.max(0, btwPctRaw)) : 0;
 
-  const epc = buildEpcSepaPayload(S, subtotaal, `Factuur ${meta.factuurCode}`);
+  let subtotaalExcl = 0;
+  for (const r of regels) subtotaalExcl += Number(r.totaal) || 0;
+  const sumBtwBedrag = subtotaalExcl * (btwPct / 100);
+  const teBetalenTotaal = subtotaalExcl + sumBtwBedrag;
+
+  const epc = buildEpcSepaPayload(S, teBetalenTotaal, `Factuur ${meta.factuurCode}`);
   const qrUrl = await paymentQrDataUrl(epc);
 
   const drawHeaderBlock = (yStart, isContinuation) => {
@@ -116,7 +122,7 @@ export async function generateFactuurPdfBlob(opts) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     const vanNaam = (S.bedrijfsnaam || '—').trim() || '—';
-    const aanNaam = (S.klantNaam || '—').trim() || '—';
+    const aanNaam = (S.klantBedrijfsnaam || S.klantNaam || '—').trim() || '—';
     doc.text(vanNaam, M.x, y);
     doc.text(aanNaam, mid, y);
     y += 5;
@@ -132,7 +138,15 @@ export async function generateFactuurPdfBlob(opts) {
       S.iban ? `IBAN: ${S.iban}` : '',
     ].filter(Boolean);
 
-    const aanLines = [S.klantAdres, S.klantLand].map((x) => String(x || '').trim()).filter(Boolean);
+    const aanContact = (S.klantContactpersoon || '').trim();
+    const aanLines = [
+      aanContact ? `t.a.v. ${aanContact}` : '',
+      (S.klantAdres || '').trim(),
+      (S.klantLand || '').trim(),
+      (S.klantBtw || '').trim() ? `BTW-nummer klant: ${String(S.klantBtw).trim()}` : '',
+    ]
+      .map((x) => String(x || '').trim())
+      .filter(Boolean);
 
     const vanSplit = vanLines.flatMap((line) => doc.splitTextToSize(line, colW - 2));
     const aanSplit = aanLines.length ? aanLines.flatMap((line) => doc.splitTextToSize(line, colW - 2)) : ['—'];
@@ -179,7 +193,8 @@ export async function generateFactuurPdfBlob(opts) {
     doc.text('Btw-tarief', TAB.btwL, yy);
     doc.setFontSize(8);
     doc.text('Aantal', TAB.aantalC, yy, { align: 'center' });
-    doc.text('Totaal', TAB.totaalR, yy, { align: 'right' });
+    const totLabel = btwPct > 0 ? 'Totaal incl.' : 'Totaal';
+    doc.text(totLabel, TAB.totaalR, yy, { align: 'right' });
     doc.setFont('helvetica', 'normal');
   }
 
@@ -196,7 +211,7 @@ export async function generateFactuurPdfBlob(opts) {
     const titel = String(r.titel || 'Ziekenhuisvervoer');
     const detail = String(r.detail || '—');
     const prijs = Number(r.prijsExcl ?? r.totaal) || 0;
-    const tot = Number(r.totaal) || 0;
+    const tot = btwPct > 0 ? prijs * (1 + btwPct / 100) : prijs;
 
     const detailLines = doc.splitTextToSize(detail, TAB.descW);
     const blockH = lineH + detailLines.length * 3.6 + 2;
@@ -221,7 +236,7 @@ export async function generateFactuurPdfBlob(opts) {
 
     doc.setFontSize(8);
     doc.text(formatEuroPdf(prijs), TAB.prijsR, yNums, { align: 'right' });
-    doc.text('0 %', TAB.btwL, yNums);
+    doc.text(btwPct > 0 ? `${btwPct} %` : '0 %', TAB.btwL, yNums);
     doc.text('1', TAB.aantalC, yNums, { align: 'center' });
     doc.text(formatEuroPdf(tot), TAB.totaalR, yNums, { align: 'right' });
 
@@ -232,13 +247,29 @@ export async function generateFactuurPdfBlob(opts) {
   y += 6;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.text('Te betalen', 128, y);
-  doc.text(formatEuroPdf(subtotaal), TAB.totaalR, y, { align: 'right' });
-  y += 8;
+  if (btwPct > 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Subtotaal excl. btw', M.x, y);
+    doc.text(formatEuroPdf(subtotaalExcl), TAB.totaalR, y, { align: 'right' });
+    y += 5;
+    doc.text(`Btw ${btwPct} %`, M.x, y);
+    doc.text(formatEuroPdf(sumBtwBedrag), TAB.totaalR, y, { align: 'right' });
+    y += 6;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Te betalen', M.x, y);
+    doc.text(formatEuroPdf(teBetalenTotaal), TAB.totaalR, y, { align: 'right' });
+    y += 8;
+  } else {
+    doc.text('Te betalen', 128, y);
+    doc.text(formatEuroPdf(subtotaalExcl), TAB.totaalR, y, { align: 'right' });
+    y += 8;
+  }
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  const btwNote = (S.btwVrijstellingTekst || '').trim();
+  const btwNote = !btwAanrekenen ? (S.btwVrijstellingTekst || '').trim() : '';
   if (btwNote) {
     const noteLines = doc.splitTextToSize(btwNote, M.w);
     doc.text(noteLines, M.x, y);
