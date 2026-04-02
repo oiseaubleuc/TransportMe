@@ -2,13 +2,29 @@
  * Formulieren – ritten, brandstof, overige kosten
  */
 
-import { RIT_DUUR_MINUTEN, DEFAULT_CHAUFFEURS } from './config.js';
+import { RIT_DUUR_MINUTEN } from './config.js';
 import { vergoedingVoorRit, toDateStr, rendabiliteitRit } from './calculations.js';
 import { formatEuro, formatLiter } from './format.js';
 import { getData, saveRitten, saveBrandstof, saveOverig, getVoertuigen, getZiekenhuizen } from './storage.js';
 import { nextVolgordeStart } from './ritVolgorde.js';
-import { parseBulkRittenText, bulkRowsToRitten } from './bulkRitten.js';
 import { parseReceiptText } from './ocr.js';
+
+function isPdfFile(file) {
+  if (!file) return false;
+  const t = String(file.type || '').toLowerCase();
+  if (t === 'application/pdf') return true;
+  return String(file.name || '').toLowerCase().endsWith('.pdf');
+}
+
+/** Afbeelding direct; PDF → eerste pagina als canvas (pdfjs lazy-load) */
+async function fileToOcrSource(file) {
+  if (file.type?.startsWith('image/')) return file;
+  if (isPdfFile(file)) {
+    const { pdfFileToCanvas } = await import('./pdfFirstPageToCanvas.js');
+    return pdfFileToCanvas(file);
+  }
+  return null;
+}
 
 
 /** Zet alle datumvelden in de app op vandaag (bijv. bij laden). */
@@ -37,13 +53,50 @@ export function initFormRit(onSubmit) {
   if (!form || !datumInput) return;
 
   datumInput.value = toDateStr(new Date());
+  const artikelLijst = document.getElementById('rit-artikelen-lijst');
+  const artikelAddBtn = document.getElementById('rit-artikel-add');
+
+  function artikelRowTemplate(bonnummer = '', boxen = '', withRemove = true) {
+    const bonIdAttr = withRemove ? '' : ' id="rit-bonnummer"';
+    const removeBtn = withRemove
+      ? '<button type="button" class="rit-artikel-remove" title="Verwijder artikel" aria-label="Verwijder artikel">×</button>'
+      : '';
+    return `<div class="rit-artikel-row">
+      <input type="text" class="rit-artikel-bon" placeholder="Bestelnummer (verplicht)" value="${bonnummer}"${bonIdAttr} required />
+      <input type="number" class="rit-artikel-boxen" min="1" step="1" placeholder="Boxen" value="${boxen}" />
+      ${removeBtn}
+    </div>`;
+  }
+
+  function bindArtikelEvents() {
+    if (!artikelLijst) return;
+    artikelLijst.querySelectorAll('.rit-artikel-remove').forEach((btn) => {
+      btn.onclick = () => {
+        btn.closest('.rit-artikel-row')?.remove();
+        const rows = artikelLijst.querySelectorAll('.rit-artikel-row');
+        if (rows.length === 0) {
+          artikelLijst.innerHTML = artikelRowTemplate('', '', false);
+          bindArtikelEvents();
+        }
+      };
+    });
+  }
+
+  artikelAddBtn?.addEventListener('click', () => {
+    if (!artikelLijst) return;
+    artikelLijst.insertAdjacentHTML('beforeend', artikelRowTemplate('', '', true));
+    bindArtikelEvents();
+  });
+  bindArtikelEvents();
 
   function updatePreview() {
     const km = parseFloat(kmInput?.value) || 0;
-    if (preview) preview.textContent = formatEuro(vergoedingVoorRit(km));
+    const now = new Date();
+    const tijd = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    if (preview) preview.textContent = formatEuro(vergoedingVoorRit(km, tijd));
     if (previewKm) previewKm.textContent = km ? `${Math.round(km)} km` : '0 km';
 
-    const rend = rendabiliteitRit(km);
+    const rend = rendabiliteitRit(km, tijd);
     const hasRendabiliteit = rend && rend.geschatteWinst != null;
 
     if (geenDataEl) geenDataEl.hidden = hasRendabiliteit;
@@ -75,14 +128,30 @@ export function initFormRit(onSubmit) {
     e.preventDefault();
     const datum = datumInput.value;
     const km = parseInt(kmInput?.value, 10);
-    const bonnummer = document.getElementById('rit-bonnummer')?.value?.trim() || '';
+    const artikelRows = Array.from(artikelLijst?.querySelectorAll('.rit-artikel-row') || []);
+    const bestelArtikelen = artikelRows
+      .map((row) => {
+        const bonnummer = row.querySelector('.rit-artikel-bon')?.value?.trim() || '';
+        const boxenRaw = row.querySelector('.rit-artikel-boxen')?.value;
+        const boxen = Number.parseInt(boxenRaw, 10);
+        return {
+          bonnummer,
+          boxen: Number.isFinite(boxen) && boxen > 0 ? boxen : null,
+        };
+      })
+      .filter((x) => x.bonnummer);
+    const bonnummer = bestelArtikelen[0]?.bonnummer || '';
     const chauffeurSel = document.getElementById('rit-chauffeur');
     const chauffeurId = chauffeurSel?.value || '';
     const chauffeurName = chauffeurSel?.selectedOptions?.[0]?.textContent || '';
-    if (!datum || !km || km < 1 || !chauffeurId || !bonnummer) return;
+    if (!bonnummer) {
+      alert('Vul minstens één bestelnummer in.');
+      return;
+    }
+    if (!datum || !km || km < 1 || !chauffeurId) return;
     const now = new Date();
     const tijd = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const vergoeding = vergoedingVoorRit(km);
+    const vergoeding = vergoedingVoorRit(km, tijd);
     const voertuigSel = document.getElementById('rit-voertuig');
     const voertuigId = voertuigSel?.value || '';
     const voertuigName = voertuigSel?.selectedOptions?.[0]?.textContent || '';
@@ -106,6 +175,7 @@ export function initFormRit(onSubmit) {
       chauffeurId,
       chauffeurName,
       bonnummer,
+      bestelArtikelen,
       status: 'komend',
       duurMinuten: RIT_DUUR_MINUTEN,
     };
@@ -128,91 +198,10 @@ export function initFormRit(onSubmit) {
     }
     if (vertrekSel) vertrekSel.value = '';
     if (bestemmingSel) bestemmingSel.value = '';
-    onSubmit?.();
-  });
-}
-
-function escBulk(s) {
-  if (s == null) return '';
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-/** Meerdere ritten plakken (Excel / tekst), als voltooid voor achterstand-invoer */
-export function initBulkRittenImport(onSubmit) {
-  const btn = document.getElementById('bulk-rit-import-btn');
-  const ta = document.getElementById('bulk-rit-raw');
-  const feedback = document.getElementById('bulk-rit-feedback');
-  if (!btn || !ta || !feedback) return;
-
-  function getDefaults() {
-    return {
-      chauffeurs: DEFAULT_CHAUFFEURS,
-      voertuigen: getVoertuigen(),
-      defaultChauffeurId: document.getElementById('bulk-default-chauffeur')?.value?.trim() || '',
-      defaultVoertuigId: document.getElementById('bulk-default-voertuig')?.value?.trim() || '',
-    };
-  }
-
-  btn.addEventListener('click', () => {
-    const text = ta.value;
-    if (!text.trim()) {
-      feedback.hidden = false;
-      feedback.className = 'bulk-import-feedback bulk-import-feedback--warn';
-      feedback.innerHTML = '<p>Plak eerst één of meer regels.</p>';
-      return;
+    if (artikelLijst) {
+      artikelLijst.innerHTML = artikelRowTemplate('', '', false);
+      bindArtikelEvents();
     }
-
-    const { ok, errors } = parseBulkRittenText(text, getDefaults());
-
-    if (ok.length === 0) {
-      feedback.hidden = false;
-      feedback.className = 'bulk-import-feedback bulk-import-feedback--error';
-      const maxErr = 6;
-      const errSlice = errors.slice(0, maxErr);
-      let errList = errSlice
-        .map(
-          (e) =>
-            `<li>Regel ${e.line}: ${escBulk(e.reason)} <span class="bulk-err-line">${escBulk(e.text)}</span></li>`
-        )
-        .join('');
-      if (errors.length > maxErr) errList += `<li>… +${errors.length - maxErr} andere</li>`;
-      feedback.innerHTML = `<p><strong>Geen ritten geïmporteerd.</strong></p><ul class="bulk-error-list bulk-error-list--compact">${errList}</ul>`;
-      return;
-    }
-
-    const { ritten } = getData();
-    const baseId = Date.now();
-    const nieuw = bulkRowsToRitten(ok, baseId);
-    let v = nextVolgordeStart(ritten);
-    nieuw.forEach((r) => {
-      r.volgordeNr = v;
-      v += 1;
-    });
-    const merged = [...ritten, ...nieuw];
-    merged.sort((a, b) => {
-      const c = a.datum.localeCompare(b.datum);
-      if (c !== 0) return c;
-      return String(a.tijd || '').localeCompare(String(b.tijd || ''));
-    });
-    saveRitten(merged);
-
-    let msg = `<p><strong>${ok.length} rit${ok.length === 1 ? '' : 'ten'} toegevoegd</strong> als voltooid.</p>`;
-    if (errors.length > 0) {
-      const maxErr = 6;
-      const errSlice = errors.slice(0, maxErr);
-      let errList = errSlice.map((e) => `<li>Regel ${e.line}: ${escBulk(e.reason)}</li>`).join('');
-      if (errors.length > maxErr) errList += `<li>… +${errors.length - maxErr} andere</li>`;
-      msg += `<p class="bulk-warn-title">${errors.length} regel(s) overgeslagen:</p><ul class="bulk-error-list bulk-error-list--compact">${errList}</ul>`;
-    }
-    feedback.hidden = false;
-    feedback.className =
-      errors.length > 0 ? 'bulk-import-feedback bulk-import-feedback--warn' : 'bulk-import-feedback bulk-import-feedback--ok';
-    feedback.innerHTML = msg;
-    if (errors.length === 0) ta.value = '';
     onSubmit?.();
   });
 }
@@ -249,8 +238,9 @@ export function initFormBrandstof(onSubmit) {
   if (fileInput) {
     fileInput.addEventListener('change', async (e) => {
       const file = e.target?.files?.[0];
-      if (!file || !file.type.startsWith('image/')) {
-        if (file) alert('Kies een afbeelding (jpg, png).');
+      const source = file ? await fileToOcrSource(file) : null;
+      if (!file || !source) {
+        if (file) alert('Kies een afbeelding (jpg, png) of een PDF.');
         return;
       }
       if (resultText) resultText.textContent = 'Bezig met analyseren…';
@@ -259,7 +249,7 @@ export function initFormBrandstof(onSubmit) {
       try {
         const { createWorker } = await import('tesseract.js');
         const worker = await createWorker('nld', 1);
-        const { data } = await worker.recognize(file);
+        const { data } = await worker.recognize(source);
         await worker.terminate();
 
         const parsed = parseReceiptText(data?.text || '');
@@ -337,8 +327,9 @@ export function initFinancieelTicketImport(onSubmit) {
   if (fileInput) {
     fileInput.addEventListener('change', async (e) => {
       const file = e.target?.files?.[0];
-      if (!file || !file.type.startsWith('image/')) {
-        if (file) alert('Kies een afbeelding (jpg, png).');
+      const source = file ? await fileToOcrSource(file) : null;
+      if (!file || !source) {
+        if (file) alert('Kies een afbeelding (jpg, png) of een PDF.');
         return;
       }
       if (resultWrap) resultWrap.hidden = false;
@@ -347,7 +338,7 @@ export function initFinancieelTicketImport(onSubmit) {
       try {
         const { createWorker } = await import('tesseract.js');
         const worker = await createWorker('nld', 1);
-        const { data } = await worker.recognize(file);
+        const { data } = await worker.recognize(source);
         await worker.terminate();
 
         const parsed = parseReceiptText(data?.text || '');

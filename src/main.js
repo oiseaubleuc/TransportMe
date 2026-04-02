@@ -3,8 +3,8 @@
  * Mobielvriendelijk: navigatie, vaste ritten, berekening (brandstof + route), kaart, ziekenhuizen
  */
 
-import { updateKPI, updateKmTeller, updateVandaagSummary, initPeriodToggle, syncPeriodButtons, updateFinancialChart, updateRittenStatusLijst, updateRitMelding, updateBeschikbaarheidWeek, updateFinancieelProfielOverzicht } from './js/dashboard.js';
-import { initFormRit, initFormBrandstof, initFinancieelTicketImport, initFormOverig, initBulkRittenImport, setAlleDatumsVandaag } from './js/forms.js';
+import { updateKPI, updateVandaagSummary, initPeriodToggle, syncPeriodButtons, updateFinancialChart, updateRittenStatusLijst, updateRitMelding, updateBeschikbaarheidWeek, updateFinancieelProfielOverzicht } from './js/dashboard.js';
+import { initFormRit, initFormBrandstof, initFinancieelTicketImport, initFormOverig, setAlleDatumsVandaag } from './js/forms.js';
 import { renderAllTables } from './js/tables.js';
 import { DEFAULT_CHAUFFEURS, UI_COMPACT } from './js/config.js';
 import {
@@ -19,6 +19,8 @@ import {
   setCurrentProfileId,
   getPlanningAvailability,
   savePlanningAvailability,
+  getLiveAvailabilityStatus,
+  setLiveAvailabilityStatus,
 } from './js/storage.js';
 import { PROFILES } from './js/config.js';
 import { vergoedingVoorRit, geschatteAfstandKm, isRitVoltooid } from './js/calculations.js';
@@ -30,6 +32,7 @@ import { buildDistanceMatrix, computeOptimalOrder } from './js/routeOptimization
 
 /** Ziekenhuizenlijst Meer: uitgeklapt = volledige lijst */
 let ziekenhuizenLijstUitgeklapt = false;
+let liveAvailabilityTickerStarted = false;
 
 function profileDisplayName() {
   const id = getCurrentProfileId();
@@ -46,15 +49,43 @@ function syncProfileSwitcher() {
   sel.value = cur;
 }
 
+function syncProfileAvailableButton() {
+  const btn = document.getElementById('btn-profile-available');
+  const txt = document.getElementById('profile-available-text');
+  if (!btn) return;
+  const pid = getCurrentProfileId();
+  const on = getLiveAvailabilityStatus(pid).active;
+  btn.classList.toggle('is-on', on);
+  if (txt) txt.textContent = on ? 'Beschikbaar' : 'Afwezig';
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+
+function initProfileAvailableButton() {
+  const btn = document.getElementById('btn-profile-available');
+  if (!btn || btn.dataset.inited) return;
+  btn.dataset.inited = '1';
+  syncProfileAvailableButton();
+  if (!liveAvailabilityTickerStarted) {
+    liveAvailabilityTickerStarted = true;
+    setInterval(syncProfileAvailableButton, 60 * 1000);
+  }
+  btn.addEventListener('click', () => {
+    const pid = getCurrentProfileId();
+    const currentlyOn = getLiveAvailabilityStatus(pid).active;
+    setLiveAvailabilityStatus(pid, !currentlyOn);
+    refresh();
+  });
+}
+
 function refresh() {
   const profileLabel = document.getElementById('dashboard-profile-label');
   if (profileLabel) profileLabel.textContent = `Zelfstandige: ${profileDisplayName()}`;
   syncProfileSwitcher();
+  syncProfileAvailableButton();
 
   updateRittenToolbar();
 
   updateKPI();
-  updateKmTeller();
   updateVandaagSummary();
   updateBeschikbaarheidWeek();
   updateFinancieelProfielOverzicht();
@@ -270,44 +301,74 @@ function initMeerZiekenhuizenToggle() {
   });
 }
 
-// --- Beschikbaarheid / Planning (maandelijks) ---
-function getMonthKeyFromDate(d) {
+// --- Beschikbaarheid / Planning (per 2 weken) ---
+function toISODateLocal(d) {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${yyyy}-${mm}`;
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-function isoDateFromYMD(yyyy, mm01, dd) {
-  const mm = String(mm01).padStart(2, '0');
-  const ddStr = String(dd).padStart(2, '0');
-  return `${yyyy}-${mm}-${ddStr}`;
+function parseISODateLocal(iso) {
+  if (!iso || typeof iso !== 'string') return null;
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function getDaysInMonth(yyyy, mm01) {
-  // mm01: 1-12
-  return new Date(yyyy, mm01, 0).getDate();
+function startOfCurrentWeekMonday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
 }
 
-function renderPlanningMonth() {
-  const monthInput = document.getElementById('planning-maand');
+let planningQuickProfileId = PROFILES[0]?.id || 'houdaifa';
+
+function renderPlanningProfileIcons() {
+  const wrap = document.getElementById('planning-profile-icons');
+  if (!wrap) return;
+  wrap.innerHTML = PROFILES.map((p) => {
+    const initials = (p.name || '?')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((x) => x[0]?.toUpperCase() || '')
+      .join('')
+      .slice(0, 2);
+    const active = p.id === planningQuickProfileId;
+    return `<button type="button"
+      class="planning-profile-icon-btn ${active ? 'is-active' : ''}"
+      data-profile-id="${escapeHtml(p.id)}"
+      aria-pressed="${active ? 'true' : 'false'}"
+      title="Snel aanpassen voor ${escapeHtml(p.name)}"
+    >
+      <span class="planning-profile-icon-badge" aria-hidden="true">${escapeHtml(initials)}</span>
+      <span class="planning-profile-icon-name">${escapeHtml(p.name)}</span>
+    </button>`;
+  }).join('');
+}
+
+function renderPlanningFortnight() {
+  const startInput = document.getElementById('planning-start');
   const daysEl = document.getElementById('planning-days');
-  if (!monthInput || !daysEl) return;
+  if (!startInput || !daysEl) return;
 
-  const monthKey = monthInput.value || getMonthKeyFromDate(new Date());
-  monthInput.value = monthKey;
-
-  const [yyyyStr, mmStr] = monthKey.split('-');
-  const yyyy = Number(yyyyStr);
-  const mm01 = Number(mmStr);
-  if (!Number.isFinite(yyyy) || !Number.isFinite(mm01)) return;
+  const defaultStart = toISODateLocal(startOfCurrentWeekMonday());
+  if (!startInput.value) startInput.value = defaultStart;
+  const startDate = parseISODateLocal(startInput.value) || startOfCurrentWeekMonday();
+  startDate.setHours(0, 0, 0, 0);
+  startInput.value = toISODateLocal(startDate);
 
   const planning = getPlanningAvailability();
-  const daysInMonth = getDaysInMonth(yyyy, mm01);
-
   const rows = [];
-  for (let dd = 1; dd <= daysInMonth; dd++) {
-    const dateISO = isoDateFromYMD(yyyy, mm01, dd);
-    const d = new Date(yyyy, mm01 - 1, dd);
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
+    const dateISO = toISODateLocal(d);
+    const monthKey = dateISO.slice(0, 7);
     const label = d.toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: '2-digit' });
 
     const profileButtons = PROFILES.map((p) => {
@@ -323,39 +384,33 @@ function renderPlanningMonth() {
     }).join('');
 
     rows.push(`<div class="planning-day-row">
-      <span class="planning-day-label">${escapeHtml(label)}</span>
+      <span class="planning-day-label" data-date-iso="${escapeHtml(dateISO)}">${escapeHtml(label)}</span>
       ${profileButtons}
     </div>`);
   }
-
   daysEl.innerHTML = rows.join('');
 }
 
 function initPlanningAvailabilityTab() {
-  const monthInput = document.getElementById('planning-maand');
+  const startInput = document.getElementById('planning-start');
   const daysEl = document.getElementById('planning-days');
-  if (!monthInput || !daysEl) return;
+  const prevBtn = document.getElementById('planning-prev-2w');
+  const nextBtn = document.getElementById('planning-next-2w');
+  const profileIconsEl = document.getElementById('planning-profile-icons');
+  if (!startInput || !daysEl || !profileIconsEl) return;
 
-  renderPlanningMonth();
+  planningQuickProfileId = getCurrentProfileId();
+  if (!PROFILES.some((p) => p.id === planningQuickProfileId)) planningQuickProfileId = PROFILES[0]?.id || 'houdaifa';
 
-  monthInput.addEventListener('change', () => {
-    renderPlanningMonth();
-    updateBeschikbaarheidWeek();
-  });
+  renderPlanningProfileIcons();
+  renderPlanningFortnight();
 
-  daysEl.addEventListener('click', (e) => {
-    const btn = e.target.closest('.planning-av-toggle');
-    if (!btn) return;
-    const profileId = btn.dataset.profileId;
-    const dateISO = btn.dataset.dateIso;
+  function togglePlanningAvailability(profileId, dateISO) {
     if (!profileId || !dateISO) return;
-
     const monthKey = dateISO.slice(0, 7);
     const planning = getPlanningAvailability();
-
-    const currentlyOn = btn.getAttribute('aria-pressed') === 'true';
+    const currentlyOn = Boolean(planning?.[profileId]?.[monthKey]?.[dateISO]);
     const nextOn = !currentlyOn;
-
     if (nextOn) {
       if (!planning[profileId]) planning[profileId] = {};
       if (!planning[profileId][monthKey]) planning[profileId][monthKey] = {};
@@ -367,22 +422,77 @@ function initPlanningAvailabilityTab() {
         if (Object.keys(month).length === 0) delete planning[profileId][monthKey];
       }
     }
-
     savePlanningAvailability(planning);
-    renderPlanningMonth();
+    renderPlanningProfileIcons();
+    renderPlanningFortnight();
+    updateBeschikbaarheidWeek();
+  }
+
+  profileIconsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.planning-profile-icon-btn');
+    if (!btn) return;
+    const profileId = btn.dataset.profileId;
+    if (!profileId) return;
+    planningQuickProfileId = profileId;
+    renderPlanningProfileIcons();
+  });
+
+  startInput.addEventListener('change', () => {
+    renderPlanningFortnight();
     updateBeschikbaarheidWeek();
   });
 
+  prevBtn?.addEventListener('click', () => {
+    const startDate = parseISODateLocal(startInput.value) || startOfCurrentWeekMonday();
+    startDate.setDate(startDate.getDate() - 14);
+    startInput.value = toISODateLocal(startDate);
+    renderPlanningFortnight();
+    updateBeschikbaarheidWeek();
+  });
+
+  nextBtn?.addEventListener('click', () => {
+    const startDate = parseISODateLocal(startInput.value) || startOfCurrentWeekMonday();
+    startDate.setDate(startDate.getDate() + 14);
+    startInput.value = toISODateLocal(startDate);
+    renderPlanningFortnight();
+    updateBeschikbaarheidWeek();
+  });
+
+  daysEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.planning-av-toggle');
+    if (btn) {
+      togglePlanningAvailability(btn.dataset.profileId, btn.dataset.dateIso);
+      return;
+    }
+    const dayLabel = e.target.closest('.planning-day-label');
+    if (dayLabel?.dataset.dateIso && planningQuickProfileId) {
+      // Snelle actie: klik op daglabel toggelt gekozen profiel (icoon bovenaan)
+      togglePlanningAvailability(planningQuickProfileId, dayLabel.dataset.dateIso);
+    }
+  });
+
   document.getElementById('planning-reset-maand')?.addEventListener('click', () => {
-    const monthKey = monthInput.value || getMonthKeyFromDate(new Date());
+    const startDate = parseISODateLocal(startInput.value) || startOfCurrentWeekMonday();
+    const resetDates = [];
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(startDate);
+      d.setDate(startDate.getDate() + i);
+      resetDates.push(toISODateLocal(d));
+    }
     const planning = getPlanningAvailability();
 
     PROFILES.forEach((p) => {
-      if (planning?.[p.id]?.[monthKey]) delete planning[p.id][monthKey];
+      resetDates.forEach((dateISO) => {
+        const monthKey = dateISO.slice(0, 7);
+        if (planning?.[p.id]?.[monthKey]?.[dateISO]) {
+          delete planning[p.id][monthKey][dateISO];
+          if (Object.keys(planning[p.id][monthKey]).length === 0) delete planning[p.id][monthKey];
+        }
+      });
     });
 
     savePlanningAvailability(planning);
-    renderPlanningMonth();
+    renderPlanningFortnight();
     updateBeschikbaarheidWeek();
   });
 }
@@ -536,10 +646,13 @@ function fillKaartRitDropdown() {
 function setNavigationLinks(from, to) {
   const linkWaze = document.getElementById('link-waze');
   const linkGoogle = document.getElementById('link-google-nav');
-  if (from?.lat != null && to?.lat != null) {
-    if (linkWaze) linkWaze.href = `https://waze.com/ul?ll=${to.lat},${to.lng}&navigate=yes`;
+  const hasCoords = from?.lat != null && from?.lng != null && to?.lat != null && to?.lng != null;
+  if (hasCoords) {
+    const toCoord = encodeURIComponent(`${to.lat},${to.lng}`);
+    const fromCoord = encodeURIComponent(`${from.lat},${from.lng}`);
+    if (linkWaze) linkWaze.href = `https://www.waze.com/ul?ll=${toCoord}&navigate=yes`;
     if (linkGoogle)
-      linkGoogle.href = `https://www.google.com/maps/dir/?api=1&origin=${from.lat},${from.lng}&destination=${to.lat},${to.lng}`;
+      linkGoogle.href = `https://www.google.com/maps/dir/?api=1&origin=${fromCoord}&destination=${toCoord}&travelmode=driving`;
   } else {
     if (linkWaze) linkWaze.href = '#';
     if (linkGoogle) linkGoogle.href = '#';
@@ -555,10 +668,42 @@ function initMapIfNeeded() {
   const routeKmEl = document.getElementById('kaart-route-km');
   const routeSourceEl = document.getElementById('kaart-route-source');
   const fitBtn = document.getElementById('kaart-fit-route');
+  const linkWaze = document.getElementById('link-waze');
+  const linkGoogle = document.getElementById('link-google-nav');
   const hasORS = hasOpenRouteApiKey();
   const hospitals = getZiekenhuizen();
   let currentFrom = null;
   let currentTo = null;
+
+  function handleNavClick(e, type) {
+    const hasCoords =
+      currentFrom?.lat != null &&
+      currentFrom?.lng != null &&
+      currentTo?.lat != null &&
+      currentTo?.lng != null;
+    if (!hasCoords) {
+      e.preventDefault();
+      alert('Kies eerst vertrek en aankomst op de kaart.');
+      return;
+    }
+    const toCoord = encodeURIComponent(`${currentTo.lat},${currentTo.lng}`);
+    const fromCoord = encodeURIComponent(`${currentFrom.lat},${currentFrom.lng}`);
+    const url =
+      type === 'waze'
+        ? `https://www.waze.com/ul?ll=${toCoord}&navigate=yes`
+        : `https://www.google.com/maps/dir/?api=1&origin=${fromCoord}&destination=${toCoord}&travelmode=driving`;
+    window.open(url, '_blank', 'noopener');
+    e.preventDefault();
+  }
+
+  if (linkWaze && !linkWaze.dataset.inited) {
+    linkWaze.dataset.inited = '1';
+    linkWaze.addEventListener('click', (e) => handleNavClick(e, 'waze'));
+  }
+  if (linkGoogle && !linkGoogle.dataset.inited) {
+    linkGoogle.dataset.inited = '1';
+    linkGoogle.addEventListener('click', (e) => handleNavClick(e, 'google'));
+  }
 
   function getSelectedFromTo() {
     const fromId = fromSelect?.value;
@@ -693,7 +838,7 @@ function renderSavedZiekenhuizen() {
 
 function fillVoertuigDropdowns() {
   const voertuigen = getVoertuigen();
-  ['rit-voertuig', 'brandstof-voertuig', 'fin-ticket-voertuig', 'bulk-default-voertuig'].forEach((id) => {
+  ['rit-voertuig', 'brandstof-voertuig', 'fin-ticket-voertuig'].forEach((id) => {
     const sel = document.getElementById(id);
     if (!sel) return;
     sel.innerHTML = '<option value="">— Kies voertuig —</option>';
@@ -707,7 +852,9 @@ function fillVoertuigDropdowns() {
 }
 
 function fillChauffeurDropdown() {
-  ['rit-chauffeur', 'bulk-default-chauffeur'].forEach((id) => {
+  const profielNaam = (PROFILES.find((p) => p.id === getCurrentProfileId())?.name || '').toLowerCase();
+  const defaultChauffeurId = DEFAULT_CHAUFFEURS.find((c) => c.naam.toLowerCase() === profielNaam)?.id || '';
+  ['rit-chauffeur'].forEach((id) => {
     const sel = document.getElementById(id);
     if (!sel) return;
     sel.innerHTML = '<option value="">— Kies chauffeur —</option>';
@@ -717,6 +864,7 @@ function fillChauffeurDropdown() {
       opt.textContent = c.naam;
       sel.appendChild(opt);
     });
+    if (defaultChauffeurId && id === 'rit-chauffeur') sel.value = defaultChauffeurId;
   });
 }
 
@@ -817,6 +965,7 @@ function renderRittenStatusPagina() {
         r.fromName,
         r.toName,
         r.bonnummer,
+        ...(Array.isArray(r.bestelArtikelen) ? r.bestelArtikelen.map((x) => x?.bonnummer).filter(Boolean) : []),
         datumTijd,
         r.volgordeNr,
         r.km,
@@ -855,7 +1004,7 @@ function renderRittenStatusPagina() {
   let html = tonen
     .map(({ rit: r, status }, idx) => {
       const isMatch = heeftZoek && idx === 0;
-      const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0);
+      const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0, r.tijd);
       const tijdDisplay = status === 'voltooid' ? r.voltooidTijd || r.tijd : r.tijd;
       const datumTijd = formatDatumKort(r.datum, tijdDisplay);
       const meta = [r.chauffeurName, r.voertuigName].filter(Boolean).join(' · ') || '—';
@@ -952,28 +1101,43 @@ function renderRouteChecklist() {
   const container = document.getElementById('route-checklist');
   if (!container) return;
   const presets = getPresetRoutes();
-  const byVertrek = {};
-  presets.forEach((p) => {
-    const key = p.fromName || p.fromId;
-    if (!byVertrek[key]) byVertrek[key] = [];
-    byVertrek[key].push(p);
-  });
-  const vertrekken = Object.keys(byVertrek).sort((a, b) => a.localeCompare(b));
+  const hospitals = getZiekenhuizen();
+  const hospitalIds = new Set(hospitals.map((h) => h.id));
+  const valid = presets
+    .filter((p) => p.fromId && p.toId && hospitalIds.has(p.fromId) && hospitalIds.has(p.toId))
+    .sort((a, b) => {
+      const aa = `${pSafe(a.fromName, a.fromId)} ${pSafe(a.toName, a.toId)}`;
+      const bb = `${pSafe(b.fromName, b.fromId)} ${pSafe(b.toName, b.toId)}`;
+      return aa.localeCompare(bb);
+    });
+  const verborgen = presets.length - valid.length;
 
-  container.innerHTML = vertrekken
-    .map(
-      (vertrek) => `
-    <div class="route-checklist-groep">
-      <div class="route-checklist-groep-titel">${escapeHtml(vertrek)}</div>
-      ${byVertrek[vertrek]
-        .map(
-          (p) =>
-            `<label class="route-checklist-item"><input type="checkbox" class="route-rit-cb" data-preset-id="${p.id}" /><span class="route-checklist-to">${escapeHtml(p.toName)}</span><span class="route-checklist-km">${p.defaultKm != null ? p.defaultKm + ' km' : '?'}</span></label>`
-        )
-        .join('')}
-    </div>`
-    )
+  if (valid.length === 0) {
+    container.innerHTML =
+      '<p class="route-checklist-empty">Geen geldige ritten in de checklist. Voeg eerst ziekenhuizen/vaste ritten toe.</p>';
+    return;
+  }
+
+  let html = '';
+  if (verborgen > 0) {
+    html += `<div class="route-checklist-note">${verborgen} route${verborgen > 1 ? 's' : ''} verborgen (locatie ontbreekt in je ziekenhuislijst).</div>`;
+  }
+  html += valid
+    .map((p) => {
+      const from = pSafe(p.fromName, p.fromId);
+      const to = pSafe(p.toName, p.toId);
+      return `<label class="route-checklist-item">
+        <input type="checkbox" class="route-rit-cb" data-preset-id="${p.id}" />
+        <span class="route-checklist-route">${escapeHtml(from)} → ${escapeHtml(to)}</span>
+        <span class="route-checklist-km">${p.defaultKm != null ? p.defaultKm + ' km' : '?'}</span>
+      </label>`;
+    })
     .join('');
+  container.innerHTML = html;
+}
+
+function pSafe(name, fallback) {
+  return name && String(name).trim() ? name : fallback || '—';
 }
 
 function fillRouteStartDropdown() {
@@ -1007,9 +1171,14 @@ function initRoutePageIfNeeded() {
 
     const presets = getPresetRoutes();
     const hospitals = getZiekenhuizen();
+    const hospitalIds = new Set(hospitals.map((h) => h.id));
     const selectedRitten = selectedPresetIds
       .map((id) => presets.find((p) => p.id === id))
-      .filter(Boolean);
+      .filter((p) => p && p.fromId && p.toId && hospitalIds.has(p.fromId) && hospitalIds.has(p.toId));
+    if (selectedRitten.length === 0) {
+      alert('De geselecteerde ritten zijn niet geldig voor de huidige ziekenhuislijst.');
+      return;
+    }
 
     const allIds = new Set([startId]);
     selectedRitten.forEach((r) => {
@@ -1191,13 +1360,13 @@ function init() {
   setAlleDatumsVandaag();
   initNavigation();
   initProfileSwitcher();
+  initProfileAvailableButton();
   initMeerZiekenhuizenToggle();
   initRittenPageControls();
   initPeriodToggle(refresh);
   syncPeriodButtons();
   initDashboardTabs();
   initFormRit(afterRitFormSaved);
-  initBulkRittenImport(refresh);
   initFormBrandstof(refresh);
   initFinancieelTicketImport(refresh);
   initFormOverig(refresh);

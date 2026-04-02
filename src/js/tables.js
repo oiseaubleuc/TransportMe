@@ -31,7 +31,7 @@ export function renderRitten(onRender) {
   const voltooide = ritten.filter(isRitVoltooid);
   const totaalKm = voltooide.reduce((s, r) => s + (r.km || 0), 0);
   const totaalVergoeding = voltooide.reduce(
-    (s, r) => s + (r.vergoeding ?? vergoedingVoorRit(r.km)),
+    (s, r) => s + (r.vergoeding ?? vergoedingVoorRit(r.km, r.tijd)),
     0
   );
 
@@ -49,6 +49,12 @@ export function renderRitten(onRender) {
   const wekenVerborgen = allWeekKeys.length - weekKeys.length;
 
   const statusLabel = (s) => (s === 'komend' ? 'Kom.' : s === 'lopend' ? 'Lop.' : s === 'voltooid' ? 'Volt.' : '—');
+  const bonDisplay = (rit) => {
+    const items = Array.isArray(rit.bestelArtikelen) ? rit.bestelArtikelen.filter((x) => x?.bonnummer) : [];
+    if (items.length === 0) return rit.bonnummer || '—';
+    const eerste = items[0].bonnummer;
+    return items.length > 1 ? `${eerste} +${items.length - 1}` : eerste;
+  };
   let html = '';
   if (wekenVerborgen > 0) {
     html += `<tr class="week-header week-header--note"><td colspan="9"><span class="compact-table-note">${wekenVerborgen} oudere week${wekenVerborgen > 1 ? 'en' : ''} niet getoond · laatste ${UI_COMPACT.rittenTabelWeken} weken</span></td></tr>`;
@@ -63,12 +69,12 @@ export function renderRitten(onRender) {
       (r) =>
         (html += `<tr>
           <td class="num">${r.volgordeNr != null ? escapeHtml(String(r.volgordeNr)) : '—'}</td>
-          <td>${escapeHtml(r.bonnummer || '—')}</td>
+          <td>${escapeHtml(bonDisplay(r))}</td>
           <td>${escapeHtml(formatDatumKort(r.datum))}</td>
           <td>${escapeHtml(r.chauffeurName || '—')}</td>
           <td>${escapeHtml(r.voertuigName || '—')}</td>
           <td class="num">${r.km} km</td>
-          <td class="num">${formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km))}</td>
+          <td class="num">${formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km, r.tijd))}</td>
           <td>${statusLabel(r.status)}</td>
           <td><button type="button" class="btn btn-danger btn-icon-del btn-delete-rit" data-id="${r.id}" title="Verwijderen" aria-label="Verwijder rit">×</button></td>
         </tr>`)

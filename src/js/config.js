@@ -5,6 +5,9 @@
 export const OPSTART_PREMIE = 15;
 export const VERGOEDING_PER_20KM = 25;
 export const KM_SCHIJF = 20;
+export const NACHT_TARIEF_FACTOR = 1.3;
+export const NACHT_START_UUR = 18;
+export const NACHT_EIND_UUR = 5;
 
 export const STORAGE_KEYS = {
   ritten: 'transporteur_ritten',
@@ -19,7 +22,14 @@ export const STORAGE_KEYS = {
   mergedTestProfile: 'transporteur_merged_test_to_houdaifa_v1',
   /** Eénmalig: teller-reset gevraagd door business (ritten/brandstof/overig op nul) */
   resetAllCountersV1: 'transporteur_reset_all_counters_v1',
+  /** Eénmalig: data opgeschoond en naar nieuw schema gebracht */
+  dataCleanupV2: 'transporteur_data_cleanup_v2',
+  /** Live aanwezigheidsstatus (vervalt automatisch) */
+  liveAvailability: 'transporteur_live_availability_v1',
 };
+
+/** Live status "beschikbaar": vervalt automatisch na 6 uur */
+export const LIVE_AVAILABILITY_TTL_MS = 6 * 60 * 60 * 1000;
 
 /** Profielen (zelfstandigen): elk eigen dataset ritten / brandstof / overig in localStorage */
 export const PROFILES = [

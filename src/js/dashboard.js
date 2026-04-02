@@ -3,7 +3,7 @@
  */
 
 import { PERIOD_LABELS, UI_COMPACT, PROFILES } from './config.js';
-import { totalenVoorPeriode, kmTotalen, vergoedingVoorRit, isInDay, getWeeklyFinancials, isRitVoltooid } from './calculations.js';
+import { totalenVoorPeriode, vergoedingVoorRit, isInDay, getWeeklyFinancials, isRitVoltooid } from './calculations.js';
 import { formatEuro } from './format.js';
 import { getData, saveRitten } from './storage.js';
 
@@ -70,7 +70,7 @@ export function updateVandaagSummary() {
       const meer = vandaagVoltooid.length - tail.length;
       let html = tail
         .map((r) => {
-          const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0);
+          const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0, r.tijd);
           const nr =
             r.volgordeNr != null && Number.isFinite(Number(r.volgordeNr))
               ? `<span class="dashboard-vandaag-rit-nr">#${r.volgordeNr}</span> `
@@ -142,10 +142,17 @@ export function updateFinancieelProfielOverzicht() {
   const tonen = uitgevoerd.slice(0, 12);
   listEl.innerHTML = tonen
     .map((r) => {
-      const bon = r.bonnummer ? `Bon ${escapeHtml(r.bonnummer)}` : 'Bon —';
+      const items = Array.isArray(r.bestelArtikelen) ? r.bestelArtikelen.filter((x) => x?.bonnummer) : [];
+      const bonLabel =
+        items.length > 0
+          ? items.length > 1
+            ? `${items[0].bonnummer} +${items.length - 1}`
+            : items[0].bonnummer
+          : r.bonnummer || '—';
+      const bon = `Bon ${escapeHtml(bonLabel)}`;
       const route = r.fromName && r.toName ? `${escapeHtml(r.fromName)} → ${escapeHtml(r.toName)}` : 'Route niet ingevuld';
       return `<li class="financieel-profiel-rit-item">
-        <span class="financieel-profiel-rit-top">${bon} · ${escapeHtml(formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km || 0)))}</span>
+        <span class="financieel-profiel-rit-top">${bon} · ${escapeHtml(formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km || 0, r.tijd)))}</span>
         <span class="financieel-profiel-rit-meta">${escapeHtml(r.datum || '—')} · ${r.km || 0} km · ${route}</span>
       </li>`;
     })
@@ -370,25 +377,29 @@ export function updateRitMelding(onUpdate) {
   };
 }
 
-/** Lijst komende + lopende ritten vandaag met knoppen Start rit / Rit voltooid */
+/** Lijst met komende ritten vandaag + alle lopende ritten (ook na middernacht). */
 export function updateRittenStatusLijst(onUpdate) {
   const lijst = document.getElementById('ritten-status-lijst');
   if (!lijst) return;
   const { ritten } = getData();
   const today = new Date();
-  const vandaag = ritten
-    .filter((r) => isInDay(r.datum, today) && (r.status === 'komend' || r.status === 'lopend'))
-    .sort((a, b) => a.datum.localeCompare(b.datum));
-  if (vandaag.length === 0) {
+  const komendeVandaag = ritten.filter((r) => r.status === 'komend' && isInDay(r.datum, today));
+  const lopendeAlleDagen = ritten.filter((r) => r.status === 'lopend');
+  const zichtbaar = [...lopendeAlleDagen, ...komendeVandaag].sort((a, b) => {
+    const da = `${a.datum || ''}${a.tijd || ''}`;
+    const db = `${b.datum || ''}${b.tijd || ''}`;
+    return da.localeCompare(db);
+  });
+  if (zichtbaar.length === 0) {
     lijst.innerHTML = '<li class="ritten-status-empty">Geen ritten vandaag.</li>';
     return;
   }
   const max = UI_COMPACT.dashboardStatusRitten;
-  const tonen = vandaag.slice(0, max);
-  const meer = vandaag.length - tonen.length;
+  const tonen = zichtbaar.slice(0, max);
+  const meer = zichtbaar.length - tonen.length;
   let html = tonen
     .map((r) => {
-      const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0);
+      const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0, r.tijd);
       const chauffeur = r.chauffeurName || '—';
       const voertuig = r.voertuigName || '—';
       const isLopend = r.status === 'lopend';
@@ -460,16 +471,6 @@ export function updateKPI() {
     const periodEl = document.getElementById(id + '-period');
     if (periodEl) periodEl.textContent = PERIOD_LABELS[currentPeriod];
   });
-}
-
-export function updateKmTeller() {
-  const { day, week, month } = kmTotalen();
-  const dayEl = document.getElementById('km-day');
-  const weekEl = document.getElementById('km-week');
-  const monthEl = document.getElementById('km-month');
-  if (dayEl) dayEl.textContent = day + ' km';
-  if (weekEl) weekEl.textContent = week + ' km';
-  if (monthEl) monthEl.textContent = month + ' km';
 }
 
 /** Zet de actieve periode-knop in sync met currentPeriod (bijv. bij laden) */

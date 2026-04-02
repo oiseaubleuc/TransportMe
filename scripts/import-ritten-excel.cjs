@@ -3,9 +3,17 @@
  * Gebruik: node scripts/import-ritten-excel.cjs [pad/naar/ritten_vergoeding_v2.xlsx]
  */
 
-const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
+let XLSX = null;
+try {
+  XLSX = require('xlsx');
+} catch {
+  console.error(
+    'xlsx is verwijderd om security-redenen. Converteer het Excel-bestand naar CSV of gebruik tijdelijk een aparte veilige omgeving voor dit script.'
+  );
+  process.exit(1);
+}
 
 const excelPath = process.argv[2] || path.join(process.cwd(), 'ritten_vergoeding_v2.xlsx');
 if (!fs.existsSync(excelPath)) {

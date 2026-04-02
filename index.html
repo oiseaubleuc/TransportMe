@@ -38,10 +38,13 @@
               <span class="profile-switcher-label-text">Profiel</span>
               <select id="profile-switcher" class="profile-switcher" aria-label="Actief zelfstandig profiel"></select>
             </label>
+            <button type="button" class="btn btn-outline profile-available-btn" id="btn-profile-available" aria-pressed="false">
+              <span class="profile-available-dot" id="profile-available-dot" aria-hidden="true"></span>
+              <span id="profile-available-text">Afwezig</span>
+            </button>
           </div>
           <nav class="dashboard-nav" role="tablist" aria-label="Dashboard secties">
             <button type="button" class="dashboard-nav-btn active" role="tab" id="tab-dash-vandaag" aria-selected="true" data-dashboard-tab="vandaag">Vandaag</button>
-            <button type="button" class="dashboard-nav-btn" role="tab" id="tab-dash-km" aria-selected="false" data-dashboard-tab="km">Kilometers</button>
           </nav>
 
           <div class="dashboard-panel active" id="dashboard-panel-vandaag" role="tabpanel" aria-labelledby="tab-dash-vandaag">
@@ -80,16 +83,6 @@
             </div>
           </div>
 
-          <div class="dashboard-panel" id="dashboard-panel-km" role="tabpanel" aria-labelledby="tab-dash-km" hidden>
-            <div class="km-section">
-              <h2 class="dashboard-panel-subtitle">Kilometers</h2>
-              <div class="km-cards km-cards--dashboard">
-                <div class="km-card"><span class="km-label">Vandaag</span><span class="km-value" id="km-day">0 km</span></div>
-                <div class="km-card"><span class="km-label">Deze week</span><span class="km-value" id="km-week">0 km</span></div>
-                <div class="km-card"><span class="km-label">Deze maand</span><span class="km-value" id="km-month">0 km</span></div>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -138,8 +131,8 @@
                 <h3 class="financieel-ticket-title">Tanktickets als kosten importeren</h3>
                 <p class="financieel-ticket-intro">Upload foto van een ticket of vul handmatig in. Opslaan gaat direct naar brandstofkosten van dit profiel.</p>
                 <div class="form-row">
-                  <label for="fin-ticket-file">Foto tankticket (optioneel)</label>
-                  <input type="file" id="fin-ticket-file" accept="image/*" capture="environment" />
+                  <label for="fin-ticket-file">Foto of PDF tankticket (optioneel)</label>
+                  <input type="file" id="fin-ticket-file" accept="image/*,application/pdf,.pdf" />
                 </div>
                 <div class="analyse-resultaat" id="fin-ticket-result-wrap" hidden>
                   <strong>Resultaat:</strong> <span id="fin-ticket-result-text"></span>
@@ -224,11 +217,10 @@
             </div>
           </aside>
           <!-- Kolom 2: Nieuwe rit -->
-          <div class="ritten-toevoegen">
+          <div class="ritten-toevoegen" id="ritten-toevoegen">
             <h2 class="ritten-toevoegen-title">Nieuwe rit</h2>
-            <p class="ritten-toevoegen-intro">Vertrek → bestemming → gegevens → opslaan (2u30/rit). Route: tab Kaart. Bulk: zijkolom op breed scherm.</p>
-            <div class="ritten-toevoegen-split">
-              <div class="ritten-single-column">
+            <p class="ritten-toevoegen-intro">Vertrek → bestemming → gegevens → opslaan (2u30/rit). Route: tab Kaart.</p>
+            <div class="ritten-single-column">
                 <div class="rit-stap rit-stap--bestemming">
                   <h3 class="rit-stap-titel">Bestemming</h3>
                   <div class="rit-bestemming-kiezer">
@@ -277,8 +269,16 @@
                     </select>
                   </div>
                   <div class="form-row">
-                    <label for="rit-bonnummer">Bonnummer</label>
-                    <input type="text" id="rit-bonnummer" placeholder="bv. 2025-000123" required />
+                    <label for="rit-bonnummer">Bestelbon / artikels</label>
+                    <div class="rit-artikelen" id="rit-artikelen">
+                      <div class="rit-artikelen-lijst" id="rit-artikelen-lijst">
+                        <div class="rit-artikel-row">
+                          <input type="text" id="rit-bonnummer" class="rit-artikel-bon" placeholder="Bestelnummer (verplicht)" required />
+                          <input type="number" class="rit-artikel-boxen" min="1" step="1" placeholder="Boxen" />
+                        </div>
+                      </div>
+                      <button type="button" class="rit-artikel-add-link" id="rit-artikel-add">+ artikel toevoegen</button>
+                    </div>
                   </div>
                   <div class="form-row">
                     <label for="rit-km">Afstand (km)</label>
@@ -289,41 +289,6 @@
                   <div id="rit-row-winst" hidden></div>
                   <button type="submit" class="btn btn-primary btn-block">Rit opslaan</button>
                 </form>
-              </div>
-              <section class="bulk-import-section form-section" aria-labelledby="bulk-import-title">
-                <h3 class="rit-stap-titel" id="bulk-import-title">Meerdere ritten tegelijk</h3>
-                <p class="form-intro bulk-import-intro">
-                  Plak uit Excel (tab of ;). Wordt als <strong>voltooid</strong> opgeslagen. Koppen optioneel: Datum, Tijd, km, Chauffeur, Voertuig.
-                </p>
-                <div class="form-row form-row--inline bulk-defaults">
-                  <div class="bulk-default-field">
-                    <label for="bulk-default-chauffeur">Standaard chauffeur</label>
-                    <select id="bulk-default-chauffeur" class="select">
-                      <option value="">— Indien kolom ontbreekt —</option>
-                    </select>
-                  </div>
-                  <div class="bulk-default-field">
-                    <label for="bulk-default-voertuig">Standaard voertuig</label>
-                    <select id="bulk-default-voertuig" class="select">
-                      <option value="">— Optioneel —</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="form-row">
-                  <label for="bulk-rit-raw">Ritten (één per regel)</label>
-                  <textarea
-                    id="bulk-rit-raw"
-                    class="input-textarea"
-                    rows="5"
-                    spellcheck="false"
-                    placeholder="2025-03-01	08:30	45	Houdaifa&#10;2025-03-02	14:00	32	Houdaifa	Berlingo"
-                  ></textarea>
-                </div>
-                <div class="bulk-import-actions">
-                  <button type="button" class="btn btn-primary btn-block" id="bulk-rit-import-btn">Controleren &amp; importeren</button>
-                </div>
-                <div class="bulk-import-feedback" id="bulk-rit-feedback" hidden></div>
-              </section>
             </div>
           </div>
         </div>
@@ -339,8 +304,8 @@
           <h3 class="berekening-sectie-titel">Brandstof (tankbeurt)</h3>
           <p class="info-text--small berekening-sectie-intro">Vandaag standaard; optioneel foto tankbon.</p>
           <div class="form-row">
-            <label for="brandstof-file">Foto tankbon (optioneel)</label>
-            <input type="file" id="brandstof-file" accept="image/*" capture="environment" />
+            <label for="brandstof-file">Foto of PDF tankbon (optioneel)</label>
+            <input type="file" id="brandstof-file" accept="image/*,application/pdf,.pdf" />
           </div>
           <div class="analyse-resultaat" id="brandstof-analyse-resultaat" hidden>
             <strong>Resultaat:</strong> <span id="brandstof-analyse-text"></span>
@@ -444,122 +409,169 @@
         <p class="info-text--small">Tip: kies een rit uit planning voor snelle weergave, of selecteer vertrek en aankomst handmatig.</p>
       </section>
 
-      <!-- Pagina: Meer (Ziekenhuizen + Gegevens) -->
-      <section class="page" id="page-meer" aria-labelledby="nav-meer">
-        <h2 class="page-section-title">Ziekenhuizen</h2>
-        <p class="form-intro">Zoeken, toevoegen, vaste ritten koppelen.</p>
-        <div class="form-row">
-          <label for="zoek-ziekenhuis">Zoek ziekenhuis of adres</label>
-          <input type="text" id="zoek-ziekenhuis" placeholder="bv. UZ Leuven, Virga Jesse..." autocomplete="off" />
-        </div>
-        <div id="zoek-suggesties" class="zoek-suggesties" hidden></div>
-        <div id="zoek-resultaat" class="zoek-resultaat" hidden></div>
-        <div class="saved-list" id="saved-ziekenhuizen-list">
-          <h3 class="list-title">Mijn ziekenhuizen</h3>
-          <ul id="saved-ziekenhuizen" class="saved-ziekenhuizen-ul"></ul>
-          <button type="button" class="btn btn-outline btn-sm btn-block" id="btn-ziekenhuizen-toggle" hidden>Alle tonen</button>
-        </div>
-        <div class="form-section">
-          <h3 class="list-title">Nieuwe vaste rit toevoegen</h3>
-          <p class="info-text--small">Kies vertrek en bestemming uit je lijst. Afstand wordt opgehaald via OpenRouteService (gratis).</p>
-          <div class="form-row">
-            <label for="new-route-from">Van</label>
-            <select id="new-route-from" class="select"></select>
-          </div>
-          <div class="form-row">
-            <label for="new-route-to">Naar</label>
-            <select id="new-route-to" class="select"></select>
-          </div>
-          <button type="button" class="btn btn-primary" id="btn-add-preset-route">Vaste rit toevoegen</button>
-        </div>
+      <!-- Pagina: Meer (instellingen, kosten, tabellen, planning) -->
+      <section class="page page--meer" id="page-meer" aria-labelledby="meer-page-heading">
+        <header class="meer-page-header">
+          <p class="page-organisatie-kicker">Instellingen &amp; beheer</p>
+          <h2 class="page-section-title" id="meer-page-heading">Meer</h2>
+          <p class="form-intro meer-page-lead">
+            Locaties en voertuigen, snel een kost invoeren, en hieronder alle tabellen plus je 2-weken planning. Alles blijft lokaal op dit toestel.
+          </p>
+        </header>
 
-        <h2 class="page-section-title">Voertuigen</h2>
-        <p class="form-intro">Voor ritten en tankbeurten.</p>
-        <div class="form-section">
-          <div class="form-row form-row--inline">
-            <label for="voertuig-naam">Naam voertuig</label>
-            <input type="text" id="voertuig-naam" placeholder="bv. Volkswagen Caddy" />
-          </div>
-          <div class="form-row form-row--inline">
-            <label for="voertuig-kenteken">Kenteken (optioneel)</label>
-            <input type="text" id="voertuig-kenteken" placeholder="1-ABC-123" />
-          </div>
-          <button type="button" class="btn btn-primary" id="btn-voertuig-toevoegen">Voertuig toevoegen</button>
-        </div>
-        <div class="saved-list">
-          <h3 class="list-title">Mijn voertuigen</h3>
-          <ul id="saved-voertuigen"></ul>
-        </div>
+        <nav class="meer-section-nav" aria-label="Spring naar sectie">
+          <a class="meer-section-nav-link" href="#meer-locaties">Locaties</a>
+          <a class="meer-section-nav-link" href="#meer-voertuigen">Voertuigen</a>
+          <a class="meer-section-nav-link" href="#meer-kosten">Kosten</a>
+          <a class="meer-section-nav-link" href="#meer-gegevens">Tabellen &amp; planning</a>
+        </nav>
 
-        <h2 class="page-section-title">Overige kosten</h2>
-        <form id="form-overig" class="form-overig form-section">
-          <div class="form-row">
-            <label for="overig-datum">Datum</label>
-            <input type="date" id="overig-datum" required />
+        <section class="meer-section" id="meer-locaties" aria-labelledby="meer-locaties-title">
+          <div class="meer-section-head">
+            <h3 class="meer-section-title" id="meer-locaties-title">Locaties &amp; vaste ritten</h3>
+            <p class="meer-section-desc">Zoek en bewaar ziekenhuizen; koppel vaste routes voor snellere ritkeuze.</p>
           </div>
-          <div class="form-row">
-            <label for="overig-omschrijving">Omschrijving</label>
-            <input type="text" id="overig-omschrijving" placeholder="Onderhoud, tol..." />
-          </div>
-          <div class="form-row">
-            <label for="overig-bedrag">Bedrag (€)</label>
-            <input type="number" id="overig-bedrag" min="0" step="0.01" required />
-          </div>
-          <button type="submit" class="btn btn-primary btn-block">Kosten opslaan</button>
-        </form>
-
-        <h2 class="page-section-title">Gegevens</h2>
-        <div class="tabs" role="tablist">
-          <button type="button" class="tab active" role="tab" data-tab="ritten" id="tab-ritten">Ritten</button>
-          <button type="button" class="tab" role="tab" data-tab="brandstof" id="tab-brandstof">Brandstof</button>
-          <button type="button" class="tab" role="tab" data-tab="overig" id="tab-overig">Overige</button>
-          <button type="button" class="tab" role="tab" data-tab="planning" id="tab-planning">Planning</button>
-        </div>
-        <div class="tab-panels">
-          <div class="tab-panel active" id="panel-ritten" role="tabpanel">
-            <div class="table-wrap table-wrap--managed">
-              <table class="data-table data-table--compact">
-                <thead><tr><th>Volg. nr.</th><th>Bonnr.</th><th>Datum</th><th>Chauffeur</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th>Status</th><th></th></tr></thead>
-                <tbody id="tbody-ritten"></tbody>
-              </table>
+          <div class="meer-section-body">
+            <div class="form-row">
+              <label for="zoek-ziekenhuis">Zoek ziekenhuis of adres</label>
+              <input type="text" id="zoek-ziekenhuis" placeholder="bv. UZ Leuven, Virga Jesse…" autocomplete="off" />
             </div>
-          </div>
-          <div class="tab-panel" id="panel-brandstof" role="tabpanel">
-            <div class="table-wrap table-wrap--managed">
-              <table class="data-table data-table--compact">
-                <thead><tr><th>Datum</th><th>Voertuig</th><th>L</th><th>€</th><th>€/L</th><th></th></tr></thead>
-                <tbody id="tbody-brandstof"></tbody>
-              </table>
+            <div id="zoek-suggesties" class="zoek-suggesties" hidden></div>
+            <div id="zoek-resultaat" class="zoek-resultaat" hidden></div>
+            <div class="saved-list" id="saved-ziekenhuizen-list">
+              <h4 class="meer-subtitle">Mijn ziekenhuizen</h4>
+              <ul id="saved-ziekenhuizen" class="saved-ziekenhuizen-ul"></ul>
+              <button type="button" class="btn btn-outline btn-sm btn-block" id="btn-ziekenhuizen-toggle" hidden>Alle tonen</button>
             </div>
-          </div>
-          <div class="tab-panel" id="panel-overig" role="tabpanel">
-            <div class="table-wrap table-wrap--managed">
-              <table class="data-table data-table--compact">
-                <thead><tr><th>Datum</th><th>Omschrijving</th><th>Bedrag</th><th></th></tr></thead>
-                <tbody id="tbody-overig"></tbody>
-              </table>
-            </div>
-          </div>
-          <div class="tab-panel" id="panel-planning" role="tabpanel">
-            <div class="planning-availability">
-              <h3 class="list-title">Beschikbaarheid (maandelijks)</h3>
-              <p class="form-intro">Vink per dag aan wie beschikbaar is. Het dashboard toont dit voor de volgende 7 dagen.</p>
+            <div class="form-section meer-nested-card">
+              <h4 class="meer-subtitle">Nieuwe vaste rit</h4>
+              <p class="info-text--small">Vertrek en bestemming uit je lijst. Afstand via OpenRouteService (gratis API-sleutel).</p>
               <div class="form-row">
-                <label for="planning-maand">Maand</label>
-                <input type="month" id="planning-maand" />
+                <label for="new-route-from">Van</label>
+                <select id="new-route-from" class="select"></select>
               </div>
-              <div class="planning-grid-head" role="row">
-                <span class="planning-col planning-col--day">Dag</span>
-                <span class="planning-col planning-col--profile">Houdaifa</span>
-                <span class="planning-col planning-col--profile">Amine</span>
+              <div class="form-row">
+                <label for="new-route-to">Naar</label>
+                <select id="new-route-to" class="select"></select>
               </div>
-              <div class="planning-days" id="planning-days" aria-label="Beschikbaarheden per dag"></div>
-              <button type="button" id="planning-reset-maand" class="btn btn-outline btn-block btn-sm">
-                Reset maand
-              </button>
+              <button type="button" class="btn btn-primary" id="btn-add-preset-route">Vaste rit toevoegen</button>
             </div>
           </div>
-        </div>
+        </section>
+
+        <section class="meer-section" id="meer-voertuigen" aria-labelledby="meer-voertuigen-title">
+          <div class="meer-section-head">
+            <h3 class="meer-section-title" id="meer-voertuigen-title">Voertuigen</h3>
+            <p class="meer-section-desc">Gebruikt bij ritten en tankbeurten.</p>
+          </div>
+          <div class="meer-section-body">
+            <div class="form-section">
+              <div class="form-row form-row--inline">
+                <label for="voertuig-naam">Naam voertuig</label>
+                <input type="text" id="voertuig-naam" placeholder="bv. Volkswagen Caddy" />
+              </div>
+              <div class="form-row form-row--inline">
+                <label for="voertuig-kenteken">Kenteken (optioneel)</label>
+                <input type="text" id="voertuig-kenteken" placeholder="1-ABC-123" />
+              </div>
+              <button type="button" class="btn btn-primary" id="btn-voertuig-toevoegen">Voertuig toevoegen</button>
+            </div>
+            <div class="saved-list">
+              <h4 class="meer-subtitle">Mijn voertuigen</h4>
+              <ul id="saved-voertuigen"></ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="meer-section" id="meer-kosten" aria-labelledby="meer-kosten-title">
+          <div class="meer-section-head">
+            <h3 class="meer-section-title" id="meer-kosten-title">Overige kosten</h3>
+            <p class="meer-section-desc">Snel een uitgave vastleggen; het overzicht staat onder Tabellen.</p>
+          </div>
+          <div class="meer-section-body">
+            <form id="form-overig" class="form-overig form-section">
+              <div class="form-row">
+                <label for="overig-datum">Datum</label>
+                <input type="date" id="overig-datum" required />
+              </div>
+              <div class="form-row">
+                <label for="overig-omschrijving">Omschrijving</label>
+                <input type="text" id="overig-omschrijving" placeholder="Onderhoud, tol…" />
+              </div>
+              <div class="form-row">
+                <label for="overig-bedrag">Bedrag (€)</label>
+                <input type="number" id="overig-bedrag" min="0" step="0.01" required />
+              </div>
+              <button type="submit" class="btn btn-primary btn-block">Kosten opslaan</button>
+            </form>
+          </div>
+        </section>
+
+        <section class="meer-section meer-section--wide" id="meer-gegevens" aria-labelledby="meer-gegevens-title">
+          <div class="meer-section-head">
+            <h3 class="meer-section-title" id="meer-gegevens-title">Tabellen &amp; planning</h3>
+            <p class="meer-section-desc">Alle ritten, brandstof en kosten; hier stel je ook je 2-weken beschikbaarheid in.</p>
+          </div>
+          <div class="meer-section-body">
+            <div class="tabs tabs--meer" role="tablist" aria-label="Gegevensweergave">
+              <button type="button" class="tab active" role="tab" data-tab="ritten" id="tab-ritten">Ritten</button>
+              <button type="button" class="tab" role="tab" data-tab="brandstof" id="tab-brandstof">Brandstof</button>
+              <button type="button" class="tab" role="tab" data-tab="overig" id="tab-overig">Overige</button>
+              <button type="button" class="tab" role="tab" data-tab="planning" id="tab-planning">Planning</button>
+            </div>
+            <div class="tab-panels">
+              <div class="tab-panel active" id="panel-ritten" role="tabpanel">
+                <div class="table-wrap table-wrap--managed">
+                  <table class="data-table data-table--compact">
+                    <thead><tr><th>Volg. nr.</th><th>Bonnr.</th><th>Datum</th><th>Chauffeur</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th>Status</th><th></th></tr></thead>
+                    <tbody id="tbody-ritten"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="tab-panel" id="panel-brandstof" role="tabpanel">
+                <div class="table-wrap table-wrap--managed">
+                  <table class="data-table data-table--compact">
+                    <thead><tr><th>Datum</th><th>Voertuig</th><th>L</th><th>€</th><th>€/L</th><th></th></tr></thead>
+                    <tbody id="tbody-brandstof"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="tab-panel" id="panel-overig" role="tabpanel">
+                <div class="table-wrap table-wrap--managed">
+                  <table class="data-table data-table--compact">
+                    <thead><tr><th>Datum</th><th>Omschrijving</th><th>Bedrag</th><th></th></tr></thead>
+                    <tbody id="tbody-overig"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="tab-panel" id="panel-planning" role="tabpanel">
+                <div class="planning-availability">
+                  <h4 class="meer-subtitle">Beschikbaarheid (per 2 weken)</h4>
+                  <p class="form-intro">Vink per dag aan wie beschikbaar is. Het dashboard toont de volgende 7 dagen.</p>
+                  <div class="form-row">
+                    <label for="planning-start">Startdatum (2 weken)</label>
+                    <input type="date" id="planning-start" />
+                  </div>
+                  <div class="planning-nav-actions">
+                    <button type="button" id="planning-prev-2w" class="btn btn-outline btn-sm">Vorige 2 weken</button>
+                    <button type="button" id="planning-next-2w" class="btn btn-outline btn-sm">Volgende 2 weken</button>
+                  </div>
+                  <div class="planning-profile-icons" id="planning-profile-icons" aria-label="Profiel kiezen voor snelle aanpassing"></div>
+                  <div class="planning-grid-head" role="row">
+                    <span class="planning-col planning-col--day">Dag</span>
+                    <span class="planning-col planning-col--profile">Houdaifa</span>
+                    <span class="planning-col planning-col--profile">Amine</span>
+                    <span class="planning-col planning-col--profile">Frederik</span>
+                  </div>
+                  <div class="planning-days" id="planning-days" aria-label="Beschikbaarheden per dag"></div>
+                  <button type="button" id="planning-reset-maand" class="btn btn-outline btn-block btn-sm">
+                    Reset 2 weken
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </section>
     </main>
 

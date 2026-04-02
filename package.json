@@ -11,10 +11,10 @@
   },
   "dependencies": {
     "maplibre-gl": "^5.20.1",
+    "pdfjs-dist": "^4.10.38",
     "tesseract.js": "^5.1.1"
   },
   "devDependencies": {
-    "vite": "^5.4.0",
-    "xlsx": "^0.18.5"
+    "vite": "^6.4.1"
   }
 }

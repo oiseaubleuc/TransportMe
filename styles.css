@@ -536,7 +536,7 @@ body {
   margin-top: 0.25rem;
 }
 
-/* Optimale route pagina – checklist gegroepeerd */
+/* Optimale route pagina – checklist */
 .route-checklist {
   max-height: 11rem;
   overflow-y: auto;
@@ -545,22 +545,19 @@ body {
   background: var(--surface);
 }
 
-.route-checklist-groep {
+.route-checklist-note {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--surface2) 72%, transparent);
   border-bottom: 1px solid var(--border);
 }
 
-.route-checklist-groep:last-child {
-  border-bottom: none;
-}
-
-.route-checklist-groep-titel {
-  padding: 0.5rem 1rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+.route-checklist-empty {
+  margin: 0;
+  padding: 0.8rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
-  background: var(--surface2);
 }
 
 .route-checklist-item {
@@ -588,8 +585,9 @@ body {
   flex-shrink: 0;
 }
 
-.route-checklist-to {
+.route-checklist-route {
   flex: 1;
+  min-width: 0;
 }
 
 .route-checklist-km {
@@ -740,6 +738,36 @@ body {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.profile-available-btn {
+  padding: 0.38rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 10px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.profile-available-btn.is-on {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.profile-available-dot {
+  width: 0.58rem;
+  height: 0.58rem;
+  border-radius: 999px;
+  background: #c0392b;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #c0392b 25%, transparent);
+}
+
+.profile-available-btn.is-on .profile-available-dot {
+  background: #16a34a;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #16a34a 25%, transparent);
 }
 
 .dashboard-nav {
@@ -1789,50 +1817,8 @@ body {
   font-size: 0.9rem;
 }
 
-.ritten-toevoegen-split {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
 .ritten-single-column {
   min-width: 0;
-}
-
-.bulk-import-section {
-  margin-top: 0;
-}
-
-.bulk-import-intro {
-  margin-top: 0;
-}
-
-.bulk-import-intro code.bulk-code {
-  font-size: 0.8em;
-  padding: 0.12em 0.4em;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-family: ui-monospace, monospace;
-}
-
-.bulk-defaults {
-  display: grid;
-  gap: 1rem;
-}
-
-@media (min-width: 520px) {
-  .bulk-defaults {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.bulk-default-field label {
-  display: block;
-  font-size: 0.85rem;
-  font-weight: 500;
-  margin-bottom: 0.35rem;
-  color: var(--text-muted);
 }
 
 .input-textarea {
@@ -1852,83 +1838,6 @@ body {
 .input-textarea:focus {
   outline: none;
   border-color: var(--accent);
-}
-
-.bulk-import-actions {
-  margin-top: 0.5rem;
-}
-
-.bulk-import-feedback {
-  margin-top: 1rem;
-  padding: 1rem 1.1rem;
-  border-radius: var(--radius);
-  font-size: 0.9rem;
-  border: 1px solid var(--border);
-}
-
-.bulk-import-feedback--ok {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-}
-
-.bulk-import-feedback--warn {
-  background: color-mix(in srgb, var(--warning) 14%, transparent);
-  border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
-}
-
-.bulk-import-feedback--error {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
-}
-
-.bulk-import-feedback p {
-  margin: 0 0 0.5rem 0;
-}
-
-.bulk-import-feedback p:last-child {
-  margin-bottom: 0;
-}
-
-.bulk-warn-title {
-  margin-top: 0.75rem !important;
-  font-weight: 600;
-}
-
-.bulk-error-list {
-  margin: 0.35rem 0 0 1.1rem;
-  padding: 0;
-}
-
-.bulk-error-list li {
-  margin-bottom: 0.35rem;
-}
-
-.bulk-error-list--compact {
-  max-height: 8rem;
-  overflow-y: auto;
-  margin-left: 1rem !important;
-}
-
-.bulk-err-line {
-  display: block;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-top: 0.15rem;
-  word-break: break-word;
-}
-
-@media (min-width: 960px) {
-  .ritten-toevoegen-split {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 1fr);
-    gap: 1.75rem 2rem;
-    align-items: start;
-  }
-
-  .bulk-import-section {
-    position: sticky;
-    top: 0.5rem;
-  }
 }
 
 /* Planning: stats + filter + één feed */
@@ -2382,6 +2291,57 @@ body {
   min-width: 10rem;
 }
 
+.rit-artikelen {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.rit-artikelen-lijst {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.rit-artikel-row {
+  display: grid;
+  grid-template-columns: 1fr minmax(6.5rem, 8.5rem) auto;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.rit-artikel-row .rit-artikel-boxen,
+.rit-artikel-row .rit-artikel-bon {
+  margin: 0;
+}
+
+.rit-artikel-remove {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.rit-artikel-remove:hover {
+  color: var(--danger);
+}
+
+.rit-artikel-add-link {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  text-decoration: underline;
+  font-size: 0.82rem;
+  padding: 0;
+  cursor: pointer;
+}
+
+.rit-artikel-add-link:hover {
+  color: var(--accent);
+}
+
 .form-row--info {
   margin-bottom: 0.5rem;
 }
@@ -2462,6 +2422,121 @@ body {
   margin-bottom: 2rem;
 }
 
+/* Pagina Meer – structuur & sectienavigatie */
+.page--meer .page-section-title {
+  margin-bottom: 0.35rem;
+}
+
+.meer-page-header {
+  margin-bottom: 1rem;
+}
+
+.meer-page-lead {
+  margin-bottom: 0;
+  max-width: 40rem;
+}
+
+.meer-section-nav {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.35rem 0;
+  margin: 0 0 1.25rem 0;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: thin;
+}
+
+.meer-section-nav-link {
+  flex: 0 0 auto;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.meer-section-nav-link:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.meer-section {
+  scroll-margin-top: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+}
+
+.meer-section-head {
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.meer-section-title {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.meer-section-desc {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  max-width: 42rem;
+}
+
+.meer-section-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.meer-subtitle {
+  margin: 1rem 0 0.5rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.meer-section-body .meer-subtitle:first-child {
+  margin-top: 0;
+}
+
+.meer-nested-card {
+  margin-top: 1rem;
+}
+
+.meer-section .saved-list .meer-subtitle:first-of-type {
+  margin-top: 0;
+}
+
+.tabs--meer {
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tabs--meer .tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.planning-availability .meer-subtitle {
+  margin-top: 0;
+}
+
 .tabs {
   display: flex;
   gap: 0.25rem;
@@ -2510,9 +2585,57 @@ body {
   margin-top: 0;
 }
 
+.planning-nav-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.planning-profile-icons {
+  display: flex;
+  gap: 0.55rem;
+  margin-bottom: 0.65rem;
+}
+
+.planning-profile-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 0.3rem 0.6rem 0.3rem 0.35rem;
+  cursor: pointer;
+}
+
+.planning-profile-icon-badge {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fff;
+  background: var(--accent);
+}
+
+.planning-profile-icon-btn.is-active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+
+.planning-profile-icon-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .planning-grid-head {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: 1.2fr 1fr 1fr 1fr;
   gap: 0.6rem;
   align-items: center;
   margin-bottom: 0.65rem;
@@ -2541,7 +2664,7 @@ body {
 
 .planning-day-row {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: 1.2fr 1fr 1fr 1fr;
   gap: 0.6rem;
   align-items: center;
   padding: 0.5rem 0.6rem;
@@ -2559,6 +2682,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: pointer;
 }
 
 .planning-av-toggle {
@@ -2698,6 +2822,78 @@ body {
 
 .btn:focus-visible {
   outline-offset: 3px;
+}
+
+/* Extra responsive verfijning: mobiel + tablet */
+@media (max-width: 980px) {
+  .financieel-split {
+    grid-template-columns: 1fr;
+  }
+
+  .financieel-col--kpis {
+    position: static;
+  }
+
+  .dashboard-financieel-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .header {
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .form-section {
+    padding: 1rem;
+    border-radius: 10px;
+  }
+
+  .dashboard-vandaag-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kaart-actions .btn {
+    flex: 1 1 100%;
+  }
+
+  .planning-nav-actions {
+    flex-wrap: wrap;
+  }
+
+  .planning-nav-actions .btn {
+    flex: 1 1 10rem;
+  }
+
+  .planning-profile-icons {
+    flex-wrap: wrap;
+  }
+
+  .planning-availability {
+    overflow-x: auto;
+  }
+
+  .planning-grid-head,
+  .planning-day-row {
+    min-width: 34rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .app {
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  }
+
+  .dashboard-vandaag-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-switcher {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

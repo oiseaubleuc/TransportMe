@@ -10,10 +10,121 @@ import {
   DEFAULT_VOERTUIGEN,
   PROFILES,
   DATA_RETENTION_DAYS,
+  LIVE_AVAILABILITY_TTL_MS,
 } from './config.js';
 import { backfillMissingVolgordeNrs } from './ritVolgorde.js';
 
 const VALID_PROFILE_IDS = new Set(PROFILES.map((p) => p.id));
+const VALID_STATUS = new Set(['komend', 'lopend', 'voltooid']);
+
+function safeParseArray(raw) {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeDateStr(datum) {
+  if (typeof datum !== 'string') return '';
+  const d = datum.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return '';
+  return d;
+}
+
+function normalizeTimeStr(tijd) {
+  if (typeof tijd !== 'string') return '';
+  const m = tijd.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return '';
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min) || h < 0 || h > 23 || min < 0 || min > 59) return '';
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+function normalizeBestelArtikelen(rit) {
+  const arr = Array.isArray(rit?.bestelArtikelen) ? rit.bestelArtikelen : [];
+  const mapped = arr
+    .map((a) => {
+      const bonnummer = typeof a?.bonnummer === 'string' ? a.bonnummer.trim() : '';
+      const rawBoxen = Number.parseInt(a?.boxen, 10);
+      const boxen = Number.isFinite(rawBoxen) && rawBoxen > 0 ? rawBoxen : null;
+      return bonnummer ? { bonnummer, boxen } : null;
+    })
+    .filter(Boolean);
+  if (mapped.length > 0) return mapped;
+  const legacyBon = typeof rit?.bonnummer === 'string' ? rit.bonnummer.trim() : '';
+  return legacyBon ? [{ bonnummer: legacyBon, boxen: null }] : [];
+}
+
+function normalizeRit(rit) {
+  if (!rit || typeof rit !== 'object') return null;
+  const datum = normalizeDateStr(rit.datum);
+  const kmNum = Number.parseInt(rit.km, 10);
+  if (!datum || !Number.isFinite(kmNum) || kmNum < 1) return null;
+  const status = VALID_STATUS.has(rit.status) ? rit.status : rit.status == null ? 'voltooid' : 'komend';
+  const tijd = normalizeTimeStr(rit.tijd);
+  const voltooidTijd = normalizeTimeStr(rit.voltooidTijd);
+  const bonnummer = typeof rit.bonnummer === 'string' ? rit.bonnummer.trim() : '';
+  const bestelArtikelen = normalizeBestelArtikelen(rit);
+  const vergoeding = Number.isFinite(Number(rit.vergoeding)) ? Number(rit.vergoeding) : undefined;
+  return {
+    ...rit,
+    datum,
+    km: kmNum,
+    status,
+    tijd,
+    voltooidTijd: status === 'voltooid' ? (voltooidTijd || tijd) : undefined,
+    bonnummer: bonnummer || bestelArtikelen[0]?.bonnummer || '',
+    bestelArtikelen,
+    vergoeding,
+  };
+}
+
+function normalizeBrandstofItem(x) {
+  if (!x || typeof x !== 'object') return null;
+  const datum = normalizeDateStr(x.datum);
+  const liter = Number(x.liter);
+  const prijs = Number(x.prijs);
+  if (!datum || !Number.isFinite(liter) || liter <= 0 || !Number.isFinite(prijs) || prijs < 0) return null;
+  return { ...x, datum, liter, prijs };
+}
+
+function normalizeOverigItem(x) {
+  if (!x || typeof x !== 'object') return null;
+  const datum = normalizeDateStr(x.datum);
+  const bedrag = Number(x.bedrag);
+  if (!datum || !Number.isFinite(bedrag) || bedrag < 0) return null;
+  const omschrijving = typeof x.omschrijving === 'string' ? x.omschrijving.trim() : '';
+  return { ...x, datum, bedrag, omschrijving };
+}
+
+function sortByDatumTijd(a, b) {
+  const ka = `${a?.datum || ''}${a?.tijd || ''}${a?.id || ''}`;
+  const kb = `${b?.datum || ''}${b?.tijd || ''}${b?.id || ''}`;
+  return ka.localeCompare(kb);
+}
+
+function cleanupProfileData() {
+  PROFILES.forEach((p) => {
+    const rKey = `${STORAGE_KEYS.ritten}_${p.id}`;
+    const bKey = `${STORAGE_KEYS.brandstof}_${p.id}`;
+    const oKey = `${STORAGE_KEYS.overig}_${p.id}`;
+    const rawR = localStorage.getItem(rKey) || '[]';
+    const rawB = localStorage.getItem(bKey) || '[]';
+    const rawO = localStorage.getItem(oKey) || '[]';
+    const cleanR = safeParseArray(rawR).map(normalizeRit).filter(Boolean).sort(sortByDatumTijd);
+    const cleanB = safeParseArray(rawB).map(normalizeBrandstofItem).filter(Boolean).sort((a, b) => a.datum.localeCompare(b.datum));
+    const cleanO = safeParseArray(rawO).map(normalizeOverigItem).filter(Boolean).sort((a, b) => a.datum.localeCompare(b.datum));
+    const nextR = JSON.stringify(cleanR);
+    const nextB = JSON.stringify(cleanB);
+    const nextO = JSON.stringify(cleanO);
+    if (nextR !== rawR) localStorage.setItem(rKey, nextR);
+    if (nextB !== rawB) localStorage.setItem(bKey, nextB);
+    if (nextO !== rawO) localStorage.setItem(oKey, nextO);
+  });
+}
 
 export function getCurrentProfileId() {
   const id = localStorage.getItem(STORAGE_KEYS.currentProfile);
@@ -116,6 +227,12 @@ function resetAllCountersOnce() {
   localStorage.setItem(STORAGE_KEYS.resetAllCountersV1, '1');
 }
 
+function cleanupDataOnce() {
+  if (localStorage.getItem(STORAGE_KEYS.dataCleanupV2)) return;
+  cleanupProfileData();
+  localStorage.setItem(STORAGE_KEYS.dataCleanupV2, '1');
+}
+
 /** Ritten, brandstof en overig: enkel laatste DATA_RETENTION_DAGEN bewaren */
 function applyRetentionAndPersist(ritten, brandstof, overig) {
   const fR = ritten.filter((r) => keptInRollingWindow(r.datum));
@@ -135,14 +252,20 @@ export function getData() {
   migrateLegacyToProfile();
   mergeTestProfileIntoHoudaifaOnce();
   resetAllCountersOnce();
-  let ritten = JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.ritten)) || '[]');
+  cleanupDataOnce();
+  let ritten = safeParseArray(localStorage.getItem(profileKey(STORAGE_KEYS.ritten)));
+  ritten = ritten.map(normalizeRit).filter(Boolean).sort(sortByDatumTijd);
   const bf = backfillMissingVolgordeNrs(ritten);
   if (bf.changed) {
     ritten = bf.ritten;
     saveRitten(ritten);
   }
-  const brandstof = JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.brandstof)) || '[]');
-  const overig = JSON.parse(localStorage.getItem(profileKey(STORAGE_KEYS.overig)) || '[]');
+  const brandstof = safeParseArray(localStorage.getItem(profileKey(STORAGE_KEYS.brandstof)))
+    .map(normalizeBrandstofItem)
+    .filter(Boolean);
+  const overig = safeParseArray(localStorage.getItem(profileKey(STORAGE_KEYS.overig)))
+    .map(normalizeOverigItem)
+    .filter(Boolean);
   const pruned = applyRetentionAndPersist(ritten, brandstof, overig);
   return {
     ritten: pruned.ritten,
@@ -196,15 +319,24 @@ export function saveVoertuigen(voertuigen) {
 }
 
 export function saveRitten(ritten) {
-  localStorage.setItem(profileKey(STORAGE_KEYS.ritten), JSON.stringify(ritten));
+  const clean = (Array.isArray(ritten) ? ritten : []).map(normalizeRit).filter(Boolean).sort(sortByDatumTijd);
+  localStorage.setItem(profileKey(STORAGE_KEYS.ritten), JSON.stringify(clean));
 }
 
 export function saveBrandstof(brandstof) {
-  localStorage.setItem(profileKey(STORAGE_KEYS.brandstof), JSON.stringify(brandstof));
+  const clean = (Array.isArray(brandstof) ? brandstof : [])
+    .map(normalizeBrandstofItem)
+    .filter(Boolean)
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+  localStorage.setItem(profileKey(STORAGE_KEYS.brandstof), JSON.stringify(clean));
 }
 
 export function saveOverig(overig) {
-  localStorage.setItem(profileKey(STORAGE_KEYS.overig), JSON.stringify(overig));
+  const clean = (Array.isArray(overig) ? overig : [])
+    .map(normalizeOverigItem)
+    .filter(Boolean)
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+  localStorage.setItem(profileKey(STORAGE_KEYS.overig), JSON.stringify(clean));
 }
 
 function routePairExists(routes, fromId, toId) {
@@ -286,4 +418,42 @@ export function getPresetRoutes() {
 
 export function savePresetRoutes(routes) {
   localStorage.setItem(STORAGE_KEYS.presetRoutes, JSON.stringify(routes));
+}
+
+function readLiveAvailabilityMap() {
+  const raw = localStorage.getItem(STORAGE_KEYS.liveAvailability);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeLiveAvailabilityMap(map) {
+  localStorage.setItem(STORAGE_KEYS.liveAvailability, JSON.stringify(map || {}));
+}
+
+export function getLiveAvailabilityStatus(profileId) {
+  if (!profileId) return { active: false, expiresAt: null };
+  const map = readLiveAvailabilityMap();
+  const ts = Number(map[profileId]);
+  if (!Number.isFinite(ts)) return { active: false, expiresAt: null };
+  const expiresAt = ts + LIVE_AVAILABILITY_TTL_MS;
+  const now = Date.now();
+  if (expiresAt <= now) {
+    delete map[profileId];
+    writeLiveAvailabilityMap(map);
+    return { active: false, expiresAt: null };
+  }
+  return { active: true, expiresAt };
+}
+
+export function setLiveAvailabilityStatus(profileId, active) {
+  if (!profileId) return;
+  const map = readLiveAvailabilityMap();
+  if (active) map[profileId] = Date.now();
+  else delete map[profileId];
+  writeLiveAvailabilityMap(map);
 }

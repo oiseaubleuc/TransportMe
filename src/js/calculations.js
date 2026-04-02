@@ -2,12 +2,37 @@
  * Berekeningen – vergoeding, datums, totalen, km
  */
 
-import { OPSTART_PREMIE, VERGOEDING_PER_20KM, KM_SCHIJF } from './config.js';
+import {
+  OPSTART_PREMIE,
+  VERGOEDING_PER_20KM,
+  KM_SCHIJF,
+  NACHT_TARIEF_FACTOR,
+  NACHT_START_UUR,
+  NACHT_EIND_UUR,
+} from './config.js';
 import { getData } from './storage.js';
 
-export function vergoedingVoorRit(km) {
+function parseUurUitTijd(tijd) {
+  if (!tijd || typeof tijd !== 'string') return null;
+  const m = tijd.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const uur = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(uur) || !Number.isFinite(min) || uur < 0 || uur > 23 || min < 0 || min > 59) return null;
+  return uur;
+}
+
+export function isNachtTariefTijd(tijd) {
+  const uur = parseUurUitTijd(tijd);
+  if (uur == null) return false;
+  return uur >= NACHT_START_UUR || uur < NACHT_EIND_UUR;
+}
+
+export function vergoedingVoorRit(km, tijd) {
   const schijven = Math.ceil(km / KM_SCHIJF);
-  return OPSTART_PREMIE + schijven * VERGOEDING_PER_20KM;
+  const variabelDeel = schijven * VERGOEDING_PER_20KM;
+  const variabelMetTarief = isNachtTariefTijd(tijd) ? variabelDeel * NACHT_TARIEF_FACTOR : variabelDeel;
+  return Math.round((OPSTART_PREMIE + variabelMetTarief) * 100) / 100;
 }
 
 /** Geschatte rijafstand (km) uit hemelsbreed: Haversine × factor 1,3. Voor fallback als ORS/API faalt. */
@@ -122,7 +147,7 @@ export function totalenVoorPeriode(period) {
   const b = filterByPeriod(brandstof, period);
   const o = filterByPeriod(overig, period);
 
-  const omzet = r.reduce((sum, rit) => sum + (rit.vergoeding ?? vergoedingVoorRit(rit.km)), 0);
+  const omzet = r.reduce((sum, rit) => sum + (rit.vergoeding ?? vergoedingVoorRit(rit.km, rit.tijd)), 0);
   const brandstofKosten = b.reduce((sum, x) => sum + (x.prijs || 0), 0);
   const overigeKosten = o.reduce((sum, x) => sum + (x.bedrag || 0), 0);
   const winst = omzet - brandstofKosten - overigeKosten;
@@ -160,7 +185,7 @@ export function getWeeklyFinancials(weeksBack = 8) {
     );
     const b = brandstof.filter((x) => new Date(x.datum) >= weekStart && new Date(x.datum) <= weekEnd);
     const o = overig.filter((x) => new Date(x.datum) >= weekStart && new Date(x.datum) <= weekEnd);
-    const omzet = r.reduce((sum, rit) => sum + (rit.vergoeding ?? vergoedingVoorRit(rit.km)), 0);
+    const omzet = r.reduce((sum, rit) => sum + (rit.vergoeding ?? vergoedingVoorRit(rit.km, rit.tijd)), 0);
     const brandstofKosten = b.reduce((sum, x) => sum + (x.prijs || 0), 0);
     const overigeKosten = o.reduce((sum, x) => sum + (x.bedrag || 0), 0);
     const winst = omzet - brandstofKosten - overigeKosten;
@@ -188,9 +213,9 @@ export function getGemiddeldeBenzineKostPerKm() {
  * Voor een rit van X km: vergoeding, geschatte benzinekosten en geschatte winst.
  * Geschatte winst = vergoeding − (km × gem. €/km). Null als we geen gemiddelde hebben.
  */
-export function rendabiliteitRit(km) {
+export function rendabiliteitRit(km, tijd) {
   if (!km || km < 0) return null;
-  const vergoeding = vergoedingVoorRit(km);
+  const vergoeding = vergoedingVoorRit(km, tijd);
   const euroPerKm = getGemiddeldeBenzineKostPerKm();
   if (euroPerKm == null) return { vergoeding, geschatteBenzine: null, geschatteWinst: null };
   const geschatteBenzine = km * euroPerKm;
