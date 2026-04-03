@@ -155,8 +155,14 @@
               <section class="financieel-factuur-section" aria-labelledby="fin-factuur-heading">
                 <h3 class="financieel-ticket-title" id="fin-factuur-heading">Factuur (PDF)</h3>
                 <p class="financieel-ticket-intro">
-                  Download een PDF op basis van <strong>voltooide</strong> ritten (dag, week, maand, bon of aangevinkte ritten hierboven). Klant en btw: <strong>Meer → Factuur &amp; logo</strong>.
+                  Download een PDF op basis van <strong>voltooide</strong> ritten (dag, week, maand, bon of aangevinkte ritten hierboven). Klant, btw-tarief en vrijstellingsregel: <strong>Meer → Factuur &amp; logo</strong>.
                 </p>
+                <div class="form-row financieel-factuur-btw-row">
+                  <label class="checkbox-label" for="fin-factuur-btw-aanrekenen">
+                    <input type="checkbox" id="fin-factuur-btw-aanrekenen" />
+                    <span>BTW aanrekenen op deze factuur-PDF (uit = geen btw op totalen; ritbedragen blijven <strong>excl. btw</strong>)</span>
+                  </label>
+                </div>
                 <div class="financieel-factuur-grid">
                   <div class="form-row">
                     <label for="fin-factuur-datum">Factuur per dag</label>

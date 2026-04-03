@@ -1,14 +1,45 @@
 /**
  * Bestelbon barcode scannen via camera (ZXing).
+ * Ondersteunt o.a. Code 128 / Code 39 zoals op transportlabels (elke box eigen code).
  */
 
 function normalizeScannedBon(text) {
   if (typeof text !== 'string') return '';
-  let s = text.trim();
+  let s = text.replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+  if (!s) return '';
+  s = s.split(/\r?\n/)[0].trim();
   if (s.startsWith('*') && s.endsWith('*') && s.length > 2) {
     s = s.slice(1, -1).trim();
   }
-  return s;
+  s = s.replace(/\s+/g, '');
+  if (/^[A-Za-z0-9]+$/.test(s)) return s;
+  const runs = s.match(/[A-Za-z0-9]+/g);
+  if (!runs?.length) return s;
+  runs.sort((a, b) => b.length - a.length);
+  return runs[0].length >= 3 ? runs[0] : s;
+}
+
+function buildBonScanHints() {
+  return import('@zxing/library').then(({ DecodeHintType, BarcodeFormat }) => {
+    const hints = new Map();
+    hints.set(DecodeHintType.TRY_HARDER, true);
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.CODE_93,
+      BarcodeFormat.ITF,
+      BarcodeFormat.CODABAR,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.QR_CODE,
+      BarcodeFormat.DATA_MATRIX,
+      BarcodeFormat.PDF_417,
+      BarcodeFormat.AZTEC,
+    ]);
+    return hints;
+  });
 }
 
 /**
@@ -40,7 +71,8 @@ export function scanBonBarcode(options = {}) {
 
     const hint = document.createElement('p');
     hint.className = 'bon-scan-hint';
-    hint.textContent = 'Richt de camera op de streepjescode op de bon.';
+    hint.textContent =
+      'Richt de camera op de streepjescode op het label. Elke box kan een andere code hebben; het nummer wordt automatisch ingevuld.';
 
     const video = document.createElement('video');
     video.className = 'bon-scan-video';
@@ -100,10 +132,10 @@ export function scanBonBarcode(options = {}) {
     });
     document.addEventListener('keydown', onKeyDown);
 
-    import('@zxing/browser')
-      .then(({ BrowserMultiFormatReader }) => {
+    Promise.all([import('@zxing/browser'), buildBonScanHints()])
+      .then(([{ BrowserMultiFormatReader }, hints]) => {
         if (settled) return null;
-        const reader = new BrowserMultiFormatReader();
+        const reader = new BrowserMultiFormatReader(hints);
         return reader.decodeFromVideoDevice(undefined, video, (result) => {
           if (!result || settled) return;
           const normalized = normalizeScannedBon(result.getText?.() || '');

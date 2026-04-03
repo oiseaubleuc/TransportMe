@@ -121,6 +121,21 @@ function slugFilename(s) {
     .slice(0, 80) || 'factuur';
 }
 
+/** Zet vinkje gelijk aan opgeslagen profielkeuze (na wissel profiel of laden). */
+function syncFinFactuurBtwCheckbox() {
+  const cb = document.getElementById('fin-factuur-btw-aanrekenen');
+  if (!cb) return;
+  cb.checked = Boolean(getFactuurGegevens().factuurBtwAanrekenen);
+}
+
+/** Instellingen voor PDF: profiel + optioneel ander vinkje op Financieel-tab. */
+function factuurSettingsVoorPdf() {
+  const settings = getFactuurGegevens();
+  const cb = document.getElementById('fin-factuur-btw-aanrekenen');
+  const btwAan = cb ? Boolean(cb.checked) : Boolean(settings.factuurBtwAanrekenen);
+  return { ...settings, factuurBtwAanrekenen: btwAan };
+}
+
 function huidigeWeekInputWaarde() {
   return getWeekKey(toDateStr(new Date()));
 }
@@ -136,7 +151,7 @@ async function downloadFactuurPdf(ritten, filenameStem) {
     return;
   }
   const pdfRegels = rittenNaarPdfRegels(ritten);
-  const settings = getFactuurGegevens();
+  const settings = factuurSettingsVoorPdf();
   const meta = buildFactuurMeta(settings);
   try {
     const { blob, invoiceNr } = await generateFactuurPdfBlob({
@@ -184,6 +199,8 @@ export function refreshFinancieelFactuurSelects() {
     }
     if (cur && bons.includes(cur)) bonSel.value = cur;
   }
+
+  syncFinFactuurBtwCheckbox();
 }
 
 export function initFinancieelFactuur() {

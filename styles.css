@@ -1139,6 +1139,17 @@ body {
   background: color-mix(in srgb, var(--accent) 6%, var(--surface2));
 }
 
+.financieel-factuur-btw-row {
+  margin-bottom: 0.85rem;
+}
+
+.financieel-factuur-btw-row .checkbox-label {
+  align-items: flex-start;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: var(--text);
+}
+
 .financieel-factuur-grid {
   display: grid;
   gap: 1rem;
