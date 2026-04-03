@@ -2473,17 +2473,34 @@ body.bon-scan-open {
   margin: 0.5rem 0 0 0;
   min-height: 1.25em;
   font-size: clamp(0.78rem, 2.2vw, 0.85rem);
-  color: var(--danger);
+  color: var(--text-muted);
   line-height: 1.35;
   word-wrap: break-word;
+}
+
+.bon-scan-status.bon-scan-status--error {
+  color: var(--danger);
+}
+
+.bon-scan-file-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .bon-scan-actions {
   margin-top: 0.75rem;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.bon-scan-actions .btn:first-child {
+  margin-right: auto;
 }
 
 .bon-scan-actions .btn {

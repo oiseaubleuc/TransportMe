@@ -2,8 +2,11 @@
   "name": "Transporteur",
   "short_name": "Transporteur",
   "description": "Ritbeheer en berekeningen voor zelfstandig ziekenhuisvervoer",
-  "start_url": ".",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "browser"],
   "background_color": "#f2f2f7",
   "theme_color": "#5f7f1f",
   "icons": [
