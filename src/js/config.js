@@ -5,8 +5,11 @@
 export const OPSTART_PREMIE = 15;
 export const VERGOEDING_PER_20KM = 25;
 export const KM_SCHIJF = 20;
+/** +30% op het km-deel van de vergoeding (niet op de opstartpremie). */
 export const NACHT_TARIEF_FACTOR = 1.3;
-export const NACHT_START_UUR = 18;
+/** Nachttarief vanaf dit uur (inclusief), bv. 20 → vanaf 20:00. */
+export const NACHT_START_UUR = 20;
+/** Nachttarief tot vóór dit uur ’s ochtends (exclusief), bv. 5 → t/m 04:59; vanaf 05:00 dagtarief. */
 export const NACHT_EIND_UUR = 5;
 
 export const STORAGE_KEYS = {

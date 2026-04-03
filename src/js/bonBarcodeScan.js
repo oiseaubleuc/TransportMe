@@ -132,9 +132,12 @@ export function scanBonBarcode(options = {}) {
 
     const hint = document.createElement('p');
     hint.className = 'bon-scan-hint';
-    hint.textContent = isStandaloneWebApp()
+    const hintScan = isStandaloneWebApp()
       ? 'App op je beginscherm: kies bij de eerste keer «Toestaan» voor de camera. Werkt het niet, tik op «Foto van code» en fotografeer de streepjescode scherp.'
       : 'Richt de camera op de streepjescode. Bij problemen: gebruik «Foto van code» of beter licht.';
+    const hintConfirm =
+      'Controleer het bestelnummer. Pas het hieronder aan bij een vergissing, of scan opnieuw.';
+    hint.textContent = hintScan;
 
     const video = document.createElement('video');
     video.className = 'bon-scan-video';
@@ -147,8 +150,49 @@ export function scanBonBarcode(options = {}) {
     status.className = 'bon-scan-status';
     status.setAttribute('aria-live', 'polite');
 
+    const confirmWrap = document.createElement('div');
+    confirmWrap.className = 'bon-scan-confirm';
+    confirmWrap.hidden = true;
+
+    const confirmLabel = document.createElement('label');
+    confirmLabel.className = 'bon-scan-confirm-label';
+    confirmLabel.setAttribute('for', 'bon-scan-confirm-input');
+    confirmLabel.textContent = 'Bestelnummer';
+
+    const confirmInput = document.createElement('input');
+    confirmInput.type = 'text';
+    confirmInput.id = 'bon-scan-confirm-input';
+    confirmInput.className = 'bon-scan-confirm-input';
+    confirmInput.autocomplete = 'off';
+    confirmInput.spellcheck = false;
+
+    const confirmActions = document.createElement('div');
+    confirmActions.className = 'bon-scan-actions bon-scan-actions-confirm';
+
+    const useBtn = document.createElement('button');
+    useBtn.type = 'button';
+    useBtn.className = 'btn btn-primary';
+    useBtn.textContent = 'Gebruiken';
+
+    const rescanBtn = document.createElement('button');
+    rescanBtn.type = 'button';
+    rescanBtn.className = 'btn btn-outline';
+    rescanBtn.textContent = 'Opnieuw scannen';
+
+    const cancelConfirmBtn = document.createElement('button');
+    cancelConfirmBtn.type = 'button';
+    cancelConfirmBtn.className = 'btn btn-outline';
+    cancelConfirmBtn.textContent = 'Annuleren';
+
+    confirmActions.appendChild(useBtn);
+    confirmActions.appendChild(rescanBtn);
+    confirmActions.appendChild(cancelConfirmBtn);
+    confirmWrap.appendChild(confirmLabel);
+    confirmWrap.appendChild(confirmInput);
+    confirmWrap.appendChild(confirmActions);
+
     const actions = document.createElement('div');
-    actions.className = 'bon-scan-actions';
+    actions.className = 'bon-scan-actions bon-scan-actions-scan';
 
     const fotoInput = document.createElement('input');
     fotoInput.type = 'file';
@@ -172,6 +216,7 @@ export function scanBonBarcode(options = {}) {
     dialog.appendChild(hint);
     dialog.appendChild(video);
     dialog.appendChild(status);
+    dialog.appendChild(confirmWrap);
     dialog.appendChild(actions);
     dialog.appendChild(fotoInput);
     configureFotoInputForStandalone(fotoInput);
@@ -205,10 +250,46 @@ export function scanBonBarcode(options = {}) {
     }
 
     cancelBtn.addEventListener('click', () => finish(null));
+    cancelConfirmBtn.addEventListener('click', () => finish(null));
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay) finish(null);
     });
     document.addEventListener('keydown', onKeyDown);
+
+    function showConfirmStep(normalized) {
+      stopScanner();
+      hint.textContent = hintConfirm;
+      video.hidden = true;
+      status.hidden = true;
+      actions.hidden = true;
+      confirmWrap.hidden = false;
+      confirmInput.value = normalized;
+      confirmInput.focus();
+      confirmInput.select();
+    }
+
+    function hideConfirmStep() {
+      hint.textContent = hintScan;
+      video.hidden = false;
+      status.hidden = false;
+      actions.hidden = false;
+      confirmWrap.hidden = true;
+      confirmInput.value = '';
+    }
+
+    useBtn.addEventListener('click', () => {
+      const v = confirmInput.value.trim();
+      if (!v) {
+        confirmInput.focus();
+        return;
+      }
+      finish(v);
+    });
+
+    rescanBtn.addEventListener('click', () => {
+      hideConfirmStep();
+      startLiveScan();
+    });
 
     fotoBtn.addEventListener('click', () => fotoInput.click());
 
@@ -226,7 +307,7 @@ export function scanBonBarcode(options = {}) {
       try {
         const text = await decodeBarcodeFromImageFile(file, readerRef);
         if (text) {
-          finish(text);
+          showConfirmStep(text);
           return;
         }
         status.textContent =
@@ -276,7 +357,7 @@ export function scanBonBarcode(options = {}) {
           if (settled) return;
           if (!result) return;
           const normalized = normalizeScannedBon(result.getText?.() || '');
-          if (normalized) finish(normalized);
+          if (normalized) showConfirmStep(normalized);
         });
         scannerControls = controls;
       } catch (err) {

@@ -2499,7 +2499,50 @@ body.bon-scan-open {
   flex-wrap: wrap;
 }
 
-.bon-scan-actions .btn:first-child {
+.bon-scan-actions-scan .btn:first-child {
+  margin-right: auto;
+}
+
+.bon-scan-confirm {
+  margin: 0.75rem 0 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+}
+
+.bon-scan-confirm-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.bon-scan-confirm-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 0.75rem;
+  font-size: 1.15rem;
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  margin-bottom: 0.75rem;
+}
+
+.bon-scan-confirm-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.bon-scan-actions-confirm {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.bon-scan-actions-confirm .btn-primary {
   margin-right: auto;
 }
 
