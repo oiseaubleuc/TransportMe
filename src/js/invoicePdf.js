@@ -208,7 +208,7 @@ export async function generateFactuurPdfBlob(opts) {
   const lineH = 4;
 
   for (const r of regels) {
-    const titel = String(r.titel || 'Ziekenhuisvervoer');
+    const titel = String(r.titel || 'Dienstverlening: ziekenhuisvervoer');
     const detail = String(r.detail || '—');
     const prijs = Number(r.prijsExcl ?? r.totaal) || 0;
     const tot = btwPct > 0 ? prijs * (1 + btwPct / 100) : prijs;

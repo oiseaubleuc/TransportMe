@@ -695,9 +695,11 @@ body {
 }
 .dashboard-panel {
   display: block;
+  margin-bottom: 1.25rem;
 }
 .dashboard-panel[hidden] {
   display: none !important;
+  margin-bottom: 0;
 }
 .dashboard-panel-subtitle {
   margin: 0 0 0.75rem 0;
@@ -709,7 +711,18 @@ body {
   margin-top: 0.5rem;
 }
 
-/* Dashboard – vandaag blok */
+.dashboard-dag-blok {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+.dashboard-dag-blok--gisteren {
+  background: color-mix(in srgb, var(--surface2) 55%, var(--surface));
+}
+
+/* Oude classnaam: zelfde kaartstijl */
 .dashboard-vandaag {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -812,7 +825,12 @@ body {
 
 /* Dashboard – beschikbaarheid per dag */
 .dashboard-beschikbaarheid-section {
-  margin-top: 1.1rem;
+  margin-top: 0;
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .dashboard-beschikbaarheid-lijst {
@@ -1141,6 +1159,16 @@ body {
   margin-top: 0.5rem;
 }
 
+.financieel-factuur-selectie {
+  margin-top: 0.85rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed var(--border);
+}
+
+.financieel-factuur-selectie-hint {
+  margin: 0 0 0.5rem 0;
+}
+
 .financieel-ticket-import {
   margin-top: 1rem;
   padding: 0.9rem;
@@ -1195,8 +1223,31 @@ body {
   list-style: none;
   margin: 0.4rem 0 0 0;
   padding: 0;
-  max-height: 10.5rem;
+  max-height: min(18rem, 42vh);
   overflow-y: auto;
+}
+
+.financieel-profiel-rit-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.fin-rit-factuur-label {
+  flex-shrink: 0;
+  padding-top: 0.15rem;
+  cursor: pointer;
+}
+
+.fin-rit-factuur-label input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--accent);
+}
+
+.financieel-profiel-rit-body {
+  min-width: 0;
+  flex: 1;
 }
 
 .financieel-profiel-rit-item {
@@ -2282,6 +2333,256 @@ body {
 .rit-artikel-row .rit-artikel-boxen,
 .rit-artikel-row .rit-artikel-bon {
   margin: 0;
+}
+
+.rit-artikel-bon-cell {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.rit-artikel-bon-cell .rit-artikel-bon {
+  flex: 1;
+  min-width: 0;
+}
+
+.rit-artikel-bon-cell .btn-bon-scan {
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+.form-row .input-with-bon-scan {
+  width: 100%;
+  max-width: 100%;
+}
+
+.input-with-bon-scan {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.input-with-bon-scan input {
+  flex: 1;
+  min-width: 0;
+}
+
+.input-with-bon-scan .btn-bon-scan {
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+/* Bon scan: voldoende tappable op iPhone / Android (ca. 44×44 pt) */
+.btn-bon-scan {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding-left: 0.65rem;
+  padding-right: 0.65rem;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.bon-scan-open,
+body.bon-scan-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.bon-scan-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(0.75rem, env(safe-area-inset-top, 0px)) max(0.75rem, env(safe-area-inset-right, 0px))
+    max(0.75rem, env(safe-area-inset-bottom, 0px)) max(0.75rem, env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bon-scan-dialog {
+  width: 100%;
+  max-width: min(22rem, 100%);
+  max-height: min(100dvh - 1.5rem, 100vh - 1.5rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: 1rem 1rem 1.1rem;
+  box-sizing: border-box;
+}
+
+@supports (height: 100svh) {
+  .bon-scan-dialog {
+    max-height: min(100dvh - 1.5rem, 100svh - 1.5rem);
+  }
+}
+
+.bon-scan-title {
+  margin: 0 0 0.35rem 0;
+  font-size: clamp(1rem, 2.8vw, 1.15rem);
+  font-weight: 700;
+  line-height: 1.25;
+  word-wrap: break-word;
+}
+
+.bon-scan-hint {
+  margin: 0 0 0.65rem 0;
+  font-size: clamp(0.82rem, 2.4vw, 0.9rem);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.bon-scan-video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: min(50dvh, 50vh, 320px);
+  min-height: 10rem;
+  border-radius: calc(var(--radius) - 4px);
+  background: #000;
+  object-fit: cover;
+}
+
+.bon-scan-status {
+  margin: 0.5rem 0 0 0;
+  min-height: 1.25em;
+  font-size: clamp(0.78rem, 2.2vw, 0.85rem);
+  color: var(--danger);
+  line-height: 1.35;
+  word-wrap: break-word;
+}
+
+.bon-scan-actions {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.bon-scan-actions .btn {
+  min-height: 2.75rem;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smalle telefoons: bon + boxen onder elkaar */
+@media (max-width: 30rem) {
+  .rit-artikel-row {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+  }
+
+  .rit-artikel-bon-cell {
+    grid-column: 1 / -1;
+  }
+
+  .rit-artikel-row .rit-artikel-boxen {
+    min-width: 0;
+  }
+}
+
+/* Zeer smalle schermen: Scan-knop onder het veld (volle breedte invoer) */
+@media (max-width: 22rem) {
+  .rit-artikel-bon-cell {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .rit-artikel-bon-cell .btn-bon-scan {
+    align-self: stretch;
+    width: 100%;
+  }
+
+  .input-with-bon-scan {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .input-with-bon-scan .btn-bon-scan {
+    width: 100%;
+  }
+}
+
+/* Telefoon: scanmodaal bijna volle breedte, grote annuleerknop */
+@media (max-width: 36rem) {
+  .bon-scan-dialog {
+    max-width: 100%;
+  }
+
+  .bon-scan-actions {
+    flex-direction: column;
+  }
+
+  .bon-scan-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .bon-scan-video {
+    aspect-ratio: 3 / 4;
+    max-height: min(52dvh, 52vh, 380px);
+    min-height: 11rem;
+  }
+}
+
+/* Landschap op kleine hoogte (iPhone liggend) */
+@media (orientation: landscape) and (max-height: 32rem) {
+  .bon-scan-overlay {
+    align-items: flex-start;
+    padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+    overflow-y: auto;
+  }
+
+  .bon-scan-dialog {
+    max-height: none;
+    margin-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .bon-scan-video {
+    aspect-ratio: 16 / 9;
+    max-height: min(42dvh, 42vh, 220px);
+    min-height: 7rem;
+  }
+}
+
+/* Tablet / iPad: ruimer modaal en hoger videovlak */
+@media (min-width: 48rem) {
+  .bon-scan-dialog {
+    max-width: min(28rem, 92vw);
+    padding: 1.15rem 1.25rem 1.25rem;
+  }
+
+  .bon-scan-video {
+    max-height: min(45dvh, 420px);
+    min-height: 14rem;
+  }
+}
+
+@media (min-width: 64rem) {
+  .bon-scan-dialog {
+    max-width: min(32rem, 90vw);
+  }
+
+  .bon-scan-video {
+    max-height: min(48dvh, 480px);
+  }
 }
 
 .rit-artikel-remove {

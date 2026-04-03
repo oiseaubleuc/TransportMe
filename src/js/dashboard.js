@@ -4,7 +4,7 @@
 
 import { PERIOD_LABELS, UI_COMPACT, PROFILES } from './config.js';
 import { totalenVoorPeriode, vergoedingVoorRit, isInDay, getWeeklyFinancials, isRitVoltooid } from './calculations.js';
-import { formatEuro } from './format.js';
+import { formatEuro, formatDatumKort } from './format.js';
 import { getData, saveRitten } from './storage.js';
 
 let currentPeriod = 'month';
@@ -42,48 +42,75 @@ export function setCurrentPeriod(period) {
   currentPeriod = period;
 }
 
-/** Vandaag-block: aantal ritten, km, vergoeding + lijst ritten vandaag */
-export function updateVandaagSummary() {
-  const t = totalenVoorPeriode('day');
-  const rittenEl = document.getElementById('vandaag-ritten');
-  const kmEl = document.getElementById('vandaag-km');
-  const vergoedingEl = document.getElementById('vandaag-vergoeding');
-  const lijstEl = document.getElementById('ritten-vandaag-lijst');
+function voltooideRittenOpKalenderdag(refDate) {
+  return getData()
+    .ritten.filter((r) => isInDay(r.datum, refDate) && isRitVoltooid(r))
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+}
 
-  if (rittenEl) rittenEl.textContent = t.aantalRitten;
-  if (kmEl) kmEl.textContent = t.km;
-  if (vergoedingEl) vergoedingEl.textContent = formatEuro(t.omzet);
+function fillDashboardDagBlok(refDate, ids, emptyMessage) {
+  const rittenEl = document.getElementById(ids.ritten);
+  const kmEl = document.getElementById(ids.km);
+  const vergoedingEl = document.getElementById(ids.vergoeding);
+  const lijstEl = document.getElementById(ids.lijst);
 
-  if (lijstEl) {
-    const { ritten } = getData();
-    const today = new Date();
-    const vandaagVoltooid = ritten
-      .filter((r) => isInDay(r.datum, today) && isRitVoltooid(r))
-      .sort((a, b) => a.datum.localeCompare(b.datum));
-    if (vandaagVoltooid.length === 0) {
-      lijstEl.innerHTML = '<li class="dashboard-vandaag-empty">Geen voltooide ritten vandaag.</li>';
-      lijstEl.classList.add('is-empty');
-    } else {
-      lijstEl.classList.remove('is-empty');
-      const max = UI_COMPACT.dashboardVandaagRitten;
-      const tail = vandaagVoltooid.slice(-max).reverse();
-      const meer = vandaagVoltooid.length - tail.length;
-      let html = tail
-        .map((r) => {
-          const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0, r.tijd);
-          const nr =
-            r.volgordeNr != null && Number.isFinite(Number(r.volgordeNr))
-              ? `<span class="dashboard-vandaag-rit-nr">#${r.volgordeNr}</span> `
-              : '';
-          return `<li class="dashboard-vandaag-rit">${nr}<span class="dashboard-vandaag-rit-km">${r.km || 0} km</span><span class="dashboard-vandaag-rit-vergoeding">${formatEuro(verg)}</span></li>`;
-        })
-        .join('');
-      if (meer > 0) {
-        html += `<li class="dashboard-vandaag-more" aria-hidden="true">+${meer} — zie Ritten</li>`;
-      }
-      lijstEl.innerHTML = html;
-    }
+  const voltooid = voltooideRittenOpKalenderdag(refDate);
+  const omzet = voltooid.reduce(
+    (sum, rit) => sum + (rit.vergoeding ?? vergoedingVoorRit(rit.km || 0, rit.tijd)),
+    0
+  );
+  const kmSum = voltooid.reduce((sum, rit) => sum + (rit.km || 0), 0);
+
+  if (rittenEl) rittenEl.textContent = String(voltooid.length);
+  if (kmEl) kmEl.textContent = String(kmSum);
+  if (vergoedingEl) vergoedingEl.textContent = formatEuro(omzet);
+
+  if (!lijstEl) return;
+
+  if (voltooid.length === 0) {
+    lijstEl.innerHTML = `<li class="dashboard-vandaag-empty">${emptyMessage}</li>`;
+    lijstEl.classList.add('is-empty');
+    return;
   }
+  lijstEl.classList.remove('is-empty');
+  const max = UI_COMPACT.dashboardVandaagRitten;
+  const tail = voltooid.slice(-max).reverse();
+  const meer = voltooid.length - tail.length;
+  let html = tail
+    .map((r) => {
+      const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0, r.tijd);
+      const nr =
+        r.volgordeNr != null && Number.isFinite(Number(r.volgordeNr))
+          ? `<span class="dashboard-vandaag-rit-nr">#${r.volgordeNr}</span> `
+          : '';
+      return `<li class="dashboard-vandaag-rit">${nr}<span class="dashboard-vandaag-rit-km">${r.km || 0} km</span><span class="dashboard-vandaag-rit-vergoeding">${formatEuro(verg)}</span></li>`;
+    })
+    .join('');
+  if (meer > 0) {
+    html += `<li class="dashboard-vandaag-more" aria-hidden="true">+${meer} — zie Ritten</li>`;
+  }
+  lijstEl.innerHTML = html;
+}
+
+/** Vandaag + gisteren: totalen en lijsten voltooide ritten */
+export function updateVandaagSummary() {
+  const today = new Date();
+  const gisteren = new Date(today);
+  gisteren.setDate(gisteren.getDate() - 1);
+
+  fillDashboardDagBlok(today, {
+    ritten: 'vandaag-ritten',
+    km: 'vandaag-km',
+    vergoeding: 'vandaag-vergoeding',
+    lijst: 'ritten-vandaag-lijst',
+  }, 'Geen voltooide ritten vandaag.');
+
+  fillDashboardDagBlok(gisteren, {
+    ritten: 'gisteren-ritten',
+    km: 'gisteren-km',
+    vergoeding: 'gisteren-vergoeding',
+    lijst: 'ritten-gisteren-lijst',
+  }, 'Geen voltooide ritten gisteren.');
 }
 
 /** Beschikbaarheid per dag (volgende 7 dagen) op dashboard */
@@ -139,7 +166,7 @@ export function updateFinancieelProfielOverzicht() {
     return;
   }
 
-  const tonen = uitgevoerd.slice(0, 12);
+  const tonen = uitgevoerd.slice(0, 60);
   listEl.innerHTML = tonen
     .map((r) => {
       const items = Array.isArray(r.bestelArtikelen) ? r.bestelArtikelen.filter((x) => x?.bonnummer) : [];
@@ -151,9 +178,17 @@ export function updateFinancieelProfielOverzicht() {
           : r.bonnummer || '—';
       const bon = `Bon ${escapeHtml(bonLabel)}`;
       const route = r.fromName && r.toName ? `${escapeHtml(r.fromName)} → ${escapeHtml(r.toName)}` : 'Route niet ingevuld';
+      const rid = r.id != null ? String(r.id) : '';
       return `<li class="financieel-profiel-rit-item">
-        <span class="financieel-profiel-rit-top">${bon} · ${escapeHtml(formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km || 0, r.tijd)))}</span>
-        <span class="financieel-profiel-rit-meta">${escapeHtml(r.datum || '—')} · ${r.km || 0} km · ${route}</span>
+        <div class="financieel-profiel-rit-row">
+          <label class="fin-rit-factuur-label">
+            <input type="checkbox" class="fin-rit-factuur-cb" data-rit-id="${escapeHtml(rid)}" aria-label="Opnemen op factuur-PDF" />
+          </label>
+          <div class="financieel-profiel-rit-body">
+            <span class="financieel-profiel-rit-top">${bon} · ${escapeHtml(formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km || 0, r.tijd)))}</span>
+            <span class="financieel-profiel-rit-meta">${escapeHtml(r.datum || '—')} · ${r.km || 0} km · ${route}</span>
+          </div>
+        </div>
       </li>`;
     })
     .join('');
@@ -377,21 +412,22 @@ export function updateRitMelding(onUpdate) {
   };
 }
 
-/** Lijst met komende ritten vandaag + alle lopende ritten (ook na middernacht). */
+/** Lijst: eerst alle lopende ritten, daarna alle geplande (komend), zodat handmatige en geplande ritten startbaar zijn. */
 export function updateRittenStatusLijst(onUpdate) {
   const lijst = document.getElementById('ritten-status-lijst');
   if (!lijst) return;
   const { ritten } = getData();
   const today = new Date();
-  const komendeVandaag = ritten.filter((r) => r.status === 'komend' && isInDay(r.datum, today));
-  const lopendeAlleDagen = ritten.filter((r) => r.status === 'lopend');
-  const zichtbaar = [...lopendeAlleDagen, ...komendeVandaag].sort((a, b) => {
+  const byDatumTijd = (a, b) => {
     const da = `${a.datum || ''}${a.tijd || ''}`;
     const db = `${b.datum || ''}${b.tijd || ''}`;
     return da.localeCompare(db);
-  });
+  };
+  const lopendeAlleDagen = ritten.filter((r) => r.status === 'lopend').sort(byDatumTijd);
+  const komendeAlle = ritten.filter((r) => r.status === 'komend').sort(byDatumTijd);
+  const zichtbaar = [...lopendeAlleDagen, ...komendeAlle];
   if (zichtbaar.length === 0) {
-    lijst.innerHTML = '<li class="ritten-status-empty">Geen ritten vandaag.</li>';
+    lijst.innerHTML = '<li class="ritten-status-empty">Geen geplande of lopende ritten.</li>';
     return;
   }
   const max = UI_COMPACT.dashboardStatusRitten;
@@ -403,6 +439,8 @@ export function updateRittenStatusLijst(onUpdate) {
       const chauffeur = r.chauffeurName || '—';
       const voertuig = r.voertuigName || '—';
       const isLopend = r.status === 'lopend';
+      const datumPrefix =
+        !isLopend && r.datum && !isInDay(r.datum, today) ? `${escapeHtml(formatDatumKort(r.datum))} · ` : '';
       const startBtn = !isLopend ? `<button type="button" class="btn btn-small btn-start-rit" data-id="${r.id}">Start</button>` : '';
       const voltooidBtn = isLopend ? `<button type="button" class="btn btn-small btn-primary btn-voltooid-rit" data-id="${r.id}">Klaar</button>` : '';
       const nr =
@@ -411,7 +449,7 @@ export function updateRittenStatusLijst(onUpdate) {
           : '';
       return `<li class="ritten-status-item" data-id="${r.id}">
         <span class="ritten-status-rit">${nr}${r.km || 0} km · ${formatEuro(verg)}</span>
-        <span class="ritten-status-meta">${chauffeur} · ${voertuig}</span>
+        <span class="ritten-status-meta">${datumPrefix}${escapeHtml(chauffeur)} · ${escapeHtml(voertuig)}</span>
         <span class="ritten-status-buttons">${startBtn} ${voltooidBtn}</span>
       </li>`;
     })

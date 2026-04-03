@@ -8,6 +8,9 @@ import { formatEuro, formatLiter } from './format.js';
 import { getData, saveRitten, saveBrandstof, saveOverig, getVoertuigen, getZiekenhuizen } from './storage.js';
 import { nextVolgordeStart } from './ritVolgorde.js';
 import { parseReceiptText } from './ocr.js';
+import { runReceiptOcr } from './receiptOcr.js';
+import { initPlaceSearchFree } from './placeSearchFree.js';
+import { scanBonBarcode } from './bonBarcodeScan.js';
 
 function ritOpslaanModus() {
   const el = document.querySelector('input[name="rit-opslaan-modus"]:checked');
@@ -62,7 +65,7 @@ async function fileToOcrSource(file) {
   if (file.type?.startsWith('image/')) return file;
   if (isPdfFile(file)) {
     const { pdfFileToCanvas } = await import('./pdfFirstPageToCanvas.js');
-    return pdfFileToCanvas(file);
+    return pdfFileToCanvas(file, 1.5);
   }
   return null;
 }
@@ -71,7 +74,7 @@ async function fileToOcrSource(file) {
 /** Zet alle datumvelden in de app op vandaag (bijv. bij laden). */
 export function setAlleDatumsVandaag() {
   const today = toDateStr(new Date());
-  ['rit-datum', 'brandstof-datum', 'overig-datum'].forEach((id) => {
+  ['rit-datum', 'brandstof-datum', 'overig-datum', 'meer-rit-datum'].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.value = today;
   });
@@ -129,7 +132,10 @@ export function initFormRit(onSubmit) {
       ? '<button type="button" class="rit-artikel-remove" title="Verwijder artikel" aria-label="Verwijder artikel">×</button>'
       : '';
     return `<div class="rit-artikel-row">
-      <input type="text" class="rit-artikel-bon" placeholder="Bestelnummer (verplicht)" value="${bonnummer}"${bonIdAttr} required />
+      <div class="rit-artikel-bon-cell">
+        <input type="text" class="rit-artikel-bon" placeholder="Bestelnummer (verplicht)" value="${bonnummer}"${bonIdAttr} required />
+        <button type="button" class="btn btn-outline btn-small btn-bon-scan" title="Bon scannen" aria-label="Bon scannen">Scan</button>
+      </div>
       <input type="number" class="rit-artikel-boxen" min="1" step="1" placeholder="Boxen" value="${boxen}" />
       ${removeBtn}
     </div>`;
@@ -157,6 +163,21 @@ export function initFormRit(onSubmit) {
     syncRitOpslaanModusHint();
   });
   bindArtikelEvents();
+
+  document.getElementById('rit-artikelen')?.addEventListener('click', async (e) => {
+    const scanBtn = e.target.closest('.btn-bon-scan');
+    if (!scanBtn || !artikelLijst?.contains(scanBtn)) return;
+    e.preventDefault();
+    const row = scanBtn.closest('.rit-artikel-row');
+    const input = row?.querySelector('.rit-artikel-bon');
+    if (!input) return;
+    const text = await scanBonBarcode({ title: 'Bestelbon scannen' });
+    if (text) {
+      input.value = text;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+    }
+  });
 
   const modusHint = document.getElementById('rit-opslaan-modus-hint');
   function syncRitOpslaanModusHint() {
@@ -394,12 +415,8 @@ export function initFormBrandstof(onSubmit) {
       if (resultBlock) resultBlock.hidden = false;
 
       try {
-        const { createWorker } = await import('tesseract.js');
-        const worker = await createWorker('nld', 1);
-        const { data } = await worker.recognize(source);
-        await worker.terminate();
-
-        const parsed = parseReceiptText(data?.text || '');
+        const text = await runReceiptOcr(source);
+        const parsed = parseReceiptText(text);
         const today = toDateStr(new Date());
 
         if (parsed.datum) datumInput.value = parsed.datum;
@@ -483,12 +500,8 @@ export function initFinancieelTicketImport(onSubmit) {
       if (resultText) resultText.textContent = 'Bezig met analyseren…';
 
       try {
-        const { createWorker } = await import('tesseract.js');
-        const worker = await createWorker('nld', 1);
-        const { data } = await worker.recognize(source);
-        await worker.terminate();
-
-        const parsed = parseReceiptText(data?.text || '');
+        const text = await runReceiptOcr(source);
+        const parsed = parseReceiptText(text);
         if (parsed.datum) datumInput.value = parsed.datum;
         if (parsed.liter != null) literInput.value = String(parsed.liter).replace('.', ',');
         if (parsed.prijs != null) prijsInput.value = String(parsed.prijs);
@@ -553,5 +566,146 @@ export function initFormOverig(onSubmit) {
     form.reset();
     datumInput.value = toDateStr(new Date());
     onSubmit?.();
+  });
+}
+
+let meerRitVertrek = null;
+let meerRitBestemming = null;
+
+function syncMeerHandmatigeRitDefaults() {
+  const d = document.getElementById('meer-rit-datum');
+  const t = document.getElementById('meer-rit-tijd');
+  if (d && !d.value) d.value = toDateStr(new Date());
+  if (t && !t.value) {
+    const n = new Date();
+    t.value = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+  }
+}
+
+/** Meer-tab: rit invoeren met OSM-zoeken (zelfde aanpak als Locaties) */
+export function initMeerHandmatigeRit(onSaved) {
+  const btn = document.getElementById('meer-rit-opslaan');
+  if (!btn || btn.dataset.inited) return;
+  btn.dataset.inited = '1';
+
+  initPlaceSearchFree('meer-rit-vertrek-zoek', 'meer-rit-vertrek-suggesties', (p) => {
+    meerRitVertrek = p;
+  });
+  initPlaceSearchFree('meer-rit-bestemming-zoek', 'meer-rit-bestemming-suggesties', (p) => {
+    meerRitBestemming = p;
+  });
+
+  syncMeerHandmatigeRitDefaults();
+
+  document.getElementById('meer-rit-bon-scan')?.addEventListener('click', async () => {
+    const bonInput = document.getElementById('meer-rit-bon');
+    if (!bonInput) return;
+    const text = await scanBonBarcode({ title: 'Bestelbon scannen' });
+    if (text) {
+      bonInput.value = text;
+      bonInput.dispatchEvent(new Event('input', { bubbles: true }));
+      bonInput.focus();
+    }
+  });
+
+  btn.addEventListener('click', () => {
+    const datumInput = document.getElementById('meer-rit-datum');
+    const tijdInput = document.getElementById('meer-rit-tijd');
+    const kmInput = document.getElementById('meer-rit-km');
+    const bonInput = document.getElementById('meer-rit-bon');
+    const chauffeurSel = document.getElementById('meer-rit-chauffeur');
+    const voertuigSel = document.getElementById('meer-rit-voertuig');
+    const statusSel = document.getElementById('meer-rit-status');
+    const hint = document.getElementById('meer-rit-save-hint');
+
+    const datum = datumInput?.value?.trim();
+    let tijd = tijdInput?.value?.trim() || '';
+    const km = parseInt(kmInput?.value, 10);
+    const bon = bonInput?.value?.trim() || '';
+    const chauffeurId = chauffeurSel?.value || '';
+    const chauffeurName = chauffeurSel?.selectedOptions?.[0]?.textContent?.trim() || '';
+    const voertuigId = voertuigSel?.value || '';
+    const voertuigName = voertuigSel?.selectedOptions?.[0]?.textContent?.trim() || '';
+    const status = statusSel?.value === 'komend' ? 'komend' : 'voltooid';
+
+    if (!tijd) {
+      const n = new Date();
+      tijd = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+    } else {
+      const m = tijd.match(/^(\d{1,2}):(\d{2})$/);
+      if (!m) {
+        alert('Vul het uur in als uu:mm.');
+        return;
+      }
+      const h = Number(m[1]);
+      const min = Number(m[2]);
+      if (h < 0 || h > 23 || min < 0 || min > 59) {
+        alert('Vul een geldig uur in.');
+        return;
+      }
+      tijd = `${String(h).padStart(2, '0')}:${m[2]}`;
+    }
+
+    if (!datum || !Number.isFinite(km) || km < 1) {
+      alert('Vul datum en minstens 1 km in.');
+      return;
+    }
+    if (!chauffeurId) {
+      alert('Kies een chauffeur.');
+      return;
+    }
+
+    const { ritten } = getData();
+    const vergoeding = vergoedingVoorRit(km, tijd);
+    const base = Date.now();
+    const rit = {
+      id: base,
+      datum,
+      tijd,
+      km,
+      voertuigId,
+      voertuigName,
+      chauffeurId,
+      chauffeurName,
+      status,
+      duurMinuten: RIT_DUUR_MINUTEN,
+      volgordeNr: nextVolgordeStart(ritten),
+      vergoeding,
+      bonnummer: bon,
+      bestelArtikelen: bon ? [{ bonnummer: bon, boxen: null }] : [],
+    };
+    if (status === 'voltooid') {
+      rit.voltooidTijd = tijd;
+    }
+    if (meerRitVertrek) {
+      rit.fromName = meerRitVertrek.name;
+      rit.fromId = `osm-${base}-v`;
+    }
+    if (meerRitBestemming) {
+      rit.toName = meerRitBestemming.name;
+      rit.toId = `osm-${base}-t`;
+    }
+
+    ritten.push(rit);
+    ritten.sort((a, b) => a.datum.localeCompare(b.datum));
+    saveRitten(ritten);
+
+    if (kmInput) kmInput.value = '';
+    if (bonInput) bonInput.value = '';
+    const vz = document.getElementById('meer-rit-vertrek-zoek');
+    const bz = document.getElementById('meer-rit-bestemming-zoek');
+    if (vz) vz.value = '';
+    if (bz) bz.value = '';
+    meerRitVertrek = null;
+    meerRitBestemming = null;
+    if (statusSel) statusSel.value = 'komend';
+
+    if (hint) {
+      hint.hidden = false;
+      setTimeout(() => {
+        hint.hidden = true;
+      }, 2000);
+    }
+    onSaved?.();
   });
 }

@@ -10,6 +10,7 @@
     "data:ziekenhuizen": "node scripts/fetch-ziekenhuizen-vlaanderen.mjs"
   },
   "dependencies": {
+    "@zxing/browser": "^0.1.5",
     "jspdf": "^4.2.1",
     "maplibre-gl": "^5.20.1",
     "pdfjs-dist": "^4.10.38",

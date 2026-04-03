@@ -4,7 +4,14 @@
  */
 
 import { updateKPI, updateVandaagSummary, initPeriodToggle, syncPeriodButtons, updateFinancialChart, updateRittenStatusLijst, updateRitMelding, updateBeschikbaarheidWeek, updateFinancieelProfielOverzicht } from './js/dashboard.js';
-import { initFormRit, initFormBrandstof, initFinancieelTicketImport, initFormOverig, setAlleDatumsVandaag } from './js/forms.js';
+import {
+  initFormRit,
+  initFormBrandstof,
+  initFinancieelTicketImport,
+  initFormOverig,
+  initMeerHandmatigeRit,
+  setAlleDatumsVandaag,
+} from './js/forms.js';
 import { initFinancieelFactuur, refreshFinancieelFactuurSelects } from './js/financieelFactuur.js';
 import { initFactuurGegevensMeer, syncFactuurGegevensFormFromStorage } from './js/factuurGegevensMeer.js';
 import { renderAllTables } from './js/tables.js';
@@ -291,8 +298,8 @@ function showPage(pageId, options = {}) {
 let dashboardTabsInited = false;
 function initDashboardTabs() {
   if (dashboardTabsInited) return;
-  const nav = document.querySelector('.dashboard-nav');
-  const panels = document.querySelectorAll('.dashboard-panel');
+  const nav = document.querySelector('#page-dashboard .dashboard-nav');
+  const panels = document.querySelectorAll('#page-dashboard .dashboard-wrap > .dashboard-panel');
   if (!nav || !panels.length) return;
   dashboardTabsInited = true;
   nav.addEventListener('click', (e) => {
@@ -937,7 +944,7 @@ function renderSavedZiekenhuizen() {
 
 function fillVoertuigDropdowns() {
   const voertuigen = getVoertuigen();
-  ['rit-voertuig', 'brandstof-voertuig', 'fin-ticket-voertuig'].forEach((id) => {
+  ['rit-voertuig', 'brandstof-voertuig', 'fin-ticket-voertuig', 'meer-rit-voertuig'].forEach((id) => {
     const sel = document.getElementById(id);
     if (!sel) return;
     sel.innerHTML = '<option value="">— Kies voertuig —</option>';
@@ -953,7 +960,7 @@ function fillVoertuigDropdowns() {
 function fillChauffeurDropdown() {
   const profielNaam = (PROFILES.find((p) => p.id === getCurrentProfileId())?.name || '').toLowerCase();
   const defaultChauffeurId = DEFAULT_CHAUFFEURS.find((c) => c.naam.toLowerCase() === profielNaam)?.id || '';
-  ['rit-chauffeur'].forEach((id) => {
+  ['rit-chauffeur', 'meer-rit-chauffeur'].forEach((id) => {
     const sel = document.getElementById(id);
     if (!sel) return;
     sel.innerHTML = '<option value="">— Kies chauffeur —</option>';
@@ -963,7 +970,7 @@ function fillChauffeurDropdown() {
       opt.textContent = c.naam;
       sel.appendChild(opt);
     });
-    if (defaultChauffeurId && id === 'rit-chauffeur') sel.value = defaultChauffeurId;
+    if (defaultChauffeurId && (id === 'rit-chauffeur' || id === 'meer-rit-chauffeur')) sel.value = defaultChauffeurId;
   });
 }
 
@@ -1335,6 +1342,7 @@ function init() {
   initFactuurGegevensMeer();
   initFinancieelTicketImport(refresh);
   initFormOverig(refresh);
+  initMeerHandmatigeRit(refresh);
   initZiekenhuizen();
   initTabs();
   initPlanningAvailabilityTab();
