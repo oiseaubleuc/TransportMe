@@ -223,3 +223,31 @@ export function rendabiliteitRit(km, tijd) {
   const geschatteWinst = vergoeding - geschatteBenzine;
   return { vergoeding, geschatteBenzine, geschatteWinst };
 }
+
+/** Preset exact deze volgorde (geen omgekeerde match — forfait vaak richting-specifiek). */
+export function findPresetExact(presets, fromId, toId) {
+  if (!fromId || !toId || !Array.isArray(presets)) return null;
+  return presets.find((p) => p.fromId === fromId && p.toId === toId) ?? null;
+}
+
+/**
+ * Vergoeding: optioneel forfait op vaste route (minstens 1 km ingevuld), anders km-formule.
+ */
+export function vergoedingFromPresetOrKm(preset, km, tijd) {
+  const raw = preset?.forfaitVergoeding;
+  if (km >= 1 && raw != null && Number.isFinite(Number(raw))) {
+    return Math.round(Number(raw) * 100) / 100;
+  }
+  return vergoedingVoorRit(km, tijd);
+}
+
+/** Zelfde als rendabiliteitRit maar met optioneel forfait op preset (nieuwe-rit formulier). */
+export function rendabiliteitRitForForm(km, tijd, preset) {
+  if (!km || km < 0) return null;
+  const vergoeding = vergoedingFromPresetOrKm(preset, km, tijd);
+  const euroPerKm = getGemiddeldeBenzineKostPerKm();
+  if (euroPerKm == null) return { vergoeding, geschatteBenzine: null, geschatteWinst: null };
+  const geschatteBenzine = km * euroPerKm;
+  const geschatteWinst = vergoeding - geschatteBenzine;
+  return { vergoeding, geschatteBenzine, geschatteWinst };
+}

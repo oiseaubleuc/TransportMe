@@ -432,8 +432,18 @@ function ensureDefaultPresetRoutes() {
     } else {
       const cur = merged[idx];
       const km = d.defaultKm != null ? d.defaultKm : cur.defaultKm;
-      if (cur.fromName !== d.fromName || cur.toName !== d.toName || cur.defaultKm !== km) {
-        merged[idx] = { ...cur, fromName: d.fromName, toName: d.toName, defaultKm: km };
+      const nextForfait = d.forfaitVergoeding != null ? d.forfaitVergoeding : cur.forfaitVergoeding;
+      const forfaitChanged = nextForfait !== cur.forfaitVergoeding;
+      if (
+        cur.fromName !== d.fromName ||
+        cur.toName !== d.toName ||
+        cur.defaultKm !== km ||
+        forfaitChanged
+      ) {
+        const next = { ...cur, fromName: d.fromName, toName: d.toName, defaultKm: km };
+        if (nextForfait != null) next.forfaitVergoeding = nextForfait;
+        else delete next.forfaitVergoeding;
+        merged[idx] = next;
         changed = true;
       }
     }

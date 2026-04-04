@@ -534,25 +534,140 @@
           <p class="page-organisatie-kicker">Instellingen &amp; beheer</p>
           <h2 class="page-section-title" id="meer-page-heading">Meer</h2>
           <p class="form-intro meer-page-lead">
-            Ziekenhuizen, vaste routes en voertuigen zijn per gekozen profiel; ritten, kosten en factuurgegevens ook. Planning toont iedereen maar wijzigingen gaan per profiel-cel. Alles lokaal op dit toestel.
+            Drie blokken hieronder: factuur, locaties/ritten/voertuigen, tabellen en planning. Alles per profiel en lokaal op dit toestel.
           </p>
         </header>
 
         <nav class="meer-section-nav" aria-label="Spring naar sectie">
-          <a class="meer-section-nav-link" href="#meer-locaties">Locaties</a>
-          <a class="meer-section-nav-link" href="#meer-voertuigen">Voertuigen</a>
-          <a class="meer-section-nav-link" href="#meer-handmatige-rit">Rit handmatig</a>
-          <a class="meer-section-nav-link" href="#meer-factuur">Factuur &amp; logo</a>
-          <a class="meer-section-nav-link" href="#meer-kosten">Kosten</a>
+          <a class="meer-section-nav-link" href="#meer-factuur">Factuur</a>
+          <a class="meer-section-nav-link" href="#meer-locatie-rit">Locaties &amp; ritten</a>
           <a class="meer-section-nav-link" href="#meer-gegevens">Tabellen &amp; planning</a>
         </nav>
 
-        <section class="meer-section" id="meer-locaties" aria-labelledby="meer-locaties-title">
+        <section class="meer-section" id="meer-factuur" aria-labelledby="meer-factuur-title">
           <div class="meer-section-head">
-            <h3 class="meer-section-title" id="meer-locaties-title">Locaties &amp; vaste ritten</h3>
-            <p class="meer-section-desc">Zoek en bewaar ziekenhuizen; koppel vaste routes voor snellere ritkeuze.</p>
+            <h3 class="meer-section-title" id="meer-factuur-title">Factuur &amp; logo</h3>
+            <p class="meer-section-desc">
+              Gegevens voor PDF-facturen (Financieel-tab). Vul je <strong>klant</strong> handmatig in; je kunt die gegevens meteen onder de klantvelden <strong>Klant opslaan</strong> zonder de rest van het formulier in te vullen. Onderaan: volledige factuurgegevens + BTW-keuzes. Opgeslagen per profiel.
+            </p>
+          </div>
+          <div class="meer-section-body meer-factuur-body">
+            <div class="meer-factuur-logo-row">
+              <div class="form-row">
+                <label for="fg-logo-file">Logo (PNG, JPG …)</label>
+                <input type="file" id="fg-logo-file" accept="image/*" class="input-file" />
+                <button type="button" class="btn btn-outline btn-sm" id="fg-logo-wissen">Logo wissen</button>
+              </div>
+              <div class="meer-factuur-logo-preview-wrap">
+                <img id="fg-logo-preview" class="meer-factuur-logo-preview" alt="Factuurlogo" width="96" height="96" hidden />
+              </div>
+            </div>
+            <div class="meer-factuur-grid">
+              <div class="form-row">
+                <label for="fg-bedrijfsnaam">Bedrijfsnaam (Van)</label>
+                <input type="text" id="fg-bedrijfsnaam" placeholder="bv. HohoSolutions" autocomplete="organization" />
+              </div>
+              <div class="form-row">
+                <label for="fg-adres-straat">Straat en nummer</label>
+                <input type="text" id="fg-adres-straat" placeholder="Koloniënstraat 11" autocomplete="street-address" />
+              </div>
+              <div class="form-row">
+                <label for="fg-adres-pc-stad">Postcode en gemeente</label>
+                <input type="text" id="fg-adres-pc-stad" placeholder="1000 Brussel" />
+              </div>
+              <div class="form-row">
+                <label for="fg-land">Land</label>
+                <input type="text" id="fg-land" placeholder="België" />
+              </div>
+              <div class="form-row">
+                <label for="fg-btw">BTW-nummer</label>
+                <input type="text" id="fg-btw" placeholder="BE0123456789" autocomplete="off" />
+              </div>
+              <div class="form-row">
+                <label for="fg-rek-naam">Rekeninghouder</label>
+                <input type="text" id="fg-rek-naam" autocomplete="name" />
+              </div>
+              <div class="form-row">
+                <label for="fg-iban">IBAN</label>
+                <input type="text" id="fg-iban" placeholder="BE00 0000 0000 0000" autocomplete="off" />
+              </div>
+              <div class="form-row">
+                <label for="fg-email">E-mail (voet factuur)</label>
+                <input type="email" id="fg-email" autocomplete="email" />
+              </div>
+              <div class="form-row">
+                <label for="fg-tel">Telefoon (voet factuur)</label>
+                <input type="tel" id="fg-tel" autocomplete="tel" />
+              </div>
+              <div class="form-row meer-factuur-span-full">
+                <p class="info-text info-text--small meer-factuur-klant-intro">
+                  <strong>Klant op de factuur (Aan)</strong> — volledig handmatig; verschijnt op elke PDF. Tik op <strong>Klant opslaan</strong> zodra de gegevens kloppen.
+                </p>
+              </div>
+              <div class="form-row">
+                <label for="fg-klant-bedrijf">Bedrijfsnaam klant</label>
+                <input type="text" id="fg-klant-bedrijf" placeholder="Naam organisatie op factuur" autocomplete="organization" />
+              </div>
+              <div class="form-row">
+                <label for="fg-klant-persoon">Contactpersoon (optioneel)</label>
+                <input type="text" id="fg-klant-persoon" placeholder="Naam persoon t.a.v." autocomplete="name" />
+              </div>
+              <div class="form-row">
+                <label for="fg-klant-btw">BTW-nummer klant (optioneel)</label>
+                <input type="text" id="fg-klant-btw" placeholder="BE0…" autocomplete="off" />
+              </div>
+              <div class="form-row meer-factuur-span-2">
+                <label for="fg-klant-adres">Adres klant</label>
+                <input type="text" id="fg-klant-adres" placeholder="Straat, nummer, postcode, gemeente" autocomplete="street-address" />
+              </div>
+              <div class="form-row">
+                <label for="fg-klant-land">Land klant</label>
+                <input type="text" id="fg-klant-land" placeholder="België" />
+              </div>
+              <div class="form-row meer-factuur-span-full factuur-klant-opslaan-row">
+                <button type="button" class="btn btn-outline" id="fg-klant-opslaan">Klant opslaan</button>
+                <span class="info-text info-text--small" id="fg-klant-save-hint" hidden>Klant opgeslagen voor dit profiel.</span>
+              </div>
+              <div class="form-row meer-factuur-span-2 factuur-btw-keuze">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="fg-factuur-btw-aanrekenen" />
+                  BTW aanrekenen op deze facturen (ritbedragen worden als <strong>excl. btw</strong> beschouwd; totaal = excl. + btw)
+                </label>
+              </div>
+              <div class="form-row meer-factuur-span-2 factuur-btw-tarief-wrap" id="fg-factuur-btw-tarief-wrap" hidden>
+                <label for="fg-factuur-btw-tarief">BTW-tarief</label>
+                <select id="fg-factuur-btw-tarief" class="select">
+                  <option value="21">21 %</option>
+                  <option value="12">12 %</option>
+                  <option value="6">6 %</option>
+                  <option value="0">0 %</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="fg-verval-dagen">Vervaldagen na factuurdatum</label>
+                <input type="number" id="fg-verval-dagen" min="0" max="365" step="1" />
+              </div>
+              <div class="form-row meer-factuur-span-full">
+                <label for="fg-btw-tekst">BTW-vrijstellingsregel (onder tabel, alleen zonder “BTW aanrekenen”)</label>
+                <textarea id="fg-btw-tekst" class="input-textarea input-textarea--compact" rows="2"></textarea>
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary" id="fg-factuur-opslaan">Factuurgegevens opslaan</button>
+            <p class="info-text info-text--small" id="fg-factuur-save-hint" hidden>Opgeslagen voor dit profiel.</p>
+          </div>
+        </section>
+
+        <section class="meer-section" id="meer-locatie-rit" aria-labelledby="meer-locatie-rit-title">
+          <div class="meer-section-head">
+            <h3 class="meer-section-title" id="meer-locatie-rit-title">Locaties, voertuigen en handmatige rit</h3>
+            <p class="meer-section-desc">
+              Alles wat je nodig hebt om ritten voor te bereiden: ziekenhuizen en routes, je wagens, en een rit invoeren als die niet via het tabblad Ritten liep.
+            </p>
           </div>
           <div class="meer-section-body">
+            <div class="meer-subsection" id="meer-locaties">
+            <h4 class="meer-subsection-heading">Locaties &amp; vaste ritten</h4>
+            <p class="info-text info-text--small meer-subsection-lead">Zoek en bewaar ziekenhuizen; koppel vaste routes voor snellere ritkeuze.</p>
             <div class="form-row">
               <label for="zoek-ziekenhuis">Zoek ziekenhuis of adres</label>
               <input type="text" id="zoek-ziekenhuis" placeholder="bv. UZ Leuven, Virga Jesse…" autocomplete="off" />
@@ -577,15 +692,11 @@
               </div>
               <button type="button" class="btn btn-primary" id="btn-add-preset-route">Vaste rit toevoegen</button>
             </div>
-          </div>
-        </section>
+            </div>
 
-        <section class="meer-section" id="meer-voertuigen" aria-labelledby="meer-voertuigen-title">
-          <div class="meer-section-head">
-            <h3 class="meer-section-title" id="meer-voertuigen-title">Voertuigen</h3>
-            <p class="meer-section-desc">Gebruikt bij ritten en tankbeurten.</p>
-          </div>
-          <div class="meer-section-body">
+            <div class="meer-subsection" id="meer-voertuigen">
+            <h4 class="meer-subsection-heading">Voertuigen</h4>
+            <p class="info-text info-text--small meer-subsection-lead">Gebruikt bij ritten en tankbeurten.</p>
             <div class="form-section">
               <div class="form-row form-row--inline">
                 <label for="voertuig-naam">Naam voertuig</label>
@@ -601,17 +712,13 @@
               <h4 class="meer-subtitle">Mijn voertuigen</h4>
               <ul id="saved-voertuigen"></ul>
             </div>
-          </div>
-        </section>
+            </div>
 
-        <section class="meer-section" id="meer-handmatige-rit" aria-labelledby="meer-handmatige-rit-title">
-          <div class="meer-section-head">
-            <h3 class="meer-section-title" id="meer-handmatige-rit-title">Rit handmatig toevoegen</h3>
-            <p class="meer-section-desc">
-              Ontbreekt een rit? Voeg hem hier toe (zoeken zoals bij <strong>Locaties</strong>). Standaard sla je op als <strong>gepland</strong>: de rit verschijnt op het dashboard en bij tab Ritten, waar je <strong>Start</strong> en <strong>Klaar</strong> gebruikt. Kies <em>Afgerond</em> alleen voor achteraf invoer (meteen op factuur).
+            <div class="meer-subsection" id="meer-handmatige-rit">
+            <h4 class="meer-subsection-heading">Rit handmatig toevoegen</h4>
+            <p class="info-text info-text--small meer-subsection-lead">
+              Ontbreekt een rit? Voeg hem hier toe (zoeken zoals bij <strong>Locaties</strong>). Standaard <strong>gepland</strong> — dashboard en tab Ritten (<strong>Start</strong> / <strong>Klaar</strong>). <em>Afgerond</em> alleen voor achteraf (meteen factureerbaar).
             </p>
-          </div>
-          <div class="meer-section-body">
             <div class="form-section meer-nested-card">
               <div class="form-row form-row--inline">
                 <label for="meer-rit-datum">Datum</label>
@@ -667,146 +774,14 @@
               </div>
               <p class="info-text info-text--small" id="meer-rit-save-hint" hidden>Opgeslagen.</p>
             </div>
-          </div>
-        </section>
-
-        <section class="meer-section" id="meer-factuur" aria-labelledby="meer-factuur-title">
-          <div class="meer-section-head">
-            <h3 class="meer-section-title" id="meer-factuur-title">Factuur &amp; logo</h3>
-            <p class="meer-section-desc">
-              Gegevens voor PDF-facturen (Financieel-tab). Vul je <strong>klant</strong> handmatig in (bedrijf, contactpersoon, adres, klant-BTW) en kies of je <strong>BTW doorrekent</strong> op de factuur. Opgeslagen per profiel.
-            </p>
-          </div>
-          <div class="meer-section-body meer-factuur-body">
-            <div class="meer-factuur-logo-row">
-              <div class="form-row">
-                <label for="fg-logo-file">Logo (PNG, JPG …)</label>
-                <input type="file" id="fg-logo-file" accept="image/*" class="input-file" />
-                <button type="button" class="btn btn-outline btn-sm" id="fg-logo-wissen">Logo wissen</button>
-              </div>
-              <div class="meer-factuur-logo-preview-wrap">
-                <img id="fg-logo-preview" class="meer-factuur-logo-preview" alt="Factuurlogo" width="96" height="96" hidden />
-              </div>
             </div>
-            <div class="meer-factuur-grid">
-              <div class="form-row">
-                <label for="fg-bedrijfsnaam">Bedrijfsnaam (Van)</label>
-                <input type="text" id="fg-bedrijfsnaam" placeholder="bv. HohoSolutions" autocomplete="organization" />
-              </div>
-              <div class="form-row">
-                <label for="fg-adres-straat">Straat en nummer</label>
-                <input type="text" id="fg-adres-straat" placeholder="Koloniënstraat 11" autocomplete="street-address" />
-              </div>
-              <div class="form-row">
-                <label for="fg-adres-pc-stad">Postcode en gemeente</label>
-                <input type="text" id="fg-adres-pc-stad" placeholder="1000 Brussel" />
-              </div>
-              <div class="form-row">
-                <label for="fg-land">Land</label>
-                <input type="text" id="fg-land" placeholder="België" />
-              </div>
-              <div class="form-row">
-                <label for="fg-btw">BTW-nummer</label>
-                <input type="text" id="fg-btw" placeholder="BE0123456789" autocomplete="off" />
-              </div>
-              <div class="form-row">
-                <label for="fg-rek-naam">Rekeninghouder</label>
-                <input type="text" id="fg-rek-naam" autocomplete="name" />
-              </div>
-              <div class="form-row">
-                <label for="fg-iban">IBAN</label>
-                <input type="text" id="fg-iban" placeholder="BE00 0000 0000 0000" autocomplete="off" />
-              </div>
-              <div class="form-row">
-                <label for="fg-email">E-mail (voet factuur)</label>
-                <input type="email" id="fg-email" autocomplete="email" />
-              </div>
-              <div class="form-row">
-                <label for="fg-tel">Telefoon (voet factuur)</label>
-                <input type="tel" id="fg-tel" autocomplete="tel" />
-              </div>
-              <div class="form-row meer-factuur-span-full">
-                <p class="info-text info-text--small meer-factuur-klant-intro">
-                  <strong>Klant op de factuur (Aan)</strong> — volledig handmatig; verschijnt op elke PDF.
-                </p>
-              </div>
-              <div class="form-row">
-                <label for="fg-klant-bedrijf">Bedrijfsnaam klant</label>
-                <input type="text" id="fg-klant-bedrijf" placeholder="Naam organisatie op factuur" autocomplete="organization" />
-              </div>
-              <div class="form-row">
-                <label for="fg-klant-persoon">Contactpersoon (optioneel)</label>
-                <input type="text" id="fg-klant-persoon" placeholder="Naam persoon t.a.v." autocomplete="name" />
-              </div>
-              <div class="form-row">
-                <label for="fg-klant-btw">BTW-nummer klant (optioneel)</label>
-                <input type="text" id="fg-klant-btw" placeholder="BE0…" autocomplete="off" />
-              </div>
-              <div class="form-row meer-factuur-span-2">
-                <label for="fg-klant-adres">Adres klant</label>
-                <input type="text" id="fg-klant-adres" placeholder="Straat, nummer, postcode, gemeente" autocomplete="street-address" />
-              </div>
-              <div class="form-row">
-                <label for="fg-klant-land">Land klant</label>
-                <input type="text" id="fg-klant-land" placeholder="België" />
-              </div>
-              <div class="form-row meer-factuur-span-2 factuur-btw-keuze">
-                <label class="checkbox-label">
-                  <input type="checkbox" id="fg-factuur-btw-aanrekenen" />
-                  BTW aanrekenen op deze facturen (ritbedragen worden als <strong>excl. btw</strong> beschouwd; totaal = excl. + btw)
-                </label>
-              </div>
-              <div class="form-row meer-factuur-span-2 factuur-btw-tarief-wrap" id="fg-factuur-btw-tarief-wrap" hidden>
-                <label for="fg-factuur-btw-tarief">BTW-tarief</label>
-                <select id="fg-factuur-btw-tarief" class="select">
-                  <option value="21">21 %</option>
-                  <option value="12">12 %</option>
-                  <option value="6">6 %</option>
-                  <option value="0">0 %</option>
-                </select>
-              </div>
-              <div class="form-row">
-                <label for="fg-verval-dagen">Vervaldagen na factuurdatum</label>
-                <input type="number" id="fg-verval-dagen" min="0" max="365" step="1" />
-              </div>
-              <div class="form-row meer-factuur-span-full">
-                <label for="fg-btw-tekst">BTW-vrijstellingsregel (onder tabel, alleen zonder “BTW aanrekenen”)</label>
-                <textarea id="fg-btw-tekst" class="input-textarea input-textarea--compact" rows="2"></textarea>
-              </div>
-            </div>
-            <button type="button" class="btn btn-primary" id="fg-factuur-opslaan">Factuurgegevens opslaan</button>
-            <p class="info-text info-text--small" id="fg-factuur-save-hint" hidden>Opgeslagen voor dit profiel.</p>
-          </div>
-        </section>
-
-        <section class="meer-section" id="meer-kosten" aria-labelledby="meer-kosten-title">
-          <div class="meer-section-head">
-            <h3 class="meer-section-title" id="meer-kosten-title">Overige kosten</h3>
-            <p class="meer-section-desc">Snel een uitgave vastleggen; het overzicht staat onder Tabellen.</p>
-          </div>
-          <div class="meer-section-body">
-            <form id="form-overig" class="form-overig form-section">
-              <div class="form-row">
-                <label for="overig-datum">Datum</label>
-                <input type="date" id="overig-datum" required />
-              </div>
-              <div class="form-row">
-                <label for="overig-omschrijving">Omschrijving</label>
-                <input type="text" id="overig-omschrijving" placeholder="Onderhoud, tol…" />
-              </div>
-              <div class="form-row">
-                <label for="overig-bedrag">Bedrag (€)</label>
-                <input type="number" id="overig-bedrag" min="0" step="0.01" required />
-              </div>
-              <button type="submit" class="btn btn-primary btn-block">Kosten opslaan</button>
-            </form>
           </div>
         </section>
 
         <section class="meer-section meer-section--wide" id="meer-gegevens" aria-labelledby="meer-gegevens-title">
           <div class="meer-section-head">
             <h3 class="meer-section-title" id="meer-gegevens-title">Tabellen &amp; planning</h3>
-            <p class="meer-section-desc">Alle ritten, brandstof en kosten; hier stel je ook je 2-weken beschikbaarheid in.</p>
+            <p class="meer-section-desc">Ritten, brandstof en overige kosten (invoer staat bij tab <strong>Overige</strong>); 2-wekenbeschikbaarheid onder <strong>Planning</strong>.</p>
           </div>
           <div class="meer-section-body">
             <div class="tabs tabs--meer" role="tablist" aria-label="Gegevensweergave">
@@ -833,6 +808,25 @@
                 </div>
               </div>
               <div class="tab-panel" id="panel-overig" role="tabpanel">
+                <div class="meer-panel-overig-quick form-section">
+                  <h4 class="meer-subtitle">Snel invoeren</h4>
+                  <p class="info-text info-text--small">Nieuwe uitgave; de tabel staat hieronder.</p>
+                  <form id="form-overig" class="form-overig">
+                    <div class="form-row">
+                      <label for="overig-datum">Datum</label>
+                      <input type="date" id="overig-datum" required />
+                    </div>
+                    <div class="form-row">
+                      <label for="overig-omschrijving">Omschrijving</label>
+                      <input type="text" id="overig-omschrijving" placeholder="Onderhoud, tol…" />
+                    </div>
+                    <div class="form-row">
+                      <label for="overig-bedrag">Bedrag (€)</label>
+                      <input type="number" id="overig-bedrag" min="0" step="0.01" required />
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">Kosten opslaan</button>
+                  </form>
+                </div>
                 <div class="table-wrap table-wrap--managed">
                   <table class="data-table data-table--compact">
                     <thead><tr><th>Datum</th><th>Omschrijving</th><th>Bedrag</th><th></th></tr></thead>

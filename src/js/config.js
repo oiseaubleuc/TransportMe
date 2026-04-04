@@ -53,7 +53,8 @@ export const DATA_RETENTION_DAYS = 62;
 /** Compacte UI: korte lijsten, scrollblokken, beheer zonder eindeloze pagina */
 export const UI_COMPACT = {
   dashboardVandaagRitten: 4,
-  dashboardStatusRitten: 4,
+  /** Komende/lopende ritten op dashboard: praktisch alles tonen (scroll in CSS) */
+  dashboardStatusRitten: 500,
   ritKaartLijstMaxHoogteRem: 10,
   rittenTabelWeken: 8,
   rittenPerWeekInTabel: 15,
@@ -62,7 +63,7 @@ export const UI_COMPACT = {
   kaartRitKeuzeMax: 45,
   grafiekWeken: 6,
   /** Één overzichts-feed op tab Ritten */
-  rittenFeedMax: 40,
+  rittenFeedMax: 500,
 };
 
 export const PERIOD_LABELS = {
@@ -138,7 +139,16 @@ export const DEFAULT_PRESET_ROUTES = [
   { id: 'preset-excel-12', fromId: 'mechelen', toId: 'gent', fromName: 'RKV Mechelen', toName: 'AZ Gent', defaultKm: 65 },
   { id: 'preset-excel-13', fromId: 'mechelen', toId: 'genk', fromName: 'RKV Mechelen', toName: 'ZOL Genk', defaultKm: 60 },
   { id: 'preset-excel-14', fromId: 'mechelen', toId: 'uz-leuven', fromName: 'RKV Mechelen', toName: 'UZ Leuven', defaultKm: 30 },
-  { id: 'preset-excel-15', fromId: 'mechelen', toId: 'uza', fromName: 'RKV Mechelen', toName: 'UZA (Edegem)', defaultKm: 28 },
+  {
+    id: 'preset-excel-15',
+    fromId: 'mechelen',
+    toId: 'uza',
+    fromName: 'RKV Mechelen',
+    toName: 'UZA (Edegem)',
+    defaultKm: 28,
+    /** Forfait RIZIV/RKV (enkel deze richting); overschrijft km-tarief bij nieuwe rit */
+    forfaitVergoeding: 35,
+  },
   { id: 'preset-excel-16', fromId: 'mechelen', toId: 'herentals', fromName: 'RKV Mechelen', toName: 'AZ Herentals', defaultKm: 30 },
   { id: 'preset-excel-17', fromId: 'mechelen', toId: 'uz-brussel', fromName: 'RKV Mechelen', toName: 'UZ Brussel', defaultKm: 33 },
   { id: 'preset-excel-18', fromId: 'mechelen', toId: 'heusden-zolder', fromName: 'RKV Mechelen', toName: 'ZOL Heusden-Zolder', defaultKm: 55 },

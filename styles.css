@@ -1623,6 +1623,9 @@ body {
   list-style: none;
   padding: 0;
   margin: 0;
+  max-height: min(50vh, 28rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .ritten-status-item {
   display: flex;
@@ -1971,8 +1974,9 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0.35rem 0.65rem;
-  max-height: min(14rem, 46vh);
+  max-height: min(36rem, 72vh);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .ritten-feed {
@@ -2888,14 +2892,11 @@ body.bon-scan-open {
 
 .meer-section-nav {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 0.35rem;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  flex-wrap: wrap;
+  gap: 0.4rem;
   padding: 0.35rem 0;
   margin: 0 0 1.25rem 0;
   border-bottom: 1px solid var(--border);
-  scrollbar-width: thin;
 }
 
 .meer-section-nav-link {
@@ -2947,6 +2948,35 @@ body.bon-scan-open {
   max-width: 42rem;
 }
 
+.meer-subsection {
+  margin-top: 1.1rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+}
+
+.meer-subsection:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.meer-subsection-heading {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.meer-subsection-lead {
+  margin: 0 0 0.65rem 0;
+}
+
+.meer-panel-overig-quick {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed var(--border);
+}
+
 .meer-factuur-body .input-textarea--compact {
   min-height: 3.5rem;
   resize: vertical;
@@ -2968,6 +2998,13 @@ body.bon-scan-open {
 
 .meer-factuur-klant-intro {
   margin: 0;
+}
+
+.factuur-klant-opslaan-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
 }
 
 .meer-factuur-grid {

@@ -65,10 +65,31 @@ function syncFactuurBtwTariefVisibility() {
   if (wrap) wrap.hidden = !cb?.checked;
 }
 
+function flashSaveHint(el) {
+  if (!el) return;
+  el.hidden = false;
+  setTimeout(() => {
+    el.hidden = true;
+  }, 2500);
+}
+
+function saveKlantFieldsFromForm() {
+  const klantBedrijf = $('fg-klant-bedrijf')?.value?.trim() || '';
+  saveFactuurGegevens({
+    klantBedrijfsnaam: klantBedrijf,
+    klantNaam: klantBedrijf,
+    klantContactpersoon: $('fg-klant-persoon')?.value?.trim() || '',
+    klantBtw: $('fg-klant-btw')?.value?.trim() || '',
+    klantAdres: $('fg-klant-adres')?.value?.trim() || '',
+    klantLand: $('fg-klant-land')?.value?.trim() || 'België',
+  });
+}
+
 export function initFactuurGegevensMeer() {
   const fileInp = $('fg-logo-file');
   const btnClear = $('fg-logo-wissen');
   const btnSave = $('fg-factuur-opslaan');
+  const btnKlant = $('fg-klant-opslaan');
 
   $('fg-factuur-btw-aanrekenen')?.addEventListener('change', syncFactuurBtwTariefVisibility);
 
@@ -104,6 +125,12 @@ export function initFactuurGegevensMeer() {
     syncFactuurGegevensFormFromStorage();
   });
 
+  btnKlant?.addEventListener('click', () => {
+    saveKlantFieldsFromForm();
+    syncFactuurGegevensFormFromStorage();
+    flashSaveHint($('fg-klant-save-hint'));
+  });
+
   btnSave?.addEventListener('click', () => {
     const verval = Number.parseInt($('fg-verval-dagen')?.value, 10);
     const klantBedrijf = $('fg-klant-bedrijf')?.value?.trim() || '';
@@ -131,13 +158,7 @@ export function initFactuurGegevensMeer() {
       btwVrijstellingTekst: $('fg-btw-tekst')?.value?.trim() || '',
     });
     syncFactuurGegevensFormFromStorage();
-    const ok = $('fg-factuur-save-hint');
-    if (ok) {
-      ok.hidden = false;
-      setTimeout(() => {
-        ok.hidden = true;
-      }, 2500);
-    }
+    flashSaveHint($('fg-factuur-save-hint'));
   });
 
   syncFactuurGegevensFormFromStorage();

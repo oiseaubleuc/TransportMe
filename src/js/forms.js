@@ -3,9 +3,22 @@
  */
 
 import { RIT_DUUR_MINUTEN } from './config.js';
-import { vergoedingVoorRit, toDateStr, rendabiliteitRit } from './calculations.js';
+import {
+  vergoedingFromPresetOrKm,
+  findPresetExact,
+  rendabiliteitRitForForm,
+  toDateStr,
+} from './calculations.js';
 import { formatEuro, formatLiter } from './format.js';
-import { getData, saveRitten, saveBrandstof, saveOverig, getVoertuigen, getZiekenhuizen } from './storage.js';
+import {
+  getData,
+  saveRitten,
+  saveBrandstof,
+  saveOverig,
+  getVoertuigen,
+  getZiekenhuizen,
+  getPresetRoutes,
+} from './storage.js';
 import { nextVolgordeStart } from './ritVolgorde.js';
 import { parseReceiptText } from './ocr.js';
 import { runReceiptOcr } from './receiptOcr.js';
@@ -203,13 +216,21 @@ export function initFormRit(onSubmit) {
   });
   syncRitOpslaanModusHint();
 
+  function ritRoutePreset() {
+    const v = document.getElementById('rit-vertrek')?.value?.trim() || '';
+    const t = document.getElementById('rit-bestemming')?.value?.trim() || '';
+    if (!v || !t) return null;
+    return findPresetExact(getPresetRoutes(), v, t);
+  }
+
   function updatePreview() {
     const km = parseFloat(kmInput?.value) || 0;
     const tijd = getEffectiveRitTijd();
-    if (preview) preview.textContent = formatEuro(vergoedingVoorRit(km, tijd));
+    const preset = ritRoutePreset();
+    if (preview) preview.textContent = formatEuro(vergoedingFromPresetOrKm(preset, km, tijd));
     if (previewKm) previewKm.textContent = km ? `${Math.round(km)} km` : '0 km';
 
-    const rend = rendabiliteitRit(km, tijd);
+    const rend = rendabiliteitRitForForm(km, tijd, preset);
     const hasRendabiliteit = rend && rend.geschatteWinst != null;
 
     if (geenDataEl) geenDataEl.hidden = hasRendabiliteit;
@@ -235,6 +256,8 @@ export function initFormRit(onSubmit) {
   }
 
   kmInput?.addEventListener('input', updatePreview);
+  document.getElementById('rit-vertrek')?.addEventListener('change', updatePreview);
+  document.getElementById('rit-bestemming')?.addEventListener('change', updatePreview);
   updatePreview();
 
   function resetRitFormulier() {
@@ -300,7 +323,6 @@ export function initFormRit(onSubmit) {
     }
     const modus = ritOpslaanModus();
     const tijd = getEffectiveRitTijd();
-    const vergoedingTotaal = vergoedingVoorRit(km, tijd);
     const voertuigSel = document.getElementById('rit-voertuig');
     const voertuigId = voertuigSel?.value || '';
     const voertuigName = voertuigSel?.selectedOptions?.[0]?.textContent || '';
@@ -308,6 +330,8 @@ export function initFormRit(onSubmit) {
     const vertrekSel = document.getElementById('rit-vertrek');
     const fromId = vertrekSel?.value?.trim() || '';
     const toId = bestemmingSel?.value?.trim() || '';
+    const presetExact = findPresetExact(getPresetRoutes(), fromId, toId);
+    const vergoedingTotaal = vergoedingFromPresetOrKm(presetExact, km, tijd);
     const ziekenhuizen = getZiekenhuizen();
     const from = fromId ? ziekenhuizen.find((h) => h.id === fromId) : null;
     const to = toId ? ziekenhuizen.find((h) => h.id === toId) : null;
@@ -691,7 +715,7 @@ export function initMeerHandmatigeRit(onSaved) {
     }
 
     const { ritten } = getData();
-    const vergoeding = vergoedingVoorRit(km, tijd);
+    const vergoeding = vergoedingFromPresetOrKm(null, km, tijd);
     const base = Date.now();
     const rit = {
       id: base,
