@@ -3,7 +3,18 @@
  * Mobielvriendelijk: navigatie, vaste ritten, kost (brandstof), kaart, ziekenhuizen
  */
 
-import { updateKPI, updateVandaagSummary, initPeriodToggle, syncPeriodButtons, updateFinancialChart, updateRittenStatusLijst, updateRitMelding, updateBeschikbaarheidWeek, updateFinancieelProfielOverzicht } from './js/dashboard.js';
+import {
+  updateKPI,
+  updateVandaagSummary,
+  updateDezeWeekSummary,
+  initPeriodToggle,
+  syncPeriodButtons,
+  updateFinancialChart,
+  updateRittenStatusLijst,
+  updateRitMelding,
+  updateBeschikbaarheidWeek,
+  updateFinancieelProfielOverzicht,
+} from './js/dashboard.js';
 import {
   initFormRit,
   initFormBrandstof,
@@ -96,6 +107,7 @@ function refresh() {
 
   updateKPI();
   updateVandaagSummary();
+  updateDezeWeekSummary();
   updateBeschikbaarheidWeek();
   updateFinancieelProfielOverzicht();
   refreshFinancieelFactuurSelects();
@@ -240,6 +252,18 @@ function initRittenOverzichtDelegation() {
       }
       return;
     }
+    const annuleerBtn = e.target.closest('.ritten-feed-btn-annuleren');
+    if (annuleerBtn) {
+      e.preventDefault();
+      const id = annuleerBtn.getAttribute('data-rit-id');
+      const { ritten } = getData();
+      const rit = findRitById(ritten, id);
+      if (rit && tryAnnuleerRit(rit)) {
+        saveRitten(ritten);
+        refresh();
+      }
+      return;
+    }
     const filterBtn = e.target.closest('.ritten-filter-btn[data-filter]');
     const statTile = e.target.closest('.ritten-stat-tile[data-filter]');
     const f = filterBtn?.dataset.filter || statTile?.dataset.filter;
@@ -291,6 +315,7 @@ function showPage(pageId, options = {}) {
   if (pageId === 'kaart') initMapIfNeeded();
   if (pageId === 'dashboard') {
     updateVandaagSummary();
+    updateDezeWeekSummary();
     updateRitMelding(refresh);
   }
 }
@@ -639,6 +664,18 @@ function findRitById(ritten, idVal) {
   if (idVal == null || idVal === '') return undefined;
   const sid = String(idVal);
   return ritten.find((r) => String(r.id) === sid);
+}
+
+function tryAnnuleerRit(rit) {
+  if (!rit || (rit.status !== 'komend' && rit.status !== 'lopend')) return false;
+  const msg =
+    rit.status === 'lopend'
+      ? 'Rit is onderweg. Annuleren? Telt niet meer mee in vergoeding en totalen.'
+      : 'Rit annuleren? Telt niet meer mee in vergoeding en totalen.';
+  if (!confirm(msg)) return false;
+  rit.status = 'geannuleerd';
+  delete rit.voltooidTijd;
+  return true;
 }
 
 function handmatigAfrondenLabel(rit) {
@@ -1127,12 +1164,13 @@ function renderRittenStatusPagina() {
           ? `<div class="ritten-feed-route">${escapeHtml(r.fromName)} → ${escapeHtml(r.toName)}</div>`
           : '';
       const idAttr = escapeHtml(String(r.id));
+      const annuleerBtn = `<button type="button" class="btn btn-small btn-outline ritten-feed-btn-annuleren" data-rit-id="${idAttr}">Annuleren</button>`;
       const acties =
         status === 'voltooid'
           ? ''
           : status === 'lopend'
-            ? `<div class="ritten-feed-actions"><button type="button" class="btn btn-small btn-primary ritten-feed-btn-afronden" data-rit-id="${idAttr}">Afronden</button></div>`
-            : `<div class="ritten-feed-actions"><button type="button" class="btn btn-small ritten-feed-btn-start" data-rit-id="${idAttr}">Start rit</button><button type="button" class="btn btn-small btn-primary ritten-feed-btn-afronden" data-rit-id="${idAttr}">Afronden</button></div>`;
+            ? `<div class="ritten-feed-actions"><button type="button" class="btn btn-small btn-primary ritten-feed-btn-afronden" data-rit-id="${idAttr}">Afronden</button>${annuleerBtn}</div>`
+            : `<div class="ritten-feed-actions"><button type="button" class="btn btn-small ritten-feed-btn-start" data-rit-id="${idAttr}">Start rit</button><button type="button" class="btn btn-small btn-primary ritten-feed-btn-afronden" data-rit-id="${idAttr}">Afronden</button>${annuleerBtn}</div>`;
       return `<li class="ritten-feed-item ritten-feed-item--${status}${isMatch ? ' ritten-feed-item--match' : ''}">
         <div class="ritten-feed-row1">
           ${nr ? `<span class="ritten-feed-numwrap">${nr}</span>` : ''}

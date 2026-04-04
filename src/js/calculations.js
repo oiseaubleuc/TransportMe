@@ -137,6 +137,7 @@ export function filterByPeriod(items, period, dateKey = 'datum') {
 
 /** Alleen voltooide ritten tellen voor omzet/km (oude ritten zonder status = voltooid) */
 export function isRitVoltooid(rit) {
+  if (rit?.status === 'geannuleerd') return false;
   return rit.status === 'voltooid' || rit.status == null;
 }
 
@@ -203,7 +204,7 @@ export function getWeeklyFinancials(weeksBack = 8) {
  */
 export function getGemiddeldeBenzineKostPerKm() {
   const { ritten, brandstof } = getData();
-  const totaalKm = ritten.reduce((s, r) => s + (r.km || 0), 0);
+  const totaalKm = ritten.filter(isRitVoltooid).reduce((s, r) => s + (r.km || 0), 0);
   const totaalBenzine = brandstof.reduce((s, b) => s + (b.prijs || 0), 0);
   if (totaalKm <= 0 || totaalBenzine < 0) return null;
   return totaalBenzine / totaalKm;

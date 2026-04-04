@@ -91,6 +91,25 @@
           </div>
 
           <div class="dashboard-shared-below-tabs">
+            <section class="dashboard-dag-blok dashboard-week-blok" aria-labelledby="dash-week-heading">
+              <h2 class="dashboard-vandaag-title" id="dash-week-heading">Deze week</h2>
+              <p class="dashboard-week-range" id="dashboard-week-range-label"></p>
+              <div class="dashboard-vandaag-stats">
+                <div class="dashboard-stat">
+                  <span class="dashboard-stat-value" id="week-ritten">0</span>
+                  <span class="dashboard-stat-label">ritten</span>
+                </div>
+                <div class="dashboard-stat">
+                  <span class="dashboard-stat-value" id="week-km">0</span>
+                  <span class="dashboard-stat-label">km</span>
+                </div>
+                <div class="dashboard-stat">
+                  <span class="dashboard-stat-value" id="week-vergoeding">€ 0</span>
+                  <span class="dashboard-stat-label">vergoeding</span>
+                </div>
+              </div>
+              <ul class="dashboard-vandaag-lijst dashboard-list-compact" id="ritten-week-lijst" aria-label="Voltooide ritten deze week"></ul>
+            </section>
             <div class="dashboard-beschikbaarheid-section" id="dashboard-beschikbaarheid-section">
               <h3 class="dashboard-panel-subtitle">Beschikbaarheid (volgende 7 dagen)</h3>
               <ul class="dashboard-beschikbaarheid-lijst" id="dashboard-beschikbaarheid-lijst" aria-label="Beschikbaarheid per dag"></ul>
@@ -408,7 +427,10 @@
                   <div id="rit-rendabiliteit" hidden><span id="rit-preview-benzine"></span></div>
                   <div id="rit-row-benzine" hidden></div>
                   <div id="rit-row-winst" hidden></div>
-                  <button type="submit" class="btn btn-primary btn-block">Rit opslaan</button>
+                  <div class="rit-form-actions">
+                    <button type="button" class="btn btn-outline btn-block" id="rit-form-leegmaken">Leegmaken</button>
+                    <button type="submit" class="btn btn-primary btn-block">Rit opslaan</button>
+                  </div>
                 </form>
             </div>
           </div>
@@ -639,7 +661,10 @@
                   <option value="voltooid">Afgerond — meteen factureerbaar (geen Start)</option>
                 </select>
               </div>
-              <button type="button" class="btn btn-primary" id="meer-rit-opslaan">Rit opslaan</button>
+              <div class="meer-rit-actions">
+                <button type="button" class="btn btn-outline" id="meer-rit-leegmaken">Leegmaken</button>
+                <button type="button" class="btn btn-primary" id="meer-rit-opslaan">Rit opslaan</button>
+              </div>
               <p class="info-text info-text--small" id="meer-rit-save-hint" hidden>Opgeslagen.</p>
             </div>
           </div>
@@ -794,7 +819,7 @@
               <div class="tab-panel active" id="panel-ritten" role="tabpanel">
                 <div class="table-wrap table-wrap--managed">
                   <table class="data-table data-table--compact">
-                    <thead><tr><th>Volg. nr.</th><th>Bonnr.</th><th>Datum</th><th>Chauffeur</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th>Status</th><th>Acties</th></tr></thead>
+                    <thead><tr><th>Volg. nr.</th><th title="Aanpasbaar. Meerdere bonnen: komma's tussen de nummers.">Bonnr.</th><th>Datum</th><th>Chauffeur</th><th>Voertuig</th><th>Km</th><th>Vergoeding</th><th>Status</th><th>Acties</th></tr></thead>
                     <tbody id="tbody-ritten"></tbody>
                   </table>
                 </div>

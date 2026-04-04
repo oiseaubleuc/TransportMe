@@ -16,7 +16,7 @@ import {
 import { backfillMissingVolgordeNrs } from './ritVolgorde.js';
 
 const VALID_PROFILE_IDS = new Set(PROFILES.map((p) => p.id));
-const VALID_STATUS = new Set(['komend', 'lopend', 'voltooid']);
+const VALID_STATUS = new Set(['komend', 'lopend', 'voltooid', 'geannuleerd']);
 
 function safeParseArray(raw) {
   try {

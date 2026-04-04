@@ -237,6 +237,34 @@ export function initFormRit(onSubmit) {
   kmInput?.addEventListener('input', updatePreview);
   updatePreview();
 
+  function resetRitFormulier() {
+    form.reset();
+    datumInput.value = toDateStr(new Date());
+    if (achterafCb) achterafCb.checked = false;
+    if (tijdInput) tijdInput.value = '';
+    if (tijdRow) tijdRow.hidden = true;
+    updatePreview();
+    const destClear = document.getElementById('rit-selected-destination');
+    if (destClear) {
+      destClear.textContent = '';
+      destClear.hidden = true;
+    }
+    const vertrekSel = document.getElementById('rit-vertrek');
+    const bestemmingSel = document.getElementById('rit-bestemming');
+    if (vertrekSel) vertrekSel.value = '';
+    if (bestemmingSel) bestemmingSel.value = '';
+    if (artikelLijst) {
+      artikelLijst.innerHTML = artikelRowTemplate('', '', false);
+      bindArtikelEvents();
+    }
+    syncRitOpslaanModusHint();
+  }
+
+  document.getElementById('rit-form-leegmaken')?.addEventListener('click', () => {
+    if (!confirm('Invoer wissen zonder op te slaan?')) return;
+    resetRitFormulier();
+  });
+
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const datum = datumInput.value;
@@ -353,23 +381,7 @@ export function initFormRit(onSubmit) {
 
     ritten.sort((a, b) => a.datum.localeCompare(b.datum));
     saveRitten(ritten);
-    form.reset();
-    datumInput.value = toDateStr(new Date());
-    if (achterafCb) achterafCb.checked = false;
-    if (tijdInput) tijdInput.value = '';
-    if (tijdRow) tijdRow.hidden = true;
-    updatePreview();
-    const destClear = document.getElementById('rit-selected-destination');
-    if (destClear) {
-      destClear.textContent = '';
-      destClear.hidden = true;
-    }
-    if (vertrekSel) vertrekSel.value = '';
-    if (bestemmingSel) bestemmingSel.value = '';
-    if (artikelLijst) {
-      artikelLijst.innerHTML = artikelRowTemplate('', '', false);
-      bindArtikelEvents();
-    }
+    resetRitFormulier();
     onSubmit?.();
   });
 }
@@ -597,6 +609,29 @@ export function initMeerHandmatigeRit(onSaved) {
 
   syncMeerHandmatigeRitDefaults();
 
+  function resetMeerHandmatigeRitForm() {
+    const datumInput = document.getElementById('meer-rit-datum');
+    const kmInput = document.getElementById('meer-rit-km');
+    const bonInput = document.getElementById('meer-rit-bon');
+    const statusSel = document.getElementById('meer-rit-status');
+    if (kmInput) kmInput.value = '';
+    if (bonInput) bonInput.value = '';
+    const vz = document.getElementById('meer-rit-vertrek-zoek');
+    const bz = document.getElementById('meer-rit-bestemming-zoek');
+    if (vz) vz.value = '';
+    if (bz) bz.value = '';
+    meerRitVertrek = null;
+    meerRitBestemming = null;
+    if (statusSel) statusSel.value = 'komend';
+    syncMeerHandmatigeRitDefaults();
+    if (datumInput) datumInput.value = toDateStr(new Date());
+  }
+
+  document.getElementById('meer-rit-leegmaken')?.addEventListener('click', () => {
+    if (!confirm('Velden wissen zonder op te slaan?')) return;
+    resetMeerHandmatigeRitForm();
+  });
+
   document.getElementById('meer-rit-bon-scan')?.addEventListener('click', async () => {
     const bonInput = document.getElementById('meer-rit-bon');
     if (!bonInput) return;
@@ -690,15 +725,7 @@ export function initMeerHandmatigeRit(onSaved) {
     ritten.sort((a, b) => a.datum.localeCompare(b.datum));
     saveRitten(ritten);
 
-    if (kmInput) kmInput.value = '';
-    if (bonInput) bonInput.value = '';
-    const vz = document.getElementById('meer-rit-vertrek-zoek');
-    const bz = document.getElementById('meer-rit-bestemming-zoek');
-    if (vz) vz.value = '';
-    if (bz) bz.value = '';
-    meerRitVertrek = null;
-    meerRitBestemming = null;
-    if (statusSel) statusSel.value = 'komend';
+    resetMeerHandmatigeRitForm();
 
     if (hint) {
       hint.hidden = false;

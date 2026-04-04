@@ -17,6 +17,32 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+/** Tekst voor bewerkveld: alle bonnen komma-gescheiden */
+function bonStringForEdit(rit) {
+  const items = Array.isArray(rit.bestelArtikelen) ? rit.bestelArtikelen.filter((x) => x?.bonnummer) : [];
+  if (items.length > 0) return items.map((x) => String(x.bonnummer).trim()).filter(Boolean).join(', ');
+  return typeof rit.bonnummer === 'string' ? rit.bonnummer.trim() : '';
+}
+
+/** Parse komma-gescheiden bonnen; behoud boxen per index waar mogelijk */
+function applyBonStringToRit(rit, raw) {
+  const parts = String(raw || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const oldItems = Array.isArray(rit.bestelArtikelen) ? rit.bestelArtikelen.filter((x) => x?.bonnummer) : [];
+  if (parts.length === 0) {
+    rit.bonnummer = '';
+    rit.bestelArtikelen = [];
+    return;
+  }
+  rit.bonnummer = parts[0];
+  rit.bestelArtikelen = parts.map((bonnummer, i) => ({
+    bonnummer,
+    boxen: oldItems[i]?.boxen ?? null,
+  }));
+}
+
 export function renderRitten(onRender) {
   const { ritten } = getData();
   const tbody = document.getElementById('tbody-ritten');
@@ -48,13 +74,8 @@ export function renderRitten(onRender) {
   const weekKeys = allWeekKeys.slice(0, UI_COMPACT.rittenTabelWeken);
   const wekenVerborgen = allWeekKeys.length - weekKeys.length;
 
-  const statusLabel = (s) => (s === 'komend' ? 'Kom.' : s === 'lopend' ? 'Lop.' : s === 'voltooid' ? 'Volt.' : '—');
-  const bonDisplay = (rit) => {
-    const items = Array.isArray(rit.bestelArtikelen) ? rit.bestelArtikelen.filter((x) => x?.bonnummer) : [];
-    if (items.length === 0) return rit.bonnummer || '—';
-    const eerste = items[0].bonnummer;
-    return items.length > 1 ? `${eerste} +${items.length - 1}` : eerste;
-  };
+  const statusLabel = (s) =>
+    s === 'komend' ? 'Kom.' : s === 'lopend' ? 'Lop.' : s === 'voltooid' ? 'Volt.' : s === 'geannuleerd' ? 'Ann.' : '—';
   let html = '';
   if (wekenVerborgen > 0) {
     html += `<tr class="week-header week-header--note"><td colspan="9"><span class="compact-table-note">${wekenVerborgen} oudere week${wekenVerborgen > 1 ? 'en' : ''} niet getoond · laatste ${UI_COMPACT.rittenTabelWeken} weken</span></td></tr>`;
@@ -66,10 +87,14 @@ export function renderRitten(onRender) {
     html += `<tr class="week-header"><td colspan="9"><strong>${escapeHtml(label)}</strong></td></tr>`;
     const rows = weekRitten.slice(0, perWeek);
     rows.forEach(
-      (r) =>
-        (html += `<tr>
+      (r) => {
+        const bonVal = bonStringForEdit(r);
+        const bonEsc = escapeHtml(bonVal);
+        html += `<tr>
           <td class="num">${r.volgordeNr != null ? escapeHtml(String(r.volgordeNr)) : '—'}</td>
-          <td>${escapeHtml(bonDisplay(r))}</td>
+          <td class="rit-bon-cell">
+            <input type="text" class="input rit-bon-input" data-id="${escapeHtml(String(r.id))}" data-initial="${bonEsc}" value="${bonEsc}" autocomplete="off" aria-label="Bestelbonnummer bewerken" />
+          </td>
           <td>${escapeHtml(formatDatumKort(r.datum))}</td>
           <td>${escapeHtml(r.chauffeurName || '—')}</td>
           <td>${escapeHtml(r.voertuigName || '—')}</td>
@@ -78,10 +103,11 @@ export function renderRitten(onRender) {
           <td>${statusLabel(r.status)}</td>
           <td class="rit-actions-cell">${
             r.status === 'komend' || r.status === 'lopend'
-              ? `<button type="button" class="btn btn-small btn-primary btn-rit-afronden-tabel" data-id="${r.id}" title="Rit afronden" aria-label="Rit afronden">Klaar</button>`
+              ? `<button type="button" class="btn btn-small btn-primary btn-rit-afronden-tabel" data-id="${r.id}" title="Rit afronden" aria-label="Rit afronden">Klaar</button><button type="button" class="btn btn-small btn-outline btn-rit-annuleren-tabel" data-id="${r.id}" title="Rit annuleren" aria-label="Rit annuleren">Annul.</button>`
               : ''
           }<button type="button" class="btn btn-danger btn-icon-del btn-delete-rit" data-id="${r.id}" title="Verwijderen" aria-label="Verwijder rit">×</button></td>
-        </tr>`)
+        </tr>`;
+      }
     );
     const rest = weekRitten.length - rows.length;
     if (rest > 0) {
@@ -97,6 +123,28 @@ export function renderRitten(onRender) {
 
   tbody.innerHTML = html;
 
+  tbody.querySelectorAll('.rit-bon-input').forEach((input) => {
+    const commit = () => {
+      const idRaw = input.dataset.id;
+      const next = String(input.value || '').trim();
+      const prev = String(input.dataset.initial || '').trim();
+      if (next === prev) return;
+      const { ritten } = getData();
+      const rit = ritten.find((r) => String(r.id) === String(idRaw));
+      if (!rit) return;
+      applyBonStringToRit(rit, input.value);
+      saveRitten(ritten);
+      onRender?.();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      }
+    });
+  });
+
   tbody.querySelectorAll('.btn-rit-afronden-tabel').forEach((btn) => {
     btn.addEventListener('click', () => {
       const idRaw = btn.dataset.id;
@@ -106,6 +154,24 @@ export function renderRitten(onRender) {
       rit.status = 'voltooid';
       const now = new Date();
       rit.voltooidTijd = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      saveRitten(ritten);
+      onRender?.();
+    });
+  });
+
+  tbody.querySelectorAll('.btn-rit-annuleren-tabel').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idRaw = btn.dataset.id;
+      const { ritten } = getData();
+      const rit = ritten.find((r) => String(r.id) === String(idRaw));
+      if (!rit || (rit.status !== 'komend' && rit.status !== 'lopend')) return;
+      const msg =
+        rit.status === 'lopend'
+          ? 'Rit is onderweg. Annuleren? Telt niet meer mee in vergoeding en totalen.'
+          : 'Rit annuleren? Telt niet meer mee in vergoeding en totalen.';
+      if (!confirm(msg)) return;
+      rit.status = 'geannuleerd';
+      delete rit.voltooidTijd;
       saveRitten(ritten);
       onRender?.();
     });

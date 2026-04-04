@@ -3,7 +3,16 @@
  */
 
 import { PERIOD_LABELS, UI_COMPACT, PROFILES } from './config.js';
-import { totalenVoorPeriode, vergoedingVoorRit, isInDay, getWeeklyFinancials, isRitVoltooid } from './calculations.js';
+import {
+  totalenVoorPeriode,
+  vergoedingVoorRit,
+  isInDay,
+  isInWeek,
+  getWeekLabel,
+  toDateStr,
+  getWeeklyFinancials,
+  isRitVoltooid,
+} from './calculations.js';
 import { formatEuro, formatDatumKort } from './format.js';
 import { getData, saveRitten } from './storage.js';
 
@@ -48,13 +57,13 @@ function voltooideRittenOpKalenderdag(refDate) {
     .sort((a, b) => a.datum.localeCompare(b.datum));
 }
 
-function fillDashboardDagBlok(refDate, ids, emptyMessage) {
+function fillDashboardDagBlok(refDate, ids, emptyMessage, voltooidOverride) {
   const rittenEl = document.getElementById(ids.ritten);
   const kmEl = document.getElementById(ids.km);
   const vergoedingEl = document.getElementById(ids.vergoeding);
   const lijstEl = document.getElementById(ids.lijst);
 
-  const voltooid = voltooideRittenOpKalenderdag(refDate);
+  const voltooid = voltooidOverride ?? voltooideRittenOpKalenderdag(refDate);
   const omzet = voltooid.reduce(
     (sum, rit) => sum + (rit.vergoeding ?? vergoedingVoorRit(rit.km || 0, rit.tijd)),
     0
@@ -111,6 +120,26 @@ export function updateVandaagSummary() {
     vergoeding: 'gisteren-vergoeding',
     lijst: 'ritten-gisteren-lijst',
   }, 'Geen voltooide ritten gisteren.');
+}
+
+/** Voltooide ritten in de huidige kalenderweek (ma–zo), zelfde lay-out als vandaag/gisteren */
+export function updateDezeWeekSummary() {
+  const now = new Date();
+  const rangeEl = document.getElementById('dashboard-week-range-label');
+  if (rangeEl) rangeEl.textContent = getWeekLabel(toDateStr(now));
+
+  const voltooid = getData()
+    .ritten.filter((r) => isInWeek(r.datum, now) && isRitVoltooid(r))
+    .sort((a, b) =>
+      `${a.datum || ''}${a.voltooidTijd || a.tijd || ''}`.localeCompare(`${b.datum || ''}${b.voltooidTijd || b.tijd || ''}`)
+    );
+
+  fillDashboardDagBlok(now, {
+    ritten: 'week-ritten',
+    km: 'week-km',
+    vergoeding: 'week-vergoeding',
+    lijst: 'ritten-week-lijst',
+  }, 'Geen voltooide ritten deze week.', voltooid);
 }
 
 /** Beschikbaarheid per dag (volgende 7 dagen) op dashboard */
@@ -443,6 +472,7 @@ export function updateRittenStatusLijst(onUpdate) {
         !isLopend && r.datum && !isInDay(r.datum, today) ? `${escapeHtml(formatDatumKort(r.datum))} · ` : '';
       const startBtn = !isLopend ? `<button type="button" class="btn btn-small btn-start-rit" data-id="${r.id}">Start</button>` : '';
       const voltooidBtn = isLopend ? `<button type="button" class="btn btn-small btn-primary btn-voltooid-rit" data-id="${r.id}">Klaar</button>` : '';
+      const annuleerBtn = `<button type="button" class="btn btn-small btn-outline btn-annuleer-rit" data-id="${r.id}">Annuleren</button>`;
       const nr =
         r.volgordeNr != null && Number.isFinite(Number(r.volgordeNr))
           ? `<span class="ritten-status-nr">#${r.volgordeNr}</span> `
@@ -450,7 +480,7 @@ export function updateRittenStatusLijst(onUpdate) {
       return `<li class="ritten-status-item" data-id="${r.id}">
         <span class="ritten-status-rit">${nr}${r.km || 0} km · ${formatEuro(verg)}</span>
         <span class="ritten-status-meta">${datumPrefix}${escapeHtml(chauffeur)} · ${escapeHtml(voertuig)}</span>
-        <span class="ritten-status-buttons">${startBtn} ${voltooidBtn}</span>
+        <span class="ritten-status-buttons">${startBtn}${voltooidBtn}${annuleerBtn}</span>
       </li>`;
     })
     .join('');
@@ -482,6 +512,23 @@ export function updateRittenStatusLijst(onUpdate) {
         saveRitten(rittenList);
         onUpdate?.();
       }
+    });
+  });
+  lijst.querySelectorAll('.btn-annuleer-rit').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idRaw = btn.closest('[data-id]')?.dataset.id;
+      const rittenList = getData().ritten;
+      const rit = rittenList.find((r) => String(r.id) === String(idRaw));
+      if (!rit || (rit.status !== 'komend' && rit.status !== 'lopend')) return;
+      const msg =
+        rit.status === 'lopend'
+          ? 'Rit is onderweg. Annuleren? Telt niet meer mee in vergoeding en totalen.'
+          : 'Rit annuleren? Telt niet meer mee in vergoeding en totalen.';
+      if (!confirm(msg)) return;
+      rit.status = 'geannuleerd';
+      delete rit.voltooidTijd;
+      saveRitten(rittenList);
+      onUpdate?.();
     });
   });
 }
