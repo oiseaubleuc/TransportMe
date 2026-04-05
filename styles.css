@@ -536,7 +536,9 @@ body {
 }
 
 .table-wrap--managed {
-  max-height: 14rem;
+  /* Meer-tab: ruim genoeg om veel ritten (incl. afgerond) te tonen; was 14rem (~224px) te krap */
+  max-height: 40rem;
+  max-height: min(62dvh, 40rem);
   overflow-y: auto;
   overflow-x: auto;
   border: 1px solid var(--border);
@@ -2336,6 +2338,28 @@ body {
 
 .rit-berekening-card .info-text--small {
   margin: 0.5rem 0 0 0;
+}
+
+.rit-berekening-uitleg {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin: 0.35rem 0 0 0;
+}
+
+.rit-tijd-nacht-hint {
+  margin-top: 0.35rem;
+}
+
+.dagrapport-block-title {
+  margin-top: 0.75rem;
+}
+
+.weekrapport-mail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .rit-rendabiliteit {

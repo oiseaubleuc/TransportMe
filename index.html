@@ -356,10 +356,17 @@
                     <strong class="rit-berekening-waarde" id="rit-preview-km">0 km</strong>
                     <span class="rit-berekening-label">Vergoeding</span>
                     <strong class="rit-berekening-waarde" id="rit-preview">€ 0</strong>
+                    <span class="rit-berekening-label" id="rit-label-nachttoeslag" hidden>Nachttoeslag</span>
+                    <strong class="rit-berekening-waarde" id="rit-preview-nachttoeslag" hidden>—</strong>
+                    <span class="rit-berekening-label" id="rit-label-benzine" hidden>Geschatte brandstof</span>
+                    <strong class="rit-berekening-waarde" id="rit-preview-benzine" hidden>—</strong>
                     <span class="rit-berekening-label rit-berekening-winst-label" id="rit-label-winst">Geschatte winst</span>
                     <strong class="rit-berekening-waarde rit-berekening-winst" id="rit-preview-winst">—</strong>
                   </div>
-                  <p class="info-text info-text--small" id="rit-geen-data">Vul brandstof in (pagina <strong>Kost</strong>) voor geschatte winst.</p>
+                  <p class="rit-berekening-uitleg" id="rit-rendabiliteit-uitleg" hidden></p>
+                  <p class="info-text info-text--small" id="rit-geen-data">
+                    Vul minstens één tankbeurt met <strong>liter</strong> en <strong>€</strong> in (pagina <strong>Kost</strong>) om de geschatte winst te tonen. Brandstof = 5 L/100 km × jouw gemiddelde €/L uit tankbeurten.
+                  </p>
                 </div>
                 <form id="form-rit" class="form-rit form-section rit-stap">
                   <h3 class="rit-stap-titel">Gegevens</h3>
@@ -374,8 +381,9 @@
                     </label>
                   </div>
                   <div class="form-row" id="rit-tijd-row" hidden>
-                    <label for="rit-tijd">Uur van de rit (nachttarief +30% alleen tussen 20:00 en vóór 05:00)</label>
+                    <label for="rit-tijd">Uur van de rit</label>
                     <input type="time" id="rit-tijd" step="60" />
+                    <p class="info-text info-text--small rit-tijd-nacht-hint" id="rit-tijd-nacht-hint" hidden></p>
                   </div>
                   <div class="form-row">
                     <label for="rit-chauffeur">Chauffeur</label>
@@ -424,9 +432,6 @@
                     <label for="rit-km">Afstand (km)</label>
                     <input type="number" id="rit-km" min="1" step="1" placeholder="bv. 45" required />
                   </div>
-                  <div id="rit-rendabiliteit" hidden><span id="rit-preview-benzine"></span></div>
-                  <div id="rit-row-benzine" hidden></div>
-                  <div id="rit-row-winst" hidden></div>
                   <div class="rit-form-actions">
                     <button type="button" class="btn btn-outline btn-block" id="rit-form-leegmaken">Leegmaken</button>
                     <button type="submit" class="btn btn-primary btn-block">Rit opslaan</button>
@@ -598,6 +603,30 @@
               <div class="form-row">
                 <label for="fg-tel">Telefoon (voet factuur)</label>
                 <input type="tel" id="fg-tel" autocomplete="tel" />
+              </div>
+              <div class="form-row meer-factuur-span-full">
+                <h4 class="meer-subtitle dagrapport-block-title">Weekrapport per e-mail</h4>
+                <p class="info-text info-text--small">
+                  <strong>Elke maandag rond 00:00</strong> (app <strong>open</strong>) opent automatisch een <strong>conceptmail</strong> voor de <strong>net afgelopen week</strong> (ma–zo). Je kunt hieronder ook <strong>zelf een week kiezen</strong> en op versturen tikken — nog steeds via jouw mailprogramma (geen server). Ontvanger leeg = zelfde als «E-mail» hierboven.
+                </p>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="fg-dagrapport-aan" />
+                  <span>Maandag 00:00 — weekrapport (volledige week)</span>
+                </label>
+              </div>
+              <div class="form-row meer-factuur-span-2">
+                <label for="fg-dagrapport-naar">Ontvanger weekrapport (optioneel)</label>
+                <input type="email" id="fg-dagrapport-naar" placeholder="Leeg = e-mail hierboven" autocomplete="email" />
+              </div>
+              <div class="form-row meer-factuur-span-2">
+                <label for="fg-weekrapport-datum">Week kiezen (willekeurige dag in die week)</label>
+                <input type="date" id="fg-weekrapport-datum" class="input-date" />
+              </div>
+              <div class="form-row meer-factuur-span-full weekrapport-mail-actions">
+                <button type="button" class="btn btn-outline btn-sm" id="fg-weekrapport-mail-selected">
+                  E-mail concept — gekozen week
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" id="fg-dagrapport-test">Snel: week van gisteren</button>
               </div>
               <div class="form-row meer-factuur-span-full">
                 <p class="info-text info-text--small meer-factuur-klant-intro">

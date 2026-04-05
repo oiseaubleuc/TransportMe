@@ -9,6 +9,8 @@ import {
   NACHT_TARIEF_FACTOR,
   NACHT_START_UUR,
   NACHT_EIND_UUR,
+  GESCHAT_VERBRUIK_L_PER_100KM,
+  NACHT_TOESLAG_PERCENT,
 } from './config.js';
 import { getData } from './storage.js';
 
@@ -33,6 +35,28 @@ export function vergoedingVoorRit(km, tijd) {
   const variabelDeel = schijven * VERGOEDING_PER_20KM;
   const variabelMetTarief = isNachtTariefTijd(tijd) ? variabelDeel * NACHT_TARIEF_FACTOR : variabelDeel;
   return Math.round((OPSTART_PREMIE + variabelMetTarief) * 100) / 100;
+}
+
+/**
+ * Uitsplitsing km-formule: opstart, km-deel, optioneel nachttoeslag (+NACHT_TOESLAG_PERCENT% op km-deel alleen).
+ */
+export function vergoedingUitsplitsingKmFormule(km, tijd) {
+  const k = Number(km) || 0;
+  const schijven = Math.max(0, Math.ceil(k / KM_SCHIJF));
+  const variabelDeel = schijven * VERGOEDING_PER_20KM;
+  const nacht = isNachtTariefTijd(tijd);
+  const nachtToeslagBruto = nacht ? variabelDeel * (NACHT_TARIEF_FACTOR - 1) : 0;
+  const nachtToeslagEuro = Math.round(nachtToeslagBruto * 100) / 100;
+  const variabelMetTarief = nacht ? variabelDeel * NACHT_TARIEF_FACTOR : variabelDeel;
+  const vergoeding = Math.round((OPSTART_PREMIE + variabelMetTarief) * 100) / 100;
+  return {
+    opstartEuro: OPSTART_PREMIE,
+    variabelDeel,
+    isNacht: nacht,
+    nachtToeslagEuro,
+    nachtToeslagPercent: NACHT_TOESLAG_PERCENT,
+    vergoeding,
+  };
 }
 
 /** Geschatte rijafstand (km) uit hemelsbreed: Haversine × factor 1,3. Voor fallback als ORS/API faalt. */
@@ -200,7 +224,7 @@ export function getWeeklyFinancials(weeksBack = 8) {
 
 /**
  * Gemiddelde benzinekost per km (totaal benzine / totaal km van alle ritten).
- * Gebruikt voor geschatte rendabiliteit van een nieuwe rit.
+ * Nog bruikbaar voor trends; voor nieuwe ritten gebruiken we liever 5 L/100 km × gem. €/L.
  */
 export function getGemiddeldeBenzineKostPerKm() {
   const { ritten, brandstof } = getData();
@@ -210,18 +234,53 @@ export function getGemiddeldeBenzineKostPerKm() {
   return totaalBenzine / totaalKm;
 }
 
+/** Gemiddelde prijs per liter uit tankbeurten (som € / som L). */
+export function getGemiddeldeLiterPrijsPerLiter() {
+  const { brandstof } = getData();
+  const totLiter = brandstof.reduce((s, b) => s + (Number(b.liter) || 0), 0);
+  const totPrijs = brandstof.reduce((s, b) => s + (Number(b.prijs) || 0), 0);
+  if (totLiter <= 0 || totPrijs < 0) return null;
+  return totPrijs / totLiter;
+}
+
+/** Geschatte brandstofkosten: km × (L/100) × €/L. */
+export function geschatteBrandstofKosten5L100(km, euroPerLiter) {
+  const k = Number(km) || 0;
+  const p = Number(euroPerLiter);
+  if (k <= 0 || !Number.isFinite(p) || p < 0) return null;
+  const raw = k * (GESCHAT_VERBRUIK_L_PER_100KM / 100) * p;
+  return Math.round(raw * 100) / 100;
+}
+
 /**
- * Voor een rit van X km: vergoeding, geschatte benzinekosten en geschatte winst.
- * Geschatte winst = vergoeding − (km × gem. €/km). Null als we geen gemiddelde hebben.
+ * Voor een rit van X km: vergoeding, geschatte benzine (5 L/100 × gem. €/L) en geschatte winst.
  */
 export function rendabiliteitRit(km, tijd) {
   if (!km || km < 0) return null;
   const vergoeding = vergoedingVoorRit(km, tijd);
-  const euroPerKm = getGemiddeldeBenzineKostPerKm();
-  if (euroPerKm == null) return { vergoeding, geschatteBenzine: null, geschatteWinst: null };
-  const geschatteBenzine = km * euroPerKm;
-  const geschatteWinst = vergoeding - geschatteBenzine;
-  return { vergoeding, geschatteBenzine, geschatteWinst };
+  const literPrijs = getGemiddeldeLiterPrijsPerLiter();
+  const uitsplitsing = vergoedingUitsplitsingKmFormule(km, tijd);
+  if (literPrijs == null) {
+    return {
+      vergoeding,
+      geschatteBenzine: null,
+      geschatteWinst: null,
+      literPrijsGemiddeld: null,
+      uitsplitsing,
+    };
+  }
+  const geschatteBenzine = geschatteBrandstofKosten5L100(km, literPrijs);
+  if (geschatteBenzine == null) {
+    return {
+      vergoeding,
+      geschatteBenzine: null,
+      geschatteWinst: null,
+      literPrijsGemiddeld: literPrijs,
+      uitsplitsing,
+    };
+  }
+  const geschatteWinst = Math.round((vergoeding - geschatteBenzine) * 100) / 100;
+  return { vergoeding, geschatteBenzine, geschatteWinst, literPrijsGemiddeld: literPrijs, uitsplitsing };
 }
 
 /** Preset exact deze volgorde (geen omgekeerde match — forfait vaak richting-specifiek). */
@@ -241,13 +300,46 @@ export function vergoedingFromPresetOrKm(preset, km, tijd) {
   return vergoedingVoorRit(km, tijd);
 }
 
-/** Zelfde als rendabiliteitRit maar met optioneel forfait op preset (nieuwe-rit formulier). */
+/**
+ * Zelfde als rendabiliteitRit maar met optioneel forfait op preset (nieuwe-rit formulier).
+ * Nachttoeslag in uitsplitsing alleen bij km-formule, niet bij forfait.
+ */
 export function rendabiliteitRitForForm(km, tijd, preset) {
   if (!km || km < 0) return null;
   const vergoeding = vergoedingFromPresetOrKm(preset, km, tijd);
-  const euroPerKm = getGemiddeldeBenzineKostPerKm();
-  if (euroPerKm == null) return { vergoeding, geschatteBenzine: null, geschatteWinst: null };
-  const geschatteBenzine = km * euroPerKm;
-  const geschatteWinst = vergoeding - geschatteBenzine;
-  return { vergoeding, geschatteBenzine, geschatteWinst };
+  const raw = preset?.forfaitVergoeding;
+  const isForfait =
+    km >= 1 && raw != null && Number.isFinite(Number(raw)) && Number(raw) >= 0;
+  const uitsplitsing = isForfait ? null : vergoedingUitsplitsingKmFormule(km, tijd);
+  const literPrijs = getGemiddeldeLiterPrijsPerLiter();
+  if (literPrijs == null) {
+    return {
+      vergoeding,
+      geschatteBenzine: null,
+      geschatteWinst: null,
+      literPrijsGemiddeld: null,
+      uitsplitsing,
+      isForfait,
+    };
+  }
+  const geschatteBenzine = geschatteBrandstofKosten5L100(km, literPrijs);
+  if (geschatteBenzine == null) {
+    return {
+      vergoeding,
+      geschatteBenzine: null,
+      geschatteWinst: null,
+      literPrijsGemiddeld: literPrijs,
+      uitsplitsing,
+      isForfait,
+    };
+  }
+  const geschatteWinst = Math.round((vergoeding - geschatteBenzine) * 100) / 100;
+  return {
+    vergoeding,
+    geschatteBenzine,
+    geschatteWinst,
+    literPrijsGemiddeld: literPrijs,
+    uitsplitsing,
+    isForfait,
+  };
 }

@@ -7,6 +7,10 @@ export const VERGOEDING_PER_20KM = 25;
 export const KM_SCHIJF = 20;
 /** +30% op het km-deel van de vergoeding (niet op de opstartpremie). */
 export const NACHT_TARIEF_FACTOR = 1.3;
+/** Zelfde toeslag als percentage t.o.v. het km-deel (alleen ter uitleg in UI). */
+export const NACHT_TOESLAG_PERCENT = Math.round((NACHT_TARIEF_FACTOR - 1) * 100);
+/** Geschat verbruik voor rendabiliteit nieuwe rit: L benzine per 100 km. */
+export const GESCHAT_VERBRUIK_L_PER_100KM = 5;
 /** Nachttarief vanaf dit uur (inclusief), bv. 20 → vanaf 20:00. */
 export const NACHT_START_UUR = 20;
 /** Nachttarief tot vóór dit uur ’s ochtends (exclusief), bv. 5 → t/m 04:59; vanaf 05:00 dagtarief. */

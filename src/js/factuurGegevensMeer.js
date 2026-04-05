@@ -49,11 +49,14 @@ export function syncFactuurGegevensFormFromStorage() {
     ['fg-verval-dagen', String(S.vervalDagen ?? 30)],
     ['fg-btw-tekst', S.btwVrijstellingTekst],
     ['fg-factuur-btw-tarief', String(S.factuurBtwTarief ?? 21)],
+    ['fg-dagrapport-naar', S.dagrapportOntvanger || ''],
   ];
   for (const [id, val] of map) {
     const el = $(id);
     if (el && 'value' in el) el.value = val ?? '';
   }
+  const drAan = $('fg-dagrapport-aan');
+  if (drAan) drAan.checked = Boolean(S.dagrapportEmailAan);
   const cb = $('fg-factuur-btw-aanrekenen');
   if (cb) cb.checked = Boolean(S.factuurBtwAanrekenen);
   syncFactuurBtwTariefVisibility();
@@ -156,6 +159,8 @@ export function initFactuurGegevensMeer() {
       factuurBtwTarief: btwTarief,
       vervalDagen: Number.isFinite(verval) && verval >= 0 ? verval : 30,
       btwVrijstellingTekst: $('fg-btw-tekst')?.value?.trim() || '',
+      dagrapportEmailAan: Boolean($('fg-dagrapport-aan')?.checked),
+      dagrapportOntvanger: $('fg-dagrapport-naar')?.value?.trim() || '',
     });
     syncFactuurGegevensFormFromStorage();
     flashSaveHint($('fg-factuur-save-hint'));

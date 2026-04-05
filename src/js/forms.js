@@ -2,12 +2,20 @@
  * Formulieren – ritten, brandstof, overige kosten
  */
 
-import { RIT_DUUR_MINUTEN } from './config.js';
+import {
+  RIT_DUUR_MINUTEN,
+  GESCHAT_VERBRUIK_L_PER_100KM,
+  NACHT_START_UUR,
+  NACHT_EIND_UUR,
+  NACHT_TOESLAG_PERCENT,
+  OPSTART_PREMIE,
+} from './config.js';
 import {
   vergoedingFromPresetOrKm,
   findPresetExact,
   rendabiliteitRitForForm,
   toDateStr,
+  isNachtTariefTijd,
 } from './calculations.js';
 import { formatEuro, formatLiter } from './format.js';
 import {
@@ -101,8 +109,11 @@ export function initFormRit(onSubmit) {
   const previewKm = document.getElementById('rit-preview-km');
   const previewBenzine = document.getElementById('rit-preview-benzine');
   const previewWinst = document.getElementById('rit-preview-winst');
-  const rowBenzine = document.getElementById('rit-row-benzine');
-  const rowWinst = document.getElementById('rit-row-winst');
+  const labelBenzine = document.getElementById('rit-label-benzine');
+  const labelNachttoeslag = document.getElementById('rit-label-nachttoeslag');
+  const previewNachttoeslag = document.getElementById('rit-preview-nachttoeslag');
+  const uitlegEl = document.getElementById('rit-rendabiliteit-uitleg');
+  const nachtHintTijd = document.getElementById('rit-tijd-nacht-hint');
   const geenDataEl = document.getElementById('rit-geen-data');
   const berekeningCard = document.getElementById('rit-berekening-card');
   const winstLabel = document.getElementById('rit-label-winst');
@@ -129,8 +140,26 @@ export function initFormRit(onSubmit) {
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   }
 
+  function syncNachtHintTijd() {
+    if (!nachtHintTijd) return;
+    if (!achterafCb?.checked || tijdRow?.hidden) {
+      nachtHintTijd.hidden = true;
+      nachtHintTijd.textContent = '';
+      return;
+    }
+    const tijd = getEffectiveRitTijd();
+    if (isNachtTariefTijd(tijd)) {
+      nachtHintTijd.hidden = false;
+      nachtHintTijd.textContent = `Nachttarief actief: +${NACHT_TOESLAG_PERCENT}% alleen op het km-deel van de vergoeding (niet op de opstartpremie van ${formatEuro(OPSTART_PREMIE)}). Venster: vanaf ${String(NACHT_START_UUR).padStart(2, '0')}:00 tot vóór ${String(NACHT_EIND_UUR).padStart(2, '0')}:00.`;
+    } else {
+      nachtHintTijd.hidden = true;
+      nachtHintTijd.textContent = '';
+    }
+  }
+
   function syncAchterafRow() {
     if (tijdRow) tijdRow.hidden = !achterafCb?.checked;
+    syncNachtHintTijd();
     updatePreview();
   }
   achterafCb?.addEventListener('change', syncAchterafRow);
@@ -232,18 +261,44 @@ export function initFormRit(onSubmit) {
 
     const rend = rendabiliteitRitForForm(km, tijd, preset);
     const hasRendabiliteit = rend && rend.geschatteWinst != null;
+    const u = rend?.uitsplitsing;
+    const toonNachtInCard =
+      Boolean(km > 0 && u?.isNacht && !rend?.isForfait && u.nachtToeslagEuro > 0);
+
+    if (labelNachttoeslag) labelNachttoeslag.hidden = !toonNachtInCard;
+    if (previewNachttoeslag) {
+      previewNachttoeslag.hidden = !toonNachtInCard;
+      if (toonNachtInCard && u) {
+        previewNachttoeslag.textContent = `${formatEuro(u.nachtToeslagEuro)} (+${u.nachtToeslagPercent}% op km-deel)`;
+      }
+    }
 
     if (geenDataEl) geenDataEl.hidden = hasRendabiliteit;
-    if (rowBenzine) rowBenzine.hidden = !hasRendabiliteit;
-    if (rowWinst) rowWinst.hidden = !hasRendabiliteit;
+    const toonBenzine = Boolean(hasRendabiliteit && rend?.geschatteBenzine != null);
+    if (labelBenzine) labelBenzine.hidden = !toonBenzine;
+    if (previewBenzine) {
+      previewBenzine.hidden = !toonBenzine;
+      if (toonBenzine && rend?.geschatteBenzine != null) {
+        previewBenzine.textContent = formatEuro(rend.geschatteBenzine);
+      }
+    }
+
+    if (uitlegEl) {
+      if (hasRendabiliteit && rend?.literPrijsGemiddeld != null && km > 0) {
+        uitlegEl.hidden = false;
+        const lp = formatEuro(rend.literPrijsGemiddeld);
+        uitlegEl.textContent = `Geschatte winst = vergoeding − brandstof. Brandstof = ${km} km × (${GESCHAT_VERBRUIK_L_PER_100KM} L/100 km) × ${lp}/L (gemiddelde uit je tankbeurten).`;
+      } else {
+        uitlegEl.hidden = true;
+        uitlegEl.textContent = '';
+      }
+    }
 
     if (hasRendabiliteit && rend) {
-      if (previewBenzine) previewBenzine.textContent = formatEuro(rend.geschatteBenzine);
       if (previewWinst) {
         previewWinst.textContent = formatEuro(rend.geschatteWinst);
         previewWinst.classList.toggle('rit-winst--negatief', rend.geschatteWinst < 0);
         previewWinst.hidden = false;
-        rowWinst?.classList.toggle('rit-winst--negatief', rend.geschatteWinst < 0);
       }
     } else if (previewWinst) {
       previewWinst.textContent = '—';
@@ -253,6 +308,7 @@ export function initFormRit(onSubmit) {
 
     if (berekeningCard) berekeningCard.classList.toggle('rit-berekening-card--heeft-km', km > 0);
     if (winstLabel) winstLabel.hidden = !hasRendabiliteit;
+    syncNachtHintTijd();
   }
 
   kmInput?.addEventListener('input', updatePreview);

@@ -107,6 +107,41 @@ function sortByDatumTijd(a, b) {
   return ka.localeCompare(kb);
 }
 
+/** Elke rit moet een unieke id hebben (tabel-knoppen gebruiken data-id; ontbrekende id = verwijderen faalt). */
+function ensureRitIds(ritten) {
+  let changed = false;
+  const seen = new Set();
+  let nextNum =
+    1 +
+    ritten.reduce((m, r) => {
+      const n = Number(r.id);
+      return Number.isFinite(n) && n > m ? n : m;
+    }, 0);
+
+  const out = ritten.map((r) => {
+    if (r.id == null || r.id === '') {
+      changed = true;
+      let nid = nextNum;
+      while (seen.has(String(nid))) nid += 1;
+      nextNum = nid + 1;
+      seen.add(String(nid));
+      return { ...r, id: nid };
+    }
+    const idStr = String(r.id);
+    if (seen.has(idStr)) {
+      changed = true;
+      let nid = nextNum;
+      while (seen.has(String(nid))) nid += 1;
+      nextNum = nid + 1;
+      seen.add(String(nid));
+      return { ...r, id: nid };
+    }
+    seen.add(idStr);
+    return r;
+  });
+  return { ritten: out, changed };
+}
+
 function cleanupProfileData() {
   PROFILES.forEach((p) => {
     const rKey = `${STORAGE_KEYS.ritten}_${p.id}`;
@@ -285,6 +320,11 @@ export function getData() {
   cleanupDataOnce();
   let ritten = safeParseArray(localStorage.getItem(profileKey(STORAGE_KEYS.ritten)));
   ritten = ritten.map(normalizeRit).filter(Boolean).sort(sortByDatumTijd);
+  const idFix = ensureRitIds(ritten);
+  if (idFix.changed) {
+    ritten = idFix.ritten;
+    saveRitten(ritten);
+  }
   const bf = backfillMissingVolgordeNrs(ritten);
   if (bf.changed) {
     ritten = bf.ritten;
@@ -530,6 +570,9 @@ const DEFAULT_FACTUUR_GEGEVENS = {
   btwVrijstellingTekst:
     'Bijzondere vrijstellingsregeling kleine ondernemingen - btw niet van toepassing',
   vervalDagen: 30,
+  /** Maandag 00:00: conceptmail (mailto) met ritten van de afgelopen week — app moet open staan */
+  dagrapportEmailAan: false,
+  dagrapportOntvanger: '',
 };
 
 function mergeFactuurGegevens(raw) {
@@ -542,6 +585,8 @@ function mergeFactuurGegevens(raw) {
     vervalDagen: Number.isFinite(n) && n >= 0 ? Math.min(365, Math.floor(n)) : DEFAULT_FACTUUR_GEGEVENS.vervalDagen,
     factuurBtwAanrekenen: Boolean(o.factuurBtwAanrekenen),
     factuurBtwTarief: Number.isFinite(tarief) ? Math.min(100, Math.max(0, tarief)) : DEFAULT_FACTUUR_GEGEVENS.factuurBtwTarief,
+    dagrapportEmailAan: Boolean(o.dagrapportEmailAan),
+    dagrapportOntvanger: typeof o.dagrapportOntvanger === 'string' ? o.dagrapportOntvanger.trim() : '',
   };
   const bedrijf = String(merged.klantBedrijfsnaam || '').trim();
   const legacyNaam = String(merged.klantNaam || '').trim();

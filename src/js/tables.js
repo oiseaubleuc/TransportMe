@@ -103,9 +103,9 @@ export function renderRitten(onRender) {
           <td>${statusLabel(r.status)}</td>
           <td class="rit-actions-cell">${
             r.status === 'komend' || r.status === 'lopend'
-              ? `<button type="button" class="btn btn-small btn-primary btn-rit-afronden-tabel" data-id="${r.id}" title="Rit afronden" aria-label="Rit afronden">Klaar</button><button type="button" class="btn btn-small btn-outline btn-rit-annuleren-tabel" data-id="${r.id}" title="Rit annuleren" aria-label="Rit annuleren">Annul.</button>`
+              ? `<button type="button" class="btn btn-small btn-primary btn-rit-afronden-tabel" data-id="${escapeHtml(String(r.id ?? ''))}" title="Rit afronden" aria-label="Rit afronden">Klaar</button><button type="button" class="btn btn-small btn-outline btn-rit-annuleren-tabel" data-id="${escapeHtml(String(r.id ?? ''))}" title="Rit annuleren" aria-label="Rit annuleren">Annul.</button>`
               : ''
-          }<button type="button" class="btn btn-danger btn-icon-del btn-delete-rit" data-id="${r.id}" title="Verwijderen" aria-label="Verwijder rit">×</button></td>
+          }<button type="button" class="btn btn-danger btn-icon-del btn-delete-rit" data-id="${escapeHtml(String(r.id ?? ''))}" title="Verwijderen" aria-label="Verwijder rit">×</button></td>
         </tr>`;
       }
     );
@@ -125,12 +125,16 @@ export function renderRitten(onRender) {
 
   tbody.querySelectorAll('.rit-bon-input').forEach((input) => {
     const commit = () => {
-      const idRaw = input.dataset.id;
+      const idRaw = input.dataset.id != null ? String(input.dataset.id).trim() : '';
       const next = String(input.value || '').trim();
       const prev = String(input.dataset.initial || '').trim();
       if (next === prev) return;
       const { ritten } = getData();
-      const rit = ritten.find((r) => String(r.id) === String(idRaw));
+      if (!idRaw) {
+        onRender?.();
+        return;
+      }
+      const rit = ritten.find((r) => String(r.id) === idRaw);
       if (!rit) return;
       applyBonStringToRit(rit, input.value);
       saveRitten(ritten);
@@ -147,9 +151,13 @@ export function renderRitten(onRender) {
 
   tbody.querySelectorAll('.btn-rit-afronden-tabel').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const idRaw = btn.dataset.id;
+      const idRaw = btn.dataset.id != null ? String(btn.dataset.id).trim() : '';
       const { ritten } = getData();
-      const rit = ritten.find((r) => String(r.id) === String(idRaw));
+      if (!idRaw) {
+        onRender?.();
+        return;
+      }
+      const rit = ritten.find((r) => String(r.id) === idRaw);
       if (!rit || (rit.status !== 'komend' && rit.status !== 'lopend')) return;
       rit.status = 'voltooid';
       const now = new Date();
@@ -161,9 +169,13 @@ export function renderRitten(onRender) {
 
   tbody.querySelectorAll('.btn-rit-annuleren-tabel').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const idRaw = btn.dataset.id;
+      const idRaw = btn.dataset.id != null ? String(btn.dataset.id).trim() : '';
       const { ritten } = getData();
-      const rit = ritten.find((r) => String(r.id) === String(idRaw));
+      if (!idRaw) {
+        onRender?.();
+        return;
+      }
+      const rit = ritten.find((r) => String(r.id) === idRaw);
       if (!rit || (rit.status !== 'komend' && rit.status !== 'lopend')) return;
       const msg =
         rit.status === 'lopend'
@@ -179,9 +191,13 @@ export function renderRitten(onRender) {
 
   tbody.querySelectorAll('.btn-delete-rit').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const idRaw = btn.dataset.id;
+      const idRaw = btn.dataset.id != null ? String(btn.dataset.id).trim() : '';
       const { ritten } = getData();
-      saveRitten(ritten.filter((r) => String(r.id) !== String(idRaw)));
+      if (!idRaw) {
+        onRender?.();
+        return;
+      }
+      saveRitten(ritten.filter((r) => String(r.id) !== idRaw));
       onRender?.();
     });
   });

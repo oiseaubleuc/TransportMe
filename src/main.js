@@ -25,6 +25,7 @@ import {
 } from './js/forms.js';
 import { initFinancieelFactuur, refreshFinancieelFactuurSelects } from './js/financieelFactuur.js';
 import { initFactuurGegevensMeer, syncFactuurGegevensFormFromStorage } from './js/factuurGegevensMeer.js';
+import { initDagrapport } from './js/dagrapport.js';
 import { renderAllTables } from './js/tables.js';
 import { DEFAULT_CHAUFFEURS, UI_COMPACT } from './js/config.js';
 import {
@@ -1378,6 +1379,7 @@ function init() {
   initFormBrandstof(refresh);
   initFinancieelFactuur();
   initFactuurGegevensMeer();
+  initDagrapport();
   initFinancieelTicketImport(refresh);
   initFormOverig(refresh);
   initMeerHandmatigeRit(refresh);
