@@ -7,7 +7,7 @@
  * Zoekt een datum in de tekst (dd/mm/yyyy, dd-mm-yyyy, dd.mm.yyyy of yyyy-mm-dd).
  * Geeft terug als YYYY-MM-DD of null.
  */
-function parseDatum(text) {
+export function parseDatum(text) {
   if (!text || typeof text !== 'string') return null;
   const t = text.replace(/\s+/g, ' ');
 

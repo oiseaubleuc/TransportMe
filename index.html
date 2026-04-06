@@ -90,40 +90,68 @@
             </section>
           </div>
 
-          <div class="dashboard-shared-below-tabs">
-            <section class="dashboard-dag-blok dashboard-week-blok" aria-labelledby="dash-week-heading">
-              <h2 class="dashboard-vandaag-title" id="dash-week-heading">Deze week</h2>
-              <p class="dashboard-week-range" id="dashboard-week-range-label"></p>
-              <div class="dashboard-vandaag-stats">
-                <div class="dashboard-stat">
-                  <span class="dashboard-stat-value" id="week-ritten">0</span>
-                  <span class="dashboard-stat-label">ritten</span>
-                </div>
-                <div class="dashboard-stat">
-                  <span class="dashboard-stat-value" id="week-km">0</span>
-                  <span class="dashboard-stat-label">km</span>
-                </div>
-                <div class="dashboard-stat">
-                  <span class="dashboard-stat-value" id="week-vergoeding">€ 0</span>
-                  <span class="dashboard-stat-label">vergoeding</span>
+          <nav class="app-hub-tiles dashboard-hub" id="dashboard-hub" aria-label="Meer dashboardschermen">
+            <button type="button" class="app-hub-tile" data-dash-open="week">
+              <span class="app-hub-tile-title">Deze week</span>
+              <span class="app-hub-tile-sub">Totalen &amp; voltooide ritten</span>
+            </button>
+            <button type="button" class="app-hub-tile" data-dash-open="beschik">
+              <span class="app-hub-tile-title">Beschikbaarheid</span>
+              <span class="app-hub-tile-sub">Volgende 7 dagen</span>
+            </button>
+            <button type="button" class="app-hub-tile" data-dash-open="planning">
+              <span class="app-hub-tile-title">Komende ritten</span>
+              <span class="app-hub-tile-sub">Open &amp; onderweg</span>
+            </button>
+          </nav>
+
+          <div class="dashboard-rit-melding" id="dashboard-rit-melding" hidden>
+            <p class="dashboard-rit-melding-text">Rit via kaart — bevestigen?</p>
+            <div class="dashboard-rit-melding-buttons">
+              <button type="button" class="btn btn-primary" id="dashboard-rit-melding-ja">Ja</button>
+              <button type="button" class="btn btn-outline" id="dashboard-rit-melding-nee">Nee</button>
+            </div>
+          </div>
+
+          <div class="app-stack" id="dashboard-stack" hidden>
+            <div class="app-stack-head">
+              <button type="button" class="btn btn-outline app-stack-back" id="dashboard-stack-back" aria-label="Terug naar dashboard">← Terug</button>
+              <h2 class="app-stack-title" id="dashboard-stack-title">Deze week</h2>
+            </div>
+            <div class="app-stack-body">
+              <div class="dash-stack-panel" data-dash-panel="week" hidden>
+                <section class="dashboard-dag-blok dashboard-week-blok" aria-labelledby="dash-week-heading">
+                  <h2 class="dashboard-vandaag-title" id="dash-week-heading">Deze week</h2>
+                  <p class="dashboard-week-range" id="dashboard-week-range-label"></p>
+                  <div class="dashboard-vandaag-stats">
+                    <div class="dashboard-stat">
+                      <span class="dashboard-stat-value" id="week-ritten">0</span>
+                      <span class="dashboard-stat-label">ritten</span>
+                    </div>
+                    <div class="dashboard-stat">
+                      <span class="dashboard-stat-value" id="week-km">0</span>
+                      <span class="dashboard-stat-label">km</span>
+                    </div>
+                    <div class="dashboard-stat">
+                      <span class="dashboard-stat-value" id="week-vergoeding">€ 0</span>
+                      <span class="dashboard-stat-label">vergoeding</span>
+                    </div>
+                  </div>
+                  <ul class="dashboard-vandaag-lijst dashboard-list-compact" id="ritten-week-lijst" aria-label="Voltooide ritten deze week"></ul>
+                </section>
+              </div>
+              <div class="dash-stack-panel" data-dash-panel="beschik" hidden>
+                <div class="dashboard-beschikbaarheid-section" id="dashboard-beschikbaarheid-section">
+                  <h3 class="dashboard-panel-subtitle">Beschikbaarheid (volgende 7 dagen)</h3>
+                  <ul class="dashboard-beschikbaarheid-lijst" id="dashboard-beschikbaarheid-lijst" aria-label="Beschikbaarheid per dag"></ul>
                 </div>
               </div>
-              <ul class="dashboard-vandaag-lijst dashboard-list-compact" id="ritten-week-lijst" aria-label="Voltooide ritten deze week"></ul>
-            </section>
-            <div class="dashboard-beschikbaarheid-section" id="dashboard-beschikbaarheid-section">
-              <h3 class="dashboard-panel-subtitle">Beschikbaarheid (volgende 7 dagen)</h3>
-              <ul class="dashboard-beschikbaarheid-lijst" id="dashboard-beschikbaarheid-lijst" aria-label="Beschikbaarheid per dag"></ul>
-            </div>
-            <div class="dashboard-rit-melding" id="dashboard-rit-melding" hidden>
-              <p class="dashboard-rit-melding-text">Rit via kaart — bevestigen?</p>
-              <div class="dashboard-rit-melding-buttons">
-                <button type="button" class="btn btn-primary" id="dashboard-rit-melding-ja">Ja</button>
-                <button type="button" class="btn btn-outline" id="dashboard-rit-melding-nee">Nee</button>
+              <div class="dash-stack-panel" data-dash-panel="planning" hidden>
+                <div class="ritten-status-section" id="ritten-status-section">
+                  <h3 class="dashboard-panel-subtitle">Komende en lopende ritten</h3>
+                  <ul class="ritten-status-lijst dashboard-list-compact" id="ritten-status-lijst"></ul>
+                </div>
               </div>
-            </div>
-            <div class="ritten-status-section" id="ritten-status-section">
-              <h3 class="dashboard-panel-subtitle">Komende en lopende ritten</h3>
-              <ul class="ritten-status-lijst dashboard-list-compact" id="ritten-status-lijst"></ul>
             </div>
           </div>
 
@@ -131,15 +159,36 @@
       </section>
 
       <!-- Pagina: Financieel -->
-      <section class="page" id="page-financieel" aria-labelledby="nav-financieel">
+      <section class="page" id="page-financieel" aria-labelledby="nav-financieel" data-fin-view="hub">
         <div class="financieel-page">
           <header class="financieel-hero">
             <h2 class="financieel-hero-title" id="financieel-hero-heading">Financieel overzicht</h2>
-            <p class="financieel-hero-lead">Cijfers voor de gekozen periode en een week-trend van omzet en winst.</p>
+            <p class="financieel-hero-lead">Kies een onderdeel — minder door scrollen, meer als een app.</p>
           </header>
 
-          <div class="financieel-split dashboard-financieel-split">
+          <nav class="app-hub-tiles fin-hub" id="fin-hub" aria-label="Financieel menu">
+            <button type="button" class="app-hub-tile" data-fin-open="cijfers">
+              <span class="app-hub-tile-title">Cijfers &amp; trend</span>
+              <span class="app-hub-tile-sub">KPI’s, periode, grafiek</span>
+            </button>
+            <button type="button" class="app-hub-tile" data-fin-open="factuur">
+              <span class="app-hub-tile-title">Ritten &amp; factuur</span>
+              <span class="app-hub-tile-sub">Lijst &amp; PDF-downloads</span>
+            </button>
+            <button type="button" class="app-hub-tile" data-fin-open="tank">
+              <span class="app-hub-tile-title">Tankticket</span>
+              <span class="app-hub-tile-sub">Importeren naar brandstof</span>
+            </button>
+          </nav>
+
+          <div class="app-stack-head fin-sub-head" id="fin-sub-head" hidden>
+            <button type="button" class="btn btn-outline" id="fin-back-hub" aria-label="Terug naar overzicht financieel">← Overzicht</button>
+            <h2 class="app-stack-title" id="fin-sub-title">Cijfers</h2>
+          </div>
+
+          <div class="financieel-split dashboard-financieel-split" id="fin-split">
             <div class="financieel-col financieel-col--kpis">
+              <div class="fin-block fin-block--kpi" data-fin-piece="kpi">
               <div class="financieel-kpi-grid" role="list">
                 <article class="financieel-kpi-card financieel-kpi-card--omzet" role="listitem">
                   <span class="financieel-kpi-accent" aria-hidden="true"></span>
@@ -166,6 +215,8 @@
                 <button type="button" class="btn-period" data-period="week">Week</button>
                 <button type="button" class="btn-period active" data-period="month">Maand</button>
               </div>
+              </div>
+              <div class="fin-block fin-block--ritten-factuur" data-fin-piece="ritten-factuur">
               <section class="financieel-profiel-overzicht">
                 <h3 class="financieel-ticket-title">Uitgevoerde ritten (huidig profiel)</h3>
                 <p class="financieel-ticket-intro"><strong id="fin-profiel-ritten-count">0</strong> ritten uitgevoerd.</p>
@@ -223,6 +274,8 @@
                   </button>
                 </div>
               </section>
+              </div>
+              <div class="fin-block fin-block--tank" data-fin-piece="tank">
               <section class="financieel-ticket-import">
                 <h3 class="financieel-ticket-title">Tanktickets als kosten importeren</h3>
                 <p class="financieel-ticket-intro">Upload foto van een ticket of vul handmatig in. Opslaan gaat direct naar brandstofkosten van dit profiel.</p>
@@ -258,9 +311,10 @@
                   <button type="button" id="fin-ticket-save" class="btn btn-primary">Opslaan als brandstofkost</button>
                 </div>
               </section>
+              </div>
             </div>
 
-            <div class="financieel-col financieel-col--chart">
+            <div class="financieel-col financieel-col--chart" data-fin-piece="chart">
               <div class="financial-chart-wrap" id="financial-chart-wrap">
                 <div class="financial-chart" id="financial-chart" role="img" aria-label=""></div>
               </div>
@@ -446,7 +500,9 @@
       <section class="page" id="page-kost" aria-labelledby="nav-kost">
         <p class="page-organisatie-kicker">Kosten</p>
         <h2 class="page-section-title">Kost</h2>
-        <p class="form-intro">Tankbeurten en brandstofkosten bijhouden.</p>
+        <p class="form-intro">
+          Tankbeurten en brandstofkosten bijhouden. Onder het formulier zie je alle opgeslagen pleinen voor dit profiel (liter, totaal € en €/L).
+        </p>
 
         <div class="berekening-sectie" id="berekening-brandstof">
           <h3 class="berekening-sectie-titel">Brandstof (tankbeurt)</h3>
@@ -482,6 +538,26 @@
             </div>
             <button type="submit" class="btn btn-primary btn-block">Tankbeurt opslaan</button>
           </form>
+        </div>
+
+        <div class="berekening-sectie kost-brandstof-overzicht" id="kost-brandstof-overzicht">
+          <h3 class="berekening-sectie-titel">Overzicht tankbeurten (kosten)</h3>
+          <p class="info-text--small berekening-sectie-intro">Zelfde gegevens als onder Meer → Tabellen → Brandstof. Profiel: zie schakelaar op Dashboard.</p>
+          <div class="table-wrap table-wrap--managed table-wrap--kost-brandstof">
+            <table class="data-table data-table--compact" aria-label="Tankbeurten en kosten">
+              <thead>
+                <tr>
+                  <th>Datum</th>
+                  <th>Voertuig</th>
+                  <th>L</th>
+                  <th>€ (plein)</th>
+                  <th>€/L</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tbody-brandstof-kost"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -534,20 +610,34 @@
       </section>
 
       <!-- Pagina: Meer (instellingen, kosten, tabellen, planning) -->
-      <section class="page page--meer" id="page-meer" aria-labelledby="meer-page-heading">
+      <section class="page page--meer" id="page-meer" aria-labelledby="meer-page-heading" data-meer-view="hub">
         <header class="meer-page-header">
           <p class="page-organisatie-kicker">Instellingen &amp; beheer</p>
           <h2 class="page-section-title" id="meer-page-heading">Meer</h2>
-          <p class="form-intro meer-page-lead">
-            Drie blokken hieronder: factuur, locaties/ritten/voertuigen, tabellen en planning. Alles per profiel en lokaal op dit toestel.
+          <p class="form-intro meer-page-lead meer-page-lead--hub">
+            Kies een onderdeel. Alles per profiel en lokaal op dit toestel.
           </p>
         </header>
 
-        <nav class="meer-section-nav" aria-label="Spring naar sectie">
-          <a class="meer-section-nav-link" href="#meer-factuur">Factuur</a>
-          <a class="meer-section-nav-link" href="#meer-locatie-rit">Locaties &amp; ritten</a>
-          <a class="meer-section-nav-link" href="#meer-gegevens">Tabellen &amp; planning</a>
+        <nav class="app-hub-tiles meer-hub" id="meer-hub" aria-label="Meer menu">
+          <button type="button" class="app-hub-tile" data-meer-open="factuur">
+            <span class="app-hub-tile-title">Factuur &amp; logo</span>
+            <span class="app-hub-tile-sub">PDF, klant, weekrapport-mail</span>
+          </button>
+          <button type="button" class="app-hub-tile" data-meer-open="locatie">
+            <span class="app-hub-tile-title">Locaties &amp; ritten</span>
+            <span class="app-hub-tile-sub">Ziekenhuizen, voertuigen, rit handmatig</span>
+          </button>
+          <button type="button" class="app-hub-tile" data-meer-open="gegevens">
+            <span class="app-hub-tile-title">Tabellen &amp; planning</span>
+            <span class="app-hub-tile-sub">Ritten, brandstof, overig, 2-weken</span>
+          </button>
         </nav>
+
+        <div class="app-stack-head meer-sub-head" id="meer-sub-head" hidden>
+          <button type="button" class="btn btn-outline" id="meer-back-hub" aria-label="Terug naar Meer-overzicht">← Overzicht</button>
+          <h2 class="app-stack-title" id="meer-sub-title">Factuur</h2>
+        </div>
 
         <section class="meer-section" id="meer-factuur" aria-labelledby="meer-factuur-title">
           <div class="meer-section-head">
@@ -743,6 +833,26 @@
             </div>
             </div>
 
+            <div class="meer-subsection" id="meer-bon-checkup">
+            <h4 class="meer-subsection-heading">Bon check-up</h4>
+            <p class="info-text info-text--small meer-subsection-lead">
+              Na een levering fotografeer je de bon? Kies de <strong>zelfde dag</strong> als je ritten en voeg <strong>alle bonfoto’s</strong> van die dag toe. De app leest de tekst (OCR), vergelijkt met je ritten en waarschuwt als een bon ontbreekt in de app of als een rit-geen bijpassende foto heeft in deze batch.
+            </p>
+            <div class="form-section meer-nested-card bon-checkup-card">
+              <div class="form-row form-row--inline">
+                <label for="bon-checkup-datum">Dag om te vergelijken</label>
+                <input type="date" id="bon-checkup-datum" class="input-date" />
+              </div>
+              <div class="form-row">
+                <label for="bon-checkup-files">Foto’s of PDF van bonnen</label>
+                <input type="file" id="bon-checkup-files" accept="image/*,application/pdf" multiple />
+              </div>
+              <button type="button" class="btn btn-primary" id="bon-checkup-run">Controleren</button>
+              <p class="info-text info-text--small bon-checkup-status" id="bon-checkup-status" aria-live="polite"></p>
+              <div id="bon-checkup-results" class="bon-checkup-results"></div>
+            </div>
+            </div>
+
             <div class="meer-subsection" id="meer-handmatige-rit">
             <h4 class="meer-subsection-heading">Rit handmatig toevoegen</h4>
             <p class="info-text info-text--small meer-subsection-lead">
@@ -813,6 +923,17 @@
             <p class="meer-section-desc">Ritten, brandstof en overige kosten (invoer staat bij tab <strong>Overige</strong>); 2-wekenbeschikbaarheid onder <strong>Planning</strong>.</p>
           </div>
           <div class="meer-section-body">
+            <div class="meer-backup-card form-section">
+              <h4 class="meer-subtitle">Backup — dezelfde data op telefoon en computer</h4>
+              <p class="info-text info-text--small">
+                Zonder cloud blijft alles op één toestel. <strong>Exporteer</strong> een bestand op dit apparaat en <strong>importeer</strong> het op je telefoon (of omgekeerd) via e-mail, AirDrop, WhatsApp naar jezelf, enz. Zo heb je overal dezelfde ritten, tankbeurten en instellingen.
+              </p>
+              <div class="meer-backup-actions">
+                <button type="button" class="btn btn-primary btn-sm" id="btn-data-export">Alles exporteren (.json)</button>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-data-import-trigger">Importeren…</button>
+              </div>
+              <input type="file" id="data-import-file" accept=".json,application/json" hidden />
+            </div>
             <div class="tabs tabs--meer" role="tablist" aria-label="Gegevensweergave">
               <button type="button" class="tab active" role="tab" data-tab="ritten" id="tab-ritten">Ritten</button>
               <button type="button" class="tab" role="tab" data-tab="brandstof" id="tab-brandstof">Brandstof</button>

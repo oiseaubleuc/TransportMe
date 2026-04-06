@@ -95,7 +95,7 @@ async function fileToOcrSource(file) {
 /** Zet alle datumvelden in de app op vandaag (bijv. bij laden). */
 export function setAlleDatumsVandaag() {
   const today = toDateStr(new Date());
-  ['rit-datum', 'brandstof-datum', 'overig-datum', 'meer-rit-datum'].forEach((id) => {
+  ['rit-datum', 'brandstof-datum', 'overig-datum', 'meer-rit-datum', 'bon-checkup-datum'].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.value = today;
   });

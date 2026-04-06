@@ -6,7 +6,7 @@
   color-scheme: light dark;
   --radius: 12px;
   --font: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  /* Licht */
+  /* Licht: grijs + groen accent */
   --bg: #f2f2f7;
   --surface: #ffffff;
   --surface2: #e5e5ea;
@@ -26,6 +26,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    /* Donker: zwart + groen accent */
     --bg: #000000;
     --surface: #0d0d0d;
     --surface2: #1c1c1e;
@@ -122,6 +123,184 @@ body {
 }
 
 .page.active {
+  display: block;
+}
+
+/* App-achtige hubs: tegels openen een “scherm” met terug-knop */
+.app-hub-tiles {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+  margin: 0.75rem 0 1.25rem;
+}
+
+@media (min-width: 480px) {
+  .app-hub-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 720px) {
+  .fin-hub.app-hub-tiles,
+  .meer-hub.app-hub-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.app-hub-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 1rem 1.1rem;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  transition: border-color 0.15s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-hub-tile:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.app-hub-tile-title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.app-hub-tile-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.app-stack-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-stack-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+}
+
+.app-stack {
+  margin-bottom: 1rem;
+}
+
+.dashboard-wrap--subview #dashboard-hub {
+  display: none !important;
+}
+
+.dashboard-wrap--subview #dashboard-stack {
+  display: block;
+}
+
+#dashboard-stack[hidden] {
+  display: none !important;
+}
+
+.dash-stack-panel[hidden] {
+  display: none !important;
+}
+
+/* Financieel: hub vs deel-schermen */
+#page-financieel[data-fin-view="hub"] #fin-split,
+#page-financieel[data-fin-view="hub"] #fin-sub-head {
+  display: none !important;
+}
+
+#page-financieel:not([data-fin-view="hub"]) #fin-hub {
+  display: none !important;
+}
+
+#page-financieel:not([data-fin-view="hub"]) #fin-sub-head {
+  display: flex;
+}
+
+#page-financieel:not([data-fin-view="hub"]) #fin-split {
+  display: flex;
+}
+
+#page-financieel[data-fin-view="cijfers"] [data-fin-piece="ritten-factuur"],
+#page-financieel[data-fin-view="cijfers"] [data-fin-piece="tank"] {
+  display: none !important;
+}
+
+#page-financieel[data-fin-view="factuur"] [data-fin-piece="kpi"],
+#page-financieel[data-fin-view="factuur"] [data-fin-piece="tank"],
+#page-financieel[data-fin-view="factuur"] [data-fin-piece="chart"] {
+  display: none !important;
+}
+
+#page-financieel[data-fin-view="tank"] [data-fin-piece="kpi"],
+#page-financieel[data-fin-view="tank"] [data-fin-piece="ritten-factuur"],
+#page-financieel[data-fin-view="tank"] [data-fin-piece="chart"] {
+  display: none !important;
+}
+
+#page-financieel[data-fin-view="factuur"] #fin-split,
+#page-financieel[data-fin-view="tank"] #fin-split {
+  flex-direction: column;
+}
+
+@media (min-width: 1100px) {
+  #page-financieel[data-fin-view="cijfers"] #fin-split.dashboard-financieel-split {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) minmax(0, 1.15fr);
+    gap: 1.75rem 2rem;
+    align-items: start;
+  }
+}
+
+/* Meer: hub vs één sectie tegelijk */
+#page-meer[data-meer-view="hub"] .meer-section,
+#page-meer[data-meer-view="hub"] #meer-sub-head {
+  display: none !important;
+}
+
+#page-meer[data-meer-view="hub"] #meer-hub {
+  display: grid;
+}
+
+#page-meer:not([data-meer-view="hub"]) #meer-hub {
+  display: none !important;
+}
+
+#page-meer:not([data-meer-view="hub"]) #meer-sub-head {
+  display: flex;
+}
+
+#page-meer:not([data-meer-view="hub"]) .meer-page-lead--hub {
+  display: none;
+}
+
+#page-meer[data-meer-view="factuur"] .meer-section:not(#meer-factuur),
+#page-meer[data-meer-view="locatie"] .meer-section:not(#meer-locatie-rit),
+#page-meer[data-meer-view="gegevens"] .meer-section:not(#meer-gegevens) {
+  display: none !important;
+}
+
+#page-meer[data-meer-view="factuur"] #meer-factuur,
+#page-meer[data-meer-view="locatie"] #meer-locatie-rit,
+#page-meer[data-meer-view="gegevens"] #meer-gegevens {
   display: block;
 }
 
@@ -2362,6 +2541,26 @@ body {
   align-items: center;
 }
 
+.meer-backup-card {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.1rem;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: var(--radius);
+}
+
+.meer-backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.65rem;
+}
+
+.kost-brandstof-overzicht {
+  margin-top: 1.5rem;
+}
+
 .rit-rendabiliteit {
   margin-bottom: 1rem;
   padding: 0.75rem 0;
@@ -3592,4 +3791,96 @@ body.bon-scan-open {
     margin-left: 240px;
     max-width: 28rem;
   }
+}
+
+/* Meer — bon check-up (OCR vs ritten) */
+.bon-checkup-card #bon-checkup-files {
+  width: 100%;
+  max-width: 100%;
+  font-size: 0.9rem;
+}
+
+.bon-checkup-status {
+  margin-top: 0.75rem;
+  min-height: 1.25rem;
+}
+
+.bon-checkup-results {
+  margin-top: 1rem;
+}
+
+.bon-checkup-block-title {
+  margin: 1rem 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bon-checkup-block-title:first-child {
+  margin-top: 0;
+}
+
+.bon-checkup-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.bon-checkup-item {
+  padding: 0.75rem 0.85rem;
+  margin-bottom: 0.5rem;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.bon-checkup-list--warn .bon-checkup-item {
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+}
+
+.bon-checkup-item-head {
+  margin-bottom: 0.35rem;
+}
+
+.bon-checkup-item-meta {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.65rem;
+  line-height: 1.4;
+}
+
+.bon-checkup-item .btn-sm {
+  margin-top: 0.15rem;
+}
+
+.bon-checkup-warn-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.85rem;
+  vertical-align: middle;
+}
+
+.bon-checkup-details {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+}
+
+.bon-checkup-pre {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  overflow-x: auto;
+  padding: 0.5rem;
+  background: var(--surface2);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  max-height: 12rem;
+  overflow-y: auto;
 }

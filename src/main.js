@@ -26,7 +26,9 @@ import {
 import { initFinancieelFactuur, refreshFinancieelFactuurSelects } from './js/financieelFactuur.js';
 import { initFactuurGegevensMeer, syncFactuurGegevensFormFromStorage } from './js/factuurGegevensMeer.js';
 import { initDagrapport } from './js/dagrapport.js';
-import { renderAllTables } from './js/tables.js';
+import { initDataBackup } from './js/dataBackup.js';
+import { initBonCheckup } from './js/bonCheckup.js';
+import { renderAllTables, renderBrandstof } from './js/tables.js';
 import { DEFAULT_CHAUFFEURS, UI_COMPACT } from './js/config.js';
 import {
   getData,
@@ -295,6 +297,70 @@ function initRittenOverzichtZoek() {
   });
 }
 
+const DASH_SUB_TITLES = {
+  week: 'Deze week',
+  beschik: 'Beschikbaarheid',
+  planning: 'Komende ritten',
+};
+const FIN_SUB_TITLES = {
+  cijfers: 'Cijfers & trend',
+  factuur: 'Ritten & factuur',
+  tank: 'Tankticket importeren',
+};
+const MEER_SUB_TITLES = {
+  factuur: 'Factuur & logo',
+  locatie: 'Locaties & ritten',
+  gegevens: 'Tabellen & planning',
+};
+
+function closeDashboardSubview() {
+  const wrap = document.querySelector('#page-dashboard .dashboard-wrap');
+  const stack = document.getElementById('dashboard-stack');
+  wrap?.classList.remove('dashboard-wrap--subview');
+  stack?.setAttribute('hidden', '');
+  stack?.querySelectorAll('.dash-stack-panel').forEach((p) => {
+    p.setAttribute('hidden', '');
+  });
+}
+
+function openDashboardSubview(key) {
+  const wrap = document.querySelector('#page-dashboard .dashboard-wrap');
+  const stack = document.getElementById('dashboard-stack');
+  const titleEl = document.getElementById('dashboard-stack-title');
+  if (!wrap || !stack || !key) return;
+  wrap.classList.add('dashboard-wrap--subview');
+  stack.removeAttribute('hidden');
+  if (titleEl) titleEl.textContent = DASH_SUB_TITLES[key] || key;
+  stack.querySelectorAll('.dash-stack-panel').forEach((p) => {
+    const on = p.dataset.dashPanel === key;
+    if (on) p.removeAttribute('hidden');
+    else p.setAttribute('hidden', '');
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function setFinancieelView(view) {
+  const page = document.getElementById('page-financieel');
+  const head = document.getElementById('fin-sub-head');
+  const titleEl = document.getElementById('fin-sub-title');
+  if (!page) return;
+  page.dataset.finView = view;
+  if (head) head.hidden = view === 'hub';
+  if (titleEl && view !== 'hub') titleEl.textContent = FIN_SUB_TITLES[view] || view;
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+function setMeerView(view) {
+  const page = document.getElementById('page-meer');
+  const head = document.getElementById('meer-sub-head');
+  const titleEl = document.getElementById('meer-sub-title');
+  if (!page) return;
+  page.dataset.meerView = view;
+  if (head) head.hidden = view === 'hub';
+  if (titleEl && view !== 'hub') titleEl.textContent = MEER_SUB_TITLES[view] || view;
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
 function showPage(pageId, options = {}) {
   if (pageId !== currentTabId) {
     previousTabId = currentTabId;
@@ -308,17 +374,61 @@ function showPage(pageId, options = {}) {
   });
   const page = document.getElementById('page-' + pageId);
   if (page) page.classList.add('active');
+
+  if (pageId !== 'dashboard') {
+    closeDashboardSubview();
+  }
+  if (pageId === 'dashboard') {
+    updateVandaagSummary();
+    updateDezeWeekSummary();
+    updateRitMelding(refresh);
+  }
+  if (pageId === 'financieel') {
+    setFinancieelView('hub');
+  }
+  if (pageId === 'meer') {
+    setMeerView('hub');
+  }
+
   if (pageId === 'ritten') {
     setRittenSubview(options.rittenMode === 'aanmaken' ? 'aanmaken' : 'overzicht');
   } else {
     updateRittenToolbar();
   }
   if (pageId === 'kaart') initMapIfNeeded();
-  if (pageId === 'dashboard') {
-    updateVandaagSummary();
-    updateDezeWeekSummary();
-    updateRitMelding(refresh);
+  if (pageId === 'kost') {
+    renderBrandstof(refresh);
   }
+}
+
+function initDashboardHub() {
+  document.getElementById('dashboard-hub')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-dash-open]');
+    if (!btn?.dataset.dashOpen) return;
+    openDashboardSubview(btn.dataset.dashOpen);
+  });
+  document.getElementById('dashboard-stack-back')?.addEventListener('click', () => {
+    closeDashboardSubview();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}
+
+function initFinancieelHub() {
+  document.getElementById('fin-hub')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-fin-open]');
+    if (!btn?.dataset.finOpen) return;
+    setFinancieelView(btn.dataset.finOpen);
+  });
+  document.getElementById('fin-back-hub')?.addEventListener('click', () => setFinancieelView('hub'));
+}
+
+function initMeerHub() {
+  document.getElementById('meer-hub')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-meer-open]');
+    if (!btn?.dataset.meerOpen) return;
+    setMeerView(btn.dataset.meerOpen);
+  });
+  document.getElementById('meer-back-hub')?.addEventListener('click', () => setMeerView('hub'));
 }
 
 let dashboardTabsInited = false;
@@ -1375,14 +1485,19 @@ function init() {
   initPeriodToggle(refresh);
   syncPeriodButtons();
   initDashboardTabs();
+  initDashboardHub();
+  initFinancieelHub();
+  initMeerHub();
   initFormRit(afterRitFormSaved);
   initFormBrandstof(refresh);
   initFinancieelFactuur();
   initFactuurGegevensMeer();
   initDagrapport();
+  initDataBackup(refresh);
   initFinancieelTicketImport(refresh);
   initFormOverig(refresh);
   initMeerHandmatigeRit(refresh);
+  initBonCheckup(refresh);
   initZiekenhuizen();
   initTabs();
   initPlanningAvailabilityTab();

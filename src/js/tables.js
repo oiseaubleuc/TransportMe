@@ -203,51 +203,65 @@ export function renderRitten(onRender) {
   });
 }
 
-export function renderBrandstof(onRender) {
-  const { brandstof } = getData();
-  const tbody = document.getElementById('tbody-brandstof');
+const BRANDSTOF_TABLES = [
+  { tbodyId: 'tbody-brandstof', emptyHint: 'Nog geen tankbeurten. Vul hierboven een tankbeurt in.' },
+  { tbodyId: 'tbody-brandstof-kost', emptyHint: 'Nog geen tankbeurten. Gebruik het formulier hierboven.' },
+];
+
+function renderBrandstofIntoTbody(tbody, brandstof, emptyHint, onRender) {
   if (!tbody) return;
 
   if (brandstof.length === 0) {
-    tbody.innerHTML =
-      '<tr><td colspan="6" class="empty-state">Nog geen tankbeurten. Vul hierboven een tankbeurt in.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${emptyHint}</td></tr>`;
     return;
   }
 
   const sorted = brandstof.slice().sort((a, b) => b.datum.localeCompare(a.datum));
-  const totaalLiter = brandstof.reduce((s, b) => s + (b.liter || 0), 0);
-  const totaalPrijs = brandstof.reduce((s, b) => s + (b.prijs || 0), 0);
+  const totaalLiter = brandstof.reduce((s, b) => s + (Number(b.liter) || 0), 0);
+  const totaalPrijs = brandstof.reduce((s, b) => s + (Number(b.prijs) || 0), 0);
 
   tbody.innerHTML =
     sorted
-      .map(
-        (b) =>
-          `<tr>
+      .map((b) => {
+        const liter = Number(b.liter) || 0;
+        const prijs = Number(b.prijs) || 0;
+        const perL = liter > 0 ? prijs / liter : null;
+        const perLCell = perL != null && Number.isFinite(perL) ? formatEuro(perL) : '—';
+        const idAttr = escapeHtml(String(b.id ?? ''));
+        return `<tr>
             <td>${escapeHtml(formatDatumKort(b.datum))}</td>
             <td>${escapeHtml(b.voertuigName || '—')}</td>
             <td class="num">${formatLiter(b.liter)}</td>
-            <td class="num">${formatEuro(b.prijs)}</td>
-            <td class="num">${formatEuro(b.prijs / b.liter)}</td>
-            <td><button type="button" class="btn btn-danger btn-icon-del btn-delete-brandstof" data-id="${b.id}" title="Verwijderen" aria-label="Verwijder tankbeurt">×</button></td>
-          </tr>`
-      )
+            <td class="num">${formatEuro(prijs)}</td>
+            <td class="num">${perLCell}</td>
+            <td><button type="button" class="btn btn-danger btn-icon-del btn-delete-brandstof" data-id="${idAttr}" title="Verwijderen" aria-label="Verwijder tankbeurt">×</button></td>
+          </tr>`;
+      })
       .join('') +
     `<tr class="total-row">
       <td colspan="2"><strong>Totaal (${brandstof.length} tankbeurt${brandstof.length === 1 ? '' : 'en'})</strong></td>
       <td class="num"><strong>${formatLiter(totaalLiter)}</strong></td>
       <td class="num"><strong>${formatEuro(totaalPrijs)}</strong></td>
-      <td class="num"></td>
+      <td class="num">—</td>
       <td></td>
     </tr>`;
 
   tbody.querySelectorAll('.btn-delete-brandstof').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const id = Number(btn.dataset.id);
-      const { brandstof } = getData();
-      saveBrandstof(brandstof.filter((b) => b.id !== id));
+      const idRaw = btn.dataset.id;
+      const { brandstof: list } = getData();
+      saveBrandstof(list.filter((b) => String(b.id) !== String(idRaw)));
       onRender?.();
     });
   });
+}
+
+export function renderBrandstof(onRender) {
+  const { brandstof } = getData();
+  for (const { tbodyId, emptyHint } of BRANDSTOF_TABLES) {
+    const tbody = document.getElementById(tbodyId);
+    if (tbody) renderBrandstofIntoTbody(tbody, brandstof, emptyHint, onRender);
+  }
 }
 
 export function renderOverig(onRender) {
