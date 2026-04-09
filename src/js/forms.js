@@ -150,7 +150,7 @@ export function initFormRit(onSubmit) {
     const tijd = getEffectiveRitTijd();
     if (isNachtTariefTijd(tijd)) {
       nachtHintTijd.hidden = false;
-      nachtHintTijd.textContent = `Nachttarief actief: +${NACHT_TOESLAG_PERCENT}% alleen op het km-deel van de vergoeding (niet op de opstartpremie van ${formatEuro(OPSTART_PREMIE)}). Venster: vanaf ${String(NACHT_START_UUR).padStart(2, '0')}:00 tot vóór ${String(NACHT_EIND_UUR).padStart(2, '0')}:00.`;
+      nachtHintTijd.textContent = `Nachttarief actief: +${NACHT_TOESLAG_PERCENT}% op het km-deel of op het forfait RKV Sango ↔ UZA Edegem (niet op de opstartpremie van ${formatEuro(OPSTART_PREMIE)}). Venster: ${String(NACHT_START_UUR).padStart(2, '0')}:00 – 05:59 ’s ochtends (tot vóór ${String(NACHT_EIND_UUR).padStart(2, '0')}:00).`;
     } else {
       nachtHintTijd.hidden = true;
       nachtHintTijd.textContent = '';
@@ -252,14 +252,23 @@ export function initFormRit(onSubmit) {
     return findPresetExact(getPresetRoutes(), v, t);
   }
 
+  function ritRouteNamenUitSelect() {
+    const v = document.getElementById('rit-vertrek');
+    const t = document.getElementById('rit-bestemming');
+    const fromName = v?.selectedOptions?.[0]?.textContent?.trim() || '';
+    const toName = t?.selectedOptions?.[0]?.textContent?.trim() || '';
+    return { fromName, toName };
+  }
+
   function updatePreview() {
     const km = parseFloat(kmInput?.value) || 0;
     const tijd = getEffectiveRitTijd();
     const preset = ritRoutePreset();
-    if (preview) preview.textContent = formatEuro(vergoedingFromPresetOrKm(preset, km, tijd));
+    const route = ritRouteNamenUitSelect();
+    if (preview) preview.textContent = formatEuro(vergoedingFromPresetOrKm(preset, km, tijd, route));
     if (previewKm) previewKm.textContent = km ? `${Math.round(km)} km` : '0 km';
 
-    const rend = rendabiliteitRitForForm(km, tijd, preset);
+    const rend = rendabiliteitRitForForm(km, tijd, preset, route);
     const hasRendabiliteit = rend && rend.geschatteWinst != null;
     const u = rend?.uitsplitsing;
     const toonNachtInCard =
@@ -386,11 +395,14 @@ export function initFormRit(onSubmit) {
     const vertrekSel = document.getElementById('rit-vertrek');
     const fromId = vertrekSel?.value?.trim() || '';
     const toId = bestemmingSel?.value?.trim() || '';
-    const presetExact = findPresetExact(getPresetRoutes(), fromId, toId);
-    const vergoedingTotaal = vergoedingFromPresetOrKm(presetExact, km, tijd);
     const ziekenhuizen = getZiekenhuizen();
     const from = fromId ? ziekenhuizen.find((h) => h.id === fromId) : null;
     const to = toId ? ziekenhuizen.find((h) => h.id === toId) : null;
+    const presetExact = findPresetExact(getPresetRoutes(), fromId, toId);
+    const vergoedingTotaal = vergoedingFromPresetOrKm(presetExact, km, tijd, {
+      fromName: from?.name,
+      toName: to?.name,
+    });
     const { ritten } = getData();
 
     const baseRit = {
@@ -771,7 +783,6 @@ export function initMeerHandmatigeRit(onSaved) {
     }
 
     const { ritten } = getData();
-    const vergoeding = vergoedingFromPresetOrKm(null, km, tijd);
     const base = Date.now();
     const rit = {
       id: base,
@@ -785,7 +796,6 @@ export function initMeerHandmatigeRit(onSaved) {
       status,
       duurMinuten: RIT_DUUR_MINUTEN,
       volgordeNr: nextVolgordeStart(ritten),
-      vergoeding,
       bonnummer: bon,
       bestelArtikelen: bon ? [{ bonnummer: bon, boxen: null }] : [],
     };
@@ -800,6 +810,10 @@ export function initMeerHandmatigeRit(onSaved) {
       rit.toName = meerRitBestemming.name;
       rit.toId = `osm-${base}-t`;
     }
+    rit.vergoeding = vergoedingFromPresetOrKm(null, km, tijd, {
+      fromName: rit.fromName,
+      toName: rit.toName,
+    });
 
     ritten.push(rit);
     ritten.sort((a, b) => a.datum.localeCompare(b.datum));

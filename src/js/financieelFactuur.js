@@ -8,7 +8,10 @@ import { formatDatumKort } from './format.js';
 import { generateFactuurPdfBlob, triggerPdfDownload } from './invoicePdf.js';
 
 function ritVergoeding(r) {
-  return r.vergoeding ?? vergoedingVoorRit(r.km || 0, r.tijd);
+  return (
+    r.vergoeding ??
+    vergoedingVoorRit(r.km || 0, r.tijd, { fromName: r.fromName, toName: r.toName })
+  );
 }
 
 function voltooideRittenSorted() {
@@ -67,35 +70,31 @@ function rittenVoorAangevinkteCheckboxes() {
   return voltooideRittenSorted().filter((r) => ids.has(String(r.id)));
 }
 
-/** Leesbare factuurregel (één zin per onderdeel, geschikt voor PDF) */
-function ritFactuurOmschrijving(r) {
-  const route =
-    r.fromName && r.toName
-      ? `Vertrekpunt: ${r.fromName}. Bestemming: ${r.toName}.`
-      : r.fromName || r.toName
-        ? `Route: ${[r.fromName, r.toName].filter(Boolean).join(' → ')}.`
-        : '';
-  const bonnen = bonnenUitRit(r);
-  const bonDeel =
-    bonnen.length === 1
-      ? `Referentie bestelbon: ${bonnen[0]}.`
-      : bonnen.length > 1
-        ? `Referentie bestelbonnen: ${bonnen.join(', ')}.`
-        : '';
+/** Velden voor factuur-PDF-tabel (kolommen: datum, order, ophaal, aflevering, km). */
+function ritFactuurPdfVelden(r) {
   const tijdWeergave = r.voltooidTijd || r.tijd || '';
-  const uitgevoerd = `Uitvoeringsdatum: ${formatDatumKort(r.datum, tijdWeergave)}.`;
-  const kmDeel = `Afgelegde afstand: ${r.km || 0} km.`;
-  return [route, bonDeel, uitgevoerd, kmDeel].filter(Boolean).join(' ');
+  const datumWeergave = formatDatumKort(r.datum, tijdWeergave);
+  const bonnen = bonnenUitRit(r);
+  const orderBon = bonnen.length ? bonnen.join(', ') : '—';
+  const ophaal = String(r.fromName || '').trim() || '—';
+  const aflevering = String(r.toName || '').trim() || '—';
+  const km = r.km != null && Number.isFinite(Number(r.km)) ? String(r.km) : '—';
+  return { datumWeergave, orderBon, ophaal, aflevering, km };
 }
 
 function rittenNaarPdfRegels(ritten) {
   return ritten.map((r) => {
     const bedrag = ritVergoeding(r);
+    const v = ritFactuurPdfVelden(r);
     return {
       titel: 'Dienstverlening: ziekenhuisvervoer',
-      detail: ritFactuurOmschrijving(r),
       prijsExcl: bedrag,
       totaal: bedrag,
+      datumWeergave: v.datumWeergave,
+      orderBon: v.orderBon,
+      ophaal: v.ophaal,
+      aflevering: v.aflevering,
+      km: v.km,
     };
   });
 }

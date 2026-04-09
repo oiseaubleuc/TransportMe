@@ -310,6 +310,7 @@ const FIN_SUB_TITLES = {
 const MEER_SUB_TITLES = {
   factuur: 'Factuur & logo',
   locatie: 'Locaties & ritten',
+  dubbelcheck: 'Dubbelcheck',
   gegevens: 'Tabellen & planning',
 };
 
@@ -1262,7 +1263,10 @@ function renderRittenStatusPagina() {
   let html = tonen
     .map(({ rit: r, status }, idx) => {
       const isMatch = heeftZoek && idx === 0;
-      const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0, r.tijd);
+      const verg =
+        r.vergoeding != null
+          ? r.vergoeding
+          : vergoedingVoorRit(r.km || 0, r.tijd, { fromName: r.fromName, toName: r.toName });
       const tijdDisplay = status === 'voltooid' ? r.voltooidTijd || r.tijd : r.tijd;
       const datumTijd = formatDatumKort(r.datum, tijdDisplay);
       const meta = [r.chauffeurName, r.voertuigName].filter(Boolean).join(' · ') || '—';

@@ -57,7 +57,8 @@ export function renderRitten(onRender) {
   const voltooide = ritten.filter(isRitVoltooid);
   const totaalKm = voltooide.reduce((s, r) => s + (r.km || 0), 0);
   const totaalVergoeding = voltooide.reduce(
-    (s, r) => s + (r.vergoeding ?? vergoedingVoorRit(r.km, r.tijd)),
+    (s, r) =>
+      s + (r.vergoeding ?? vergoedingVoorRit(r.km, r.tijd, { fromName: r.fromName, toName: r.toName })),
     0
   );
 
@@ -99,7 +100,7 @@ export function renderRitten(onRender) {
           <td>${escapeHtml(r.chauffeurName || '—')}</td>
           <td>${escapeHtml(r.voertuigName || '—')}</td>
           <td class="num">${r.km} km</td>
-          <td class="num">${formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km, r.tijd))}</td>
+          <td class="num">${formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km, r.tijd, { fromName: r.fromName, toName: r.toName }))}</td>
           <td>${statusLabel(r.status)}</td>
           <td class="rit-actions-cell">${
             r.status === 'komend' || r.status === 'lopend'

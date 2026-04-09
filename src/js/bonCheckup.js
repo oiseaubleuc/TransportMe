@@ -1,12 +1,10 @@
 /**
- * Bon check-up: foto's van leveringsbonnen (OCR) vergelijken met ritten op een dag;
- * ontbrekende ritten voorstellen op basis van herkende bon/tijden/km.
+ * Dubbelcheck: enkel bestelbonnummers uit foto’s (OCR) vergelijken met bonnummers
+ * in de ritten van de gekozen dag. Verder niets.
  */
 
-import { RIT_DUUR_MINUTEN } from './config.js';
-import { vergoedingFromPresetOrKm, toDateStr } from './calculations.js';
-import { getData, saveRitten } from './storage.js';
-import { nextVolgordeStart } from './ritVolgorde.js';
+import { toDateStr } from './calculations.js';
+import { getData } from './storage.js';
 import { runReceiptOcr } from './receiptOcr.js';
 import { parseBonSlipText, normalizeBonKey } from './bonSlipParse.js';
 
@@ -35,7 +33,7 @@ async function fileToOcrSource(file) {
   return null;
 }
 
-/** Alle bonnummers van een rit (genormaliseerde sleutels + weergavetekst) */
+/** Bonnen uit één rit: { key, display }[] */
 function bonnenUitRit(r) {
   const out = [];
   const items = Array.isArray(r?.bestelArtikelen) ? r.bestelArtikelen : [];
@@ -48,95 +46,104 @@ function bonnenUitRit(r) {
   return out;
 }
 
-function ritHeeftRelevanteBon(r) {
-  return bonnenUitRit(r).length > 0;
+/** Unieke bonnummers uit alle ritten van één dag (elke key één weergavetekst). */
+function bonnenUitDagRitten(dagRitten) {
+  const map = new Map();
+  for (const r of dagRitten) {
+    for (const { key, display } of bonnenUitRit(r)) {
+      if (key && !map.has(key)) map.set(key, display);
+    }
+  }
+  return map;
 }
 
-function ritIsOnderwegOfAfgerond(r) {
-  return r?.status === 'voltooid' || r?.status === 'lopend';
-}
-
-function readChauffeurVoertuig() {
-  const chauffeurSel = document.getElementById('meer-rit-chauffeur');
-  const voertuigSel = document.getElementById('meer-rit-voertuig');
-  const chauffeurId = chauffeurSel?.value?.trim() || '';
-  const voertuigId = voertuigSel?.value?.trim() || '';
-  const chauffeurName = chauffeurSel?.selectedOptions?.[0]?.textContent?.trim() || '';
-  const voertuigName = voertuigSel?.selectedOptions?.[0]?.textContent?.trim() || '';
-  return { chauffeurId, voertuigId, chauffeurName, voertuigName };
-}
-
-function addRitFromCheckup({
-  bonDisplay,
-  datum,
-  vertrekTijd,
-  aankomstTijd,
-  km,
-  chauffeurId,
-  voertuigId,
-  chauffeurName,
-  voertuigName,
-}) {
-  const { ritten } = getData();
-  const tijd = vertrekTijd || aankomstTijd || '12:00';
-  const vTijd = vertrekTijd || tijd;
-  const eTijd = aankomstTijd || vTijd;
-  const kmNum = Number.isFinite(km) && km >= 1 ? Math.round(km) : 1;
-  const vergoeding = vergoedingFromPresetOrKm(null, kmNum, vTijd);
-  const base = Date.now();
-  const rit = {
-    id: base,
-    datum,
-    tijd: vTijd,
-    km: kmNum,
-    voertuigId,
-    voertuigName,
-    chauffeurId,
-    chauffeurName,
-    status: 'voltooid',
-    duurMinuten: RIT_DUUR_MINUTEN,
-    voltooidTijd: eTijd,
-    volgordeNr: nextVolgordeStart(ritten),
-    vergoeding,
-    bonnummer: bonDisplay,
-    bestelArtikelen: [{ bonnummer: bonDisplay, boxen: null }],
-  };
-  ritten.push(rit);
-  ritten.sort((a, b) => a.datum.localeCompare(b.datum));
-  saveRitten(ritten);
+function fileDedupeKey(f) {
+  return `${f.name}|${f.size}|${f.lastModified}`;
 }
 
 /**
- * @param {() => void} [onSaved]
+ * @param {() => void} [_onSaved] — niet gebruikt (geen wijzigingen aan ritten)
  */
-export function initBonCheckup(onSaved) {
+export function initBonCheckup(_onSaved) {
   const runBtn = document.getElementById('bon-checkup-run');
   const datumEl = document.getElementById('bon-checkup-datum');
   const fileEl = document.getElementById('bon-checkup-files');
+  const addFilesBtn = document.getElementById('bon-checkup-add-files');
+  const clearFilesBtn = document.getElementById('bon-checkup-clear-files');
+  const queueEl = document.getElementById('bon-checkup-file-queue');
+  const queueMetaEl = document.getElementById('bon-checkup-queue-meta');
   const statusEl = document.getElementById('bon-checkup-status');
   const resultsEl = document.getElementById('bon-checkup-results');
 
   if (!runBtn || runBtn.dataset.inited) return;
   runBtn.dataset.inited = '1';
 
+  /** @type {File[]} */
+  const pendingFiles = [];
+
+  function renderFileQueue() {
+    if (queueMetaEl) {
+      const n = pendingFiles.length;
+      queueMetaEl.textContent =
+        n === 0 ? '0 bestanden in wachtrij' : `${n} bestand${n === 1 ? '' : 'en'} in wachtrij`;
+    }
+    if (!queueEl) return;
+    queueEl.innerHTML = pendingFiles
+      .map(
+        (f, i) =>
+          `<li class="bon-checkup-file-queue__item"><span class="bon-checkup-file-queue__name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span><button type="button" class="btn btn-outline btn-sm bon-checkup-remove-file" data-idx="${i}" aria-label="Bestand verwijderen uit wachtrij">×</button></li>`
+      )
+      .join('');
+  }
+
+  addFilesBtn?.addEventListener('click', () => fileEl?.click());
+
+  fileEl?.addEventListener('change', () => {
+    if (!fileEl?.files?.length) return;
+    const seen = new Set(pendingFiles.map(fileDedupeKey));
+    for (const f of fileEl.files) {
+      const k = fileDedupeKey(f);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      pendingFiles.push(f);
+    }
+    fileEl.value = '';
+    renderFileQueue();
+  });
+
+  clearFilesBtn?.addEventListener('click', () => {
+    pendingFiles.length = 0;
+    renderFileQueue();
+  });
+
+  queueEl?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.bon-checkup-remove-file');
+    if (!btn || btn.dataset.idx == null) return;
+    const i = Number(btn.dataset.idx);
+    if (!Number.isFinite(i) || i < 0 || i >= pendingFiles.length) return;
+    pendingFiles.splice(i, 1);
+    renderFileQueue();
+  });
+
   if (datumEl && !datumEl.value) datumEl.value = toDateStr(new Date());
+  renderFileQueue();
 
   runBtn.addEventListener('click', async () => {
     const datum = datumEl?.value?.trim();
-    const files = fileEl?.files;
+    const files = pendingFiles;
     if (!datum) {
       alert('Kies een datum.');
       return;
     }
-    if (!files?.length) {
-      alert('Kies minstens één foto (of PDF) van een bon.');
+    if (!files.length) {
+      alert('Voeg minstens één foto of PDF toe.');
       return;
     }
 
-    if (statusEl) statusEl.textContent = 'Bezig met lezen van de bonnen…';
+    if (statusEl) statusEl.textContent = 'Bonnummer uit foto’s lezen…';
     if (resultsEl) resultsEl.innerHTML = '';
 
-    /** @type {Map<string, { display: string, parsed: ReturnType<typeof parseBonSlipText> }>} */
+    /** @type {Map<string, string>} key → weergave van OCR */
     const uitFotos = new Map();
     /** @type {Array<{ name: string, parsed: ReturnType<typeof parseBonSlipText> }>} */
     const fileLog = [];
@@ -144,7 +151,7 @@ export function initBonCheckup(onSaved) {
     try {
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
-        if (statusEl) statusEl.textContent = `OCR ${i + 1} / ${files.length}: ${f.name}…`;
+        if (statusEl) statusEl.textContent = `Foto ${i + 1} / ${files.length}: ${f.name}…`;
         const src = await fileToOcrSource(f);
         if (!src) continue;
         const text = await runReceiptOcr(src);
@@ -153,160 +160,111 @@ export function initBonCheckup(onSaved) {
         for (const b of parsed.bonnummers) {
           const k = normalizeBonKey(b);
           if (!k) continue;
-          if (!uitFotos.has(k)) uitFotos.set(k, { display: b, parsed });
+          if (!uitFotos.has(k)) uitFotos.set(k, b);
         }
       }
     } catch (e) {
       console.error(e);
-      if (statusEl) statusEl.textContent = 'OCR mislukt. Probeer scherpere foto’s of kleinere PDF.';
-      alert('Kon de bon niet goed lezen. Probeer opnieuw met beter licht of een andere foto.');
+      if (statusEl) statusEl.textContent = 'Lezen mislukt. Probeer scherpere foto’s.';
+      alert('Kon de tekst op de bon niet goed lezen.');
       return;
     }
 
-    const { ritten } = getData();
-    const dagRitten = ritten.filter((r) => r.datum === datum);
+    const dagRitten = getData().ritten.filter((r) => r.datum === datum);
+    const uitRitten = bonnenUitDagRitten(dagRitten);
 
-    const appBons = new Set();
-    for (const r of dagRitten) {
-      for (const { key } of bonnenUitRit(r)) {
-        if (key) appBons.add(key);
-      }
-    }
+    const keysFoto = new Set(uitFotos.keys());
+    const keysRit = new Set(uitRitten.keys());
 
-    const opFotoNietInApp = [];
-    for (const [key, v] of uitFotos) {
-      if (!appBons.has(key)) opFotoNietInApp.push({ key, ...v });
+    /** @type {string[]} */
+    const komtOvereen = [];
+    for (const k of keysFoto) {
+      if (keysRit.has(k)) komtOvereen.push(uitFotos.get(k) || k);
     }
+    komtOvereen.sort((a, b) => a.localeCompare(b, 'nl'));
 
-    const inAppGeenFoto = [];
-    for (const r of dagRitten) {
-      if (!ritIsOnderwegOfAfgerond(r) || !ritHeeftRelevanteBon(r)) continue;
-      for (const { key, display } of bonnenUitRit(r)) {
-        if (!key) continue;
-        if (!uitFotos.has(key)) inAppGeenFoto.push({ rit: r, bon: display, key });
-      }
+    /** @type {string[]} */
+    const alleenFoto = [];
+    for (const k of keysFoto) {
+      if (!keysRit.has(k)) alleenFoto.push(uitFotos.get(k) || k);
     }
+    alleenFoto.sort((a, b) => a.localeCompare(b, 'nl'));
+
+    /** @type {string[]} */
+    const alleenRit = [];
+    for (const k of keysRit) {
+      if (!keysFoto.has(k)) alleenRit.push(uitRitten.get(k) || k);
+    }
+    alleenRit.sort((a, b) => a.localeCompare(b, 'nl'));
 
     if (statusEl) {
-      const nFoto = uitFotos.size;
-      const nHerken = fileLog.reduce((a, x) => a + x.parsed.bonnummers.length, 0);
+      const nf = keysFoto.size;
+      const nr = keysRit.size;
+      const nOk = komtOvereen.length;
       statusEl.textContent =
-        nFoto > 0
-          ? `${nFoto} uniek(e) bonnummer(s) op foto’s. ${opFotoNietInApp.length} ontbreken in de app.`
-          : nHerken === 0
-            ? 'Geen bestelnummer herkend — controleer de foto’s of vul handmatig in bij Rit handmatig.'
-            : 'Geen match met unieke nummers — tekst wel gelezen; bonformaat kan afwijken.';
+        nf === 0
+          ? nr === 0
+            ? 'Geen bonnummer op de foto’s herkend; geen ritten met bon op deze dag.'
+            : `Geen bonnummer op de foto’s herkend. In de ritten: ${nr} uniek bonnummer.`
+          : `Foto’s: ${nf} uniek bonnummer. Ritten: ${nr} uniek bonnummer. ${nOk} komt overeen.`;
     }
 
     if (!resultsEl) return;
 
     const parts = [];
+    parts.push('<h5 class="bon-checkup-block-title">Bestelbon vs ritten</h5>');
+    parts.push(
+      '<p class="info-text info-text--small">Alleen de nummers: wat op je foto’s staat (OCR) tegen wat je die dag in je ritten hebt staan.</p>'
+    );
 
-    if (opFotoNietInApp.length > 0) {
-      parts.push('<h5 class="bon-checkup-block-title">Op de foto, nog niet in de app</h5>');
-      parts.push('<p class="info-text info-text--small">Controleer de gegevens en kies chauffeur/voertuig bij <strong>Rit handmatig toevoegen</strong> hieronder vóór je opslaat.</p>');
-      parts.push('<ul class="bon-checkup-list">');
-      for (const row of opFotoNietInApp) {
-        const p = row.parsed;
-        const d = p.datum || datum;
-        const vt = p.vertrekTijd || p.tijden[0] || '';
-        const at = p.aankomstTijd || p.tijden[p.tijden.length - 1] || vt;
-        const km = p.km;
-        const payloadEnc = encodeURIComponent(
-          JSON.stringify({
-            bonDisplay: row.display,
-            datum: d,
-            vertrekTijd: vt || '12:00',
-            aankomstTijd: at || vt || '12:00',
-            km: km ?? null,
-          })
-        );
-        parts.push(`<li class="bon-checkup-item">`);
-        parts.push(`<div class="bon-checkup-item-head"><strong>Bon</strong> ${escapeHtml(row.display)}</div>`);
-        parts.push(
-          `<div class="bon-checkup-item-meta">Datum: ${escapeHtml(d)} · Vertrek: ${escapeHtml(vt || '—')} · Aankomst: ${escapeHtml(at || '—')} · km: ${km != null ? escapeHtml(String(km)) : '—'}</div>`
-        );
-        parts.push(
-          `<button type="button" class="btn btn-primary btn-sm bon-checkup-add" data-payload="${payloadEnc}">Rit toevoegen (afgerond)</button>`
-        );
-        parts.push(`</li>`);
+    if (komtOvereen.length > 0) {
+      parts.push('<p class="bon-checkup-result-label bon-checkup-result-label--ok">Komt overeen</p>');
+      parts.push('<ul class="bon-checkup-simple-list bon-checkup-simple-list--ok">');
+      for (const b of komtOvereen) {
+        parts.push(`<li>${escapeHtml(b)}</li>`);
       }
       parts.push('</ul>');
     }
 
-    if (inAppGeenFoto.length > 0) {
-      parts.push('<h5 class="bon-checkup-block-title">In de app, niet gevonden op deze foto’s</h5>');
-      parts.push('<p class="info-text info-text--small">Misschien vergeten te fotograferen, of OCR heeft het nummer niet gelezen. Controleer je rol.</p>');
-      parts.push('<ul class="bon-checkup-list bon-checkup-list--warn">');
-      for (const { bon, rit } of inAppGeenFoto) {
-        const st = rit.status === 'voltooid' ? 'Afgerond' : 'Onderweg';
-        parts.push(
-          `<li class="bon-checkup-item"><span class="bon-checkup-warn-mark" aria-hidden="true">!</span> Bon <strong>${escapeHtml(bon)}</strong> — ${escapeHtml(st)}, ${escapeHtml(rit.tijd || '')}, ${escapeHtml(String(rit.km || ''))} km</li>`
-        );
+    if (alleenFoto.length > 0) {
+      parts.push('<p class="bon-checkup-result-label bon-checkup-result-label--warn">Alleen op de foto — niet bij ritten van deze dag</p>');
+      parts.push('<ul class="bon-checkup-simple-list bon-checkup-simple-list--warn">');
+      for (const b of alleenFoto) {
+        parts.push(`<li>${escapeHtml(b)}</li>`);
       }
       parts.push('</ul>');
     }
 
-    if (opFotoNietInApp.length === 0 && inAppGeenFoto.length === 0 && uitFotos.size > 0) {
-      parts.push('<p class="info-text">Alle herkende bonnen van vandaag staan al in je ritten. Goed zo.</p>');
+    if (alleenRit.length > 0) {
+      parts.push(
+        '<p class="bon-checkup-result-label bon-checkup-result-label--warn">Alleen in de ritten — niet (herkend) op deze foto’s</p>'
+      );
+      parts.push('<ul class="bon-checkup-simple-list bon-checkup-simple-list--warn">');
+      for (const b of alleenRit) {
+        parts.push(`<li>${escapeHtml(b)}</li>`);
+      }
+      parts.push('</ul>');
     }
 
-    if (fileLog.length && uitFotos.size === 0) {
-      parts.push('<details class="bon-checkup-details"><summary>Tekstfragment (debug)</summary>');
-      for (const fl of fileLog.slice(0, 3)) {
+    if (komtOvereen.length > 0 && alleenFoto.length === 0 && alleenRit.length === 0 && keysFoto.size > 0) {
+      parts.push('<p class="info-text bon-checkup-all-ok">Alle herkende bonnummers op de foto’s komen voor in je ritten, en elke bon in de ritten zit op de foto’s. Geen verschil.</p>');
+    }
+
+    if (fileLog.length && keysFoto.size === 0) {
+      parts.push('<details class="bon-checkup-details"><summary>Geen nummer herkend — ruwe tekst (om te controleren)</summary>');
+      for (const fl of fileLog.slice(0, 5)) {
         parts.push(`<p class="info-text info-text--small"><strong>${escapeHtml(fl.name)}</strong></p>`);
         parts.push(`<pre class="bon-checkup-pre">${escapeHtml(fl.parsed.rawSnippet.slice(0, 600))}</pre>`);
       }
       parts.push('</details>');
     }
 
-    resultsEl.innerHTML = parts.join('');
+    if (komtOvereen.length === 0 && alleenFoto.length === 0 && alleenRit.length === 0) {
+      parts.push(
+        '<p class="info-text info-text--small">Niets om te vergelijken: geen bonnummer herkend op de foto’s én geen ritten met bon op deze datum (of OCR heeft niets gelezen).</p>'
+      );
+    }
 
-    resultsEl.querySelectorAll('.bon-checkup-add').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const raw = btn.getAttribute('data-payload');
-        if (!raw) return;
-        let data;
-        try {
-          data = JSON.parse(decodeURIComponent(raw));
-        } catch {
-          return;
-        }
-        const { chauffeurId, voertuigId, chauffeurName, voertuigName } = readChauffeurVoertuig();
-        if (!chauffeurId) {
-          alert('Kies eerst een chauffeur bij «Rit handmatig toevoegen».');
-          return;
-        }
-        if (!voertuigId) {
-          alert('Kies eerst een voertuig bij «Rit handmatig toevoegen».');
-          return;
-        }
-        const kmLine =
-          data.km != null && Number.isFinite(Number(data.km))
-            ? `${Number(data.km)} km`
-            : '1 km (standaard — pas later aan indien nodig)';
-        if (
-          !confirm(
-            `Rit toevoegen als afgerond?\n\nBon: ${data.bonDisplay}\nDatum: ${data.datum}\n${data.vertrekTijd} → ${data.aankomstTijd}\n${kmLine}`
-          )
-        ) {
-          return;
-        }
-        addRitFromCheckup({
-          bonDisplay: data.bonDisplay,
-          datum: data.datum,
-          vertrekTijd: data.vertrekTijd,
-          aankomstTijd: data.aankomstTijd,
-          km: data.km != null ? Number(data.km) : 1,
-          chauffeurId,
-          voertuigId,
-          chauffeurName,
-          voertuigName,
-        });
-        btn.disabled = true;
-        btn.textContent = 'Toegevoegd';
-        onSaved?.();
-      });
-    });
+    resultsEl.innerHTML = parts.join('');
   });
 }

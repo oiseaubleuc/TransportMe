@@ -11,6 +11,8 @@ import {
   NACHT_EIND_UUR,
   GESCHAT_VERBRUIK_L_PER_100KM,
   NACHT_TOESLAG_PERCENT,
+  FORFAIT_SANGO_UZA_EXCL_BTW,
+  ROUTE_TOESLAG_EURO,
 } from './config.js';
 import { getData } from './storage.js';
 
@@ -30,11 +32,75 @@ export function isNachtTariefTijd(tijd) {
   return uur >= NACHT_START_UUR || uur < NACHT_EIND_UUR;
 }
 
-export function vergoedingVoorRit(km, tijd) {
-  const schijven = Math.ceil(km / KM_SCHIJF);
+function normLocNaam(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .trim();
+}
+
+function heeftSangoInNaam(s) {
+  return normLocNaam(s).includes('sango');
+}
+
+function heeftEdegemUzaInNaam(s) {
+  const n = normLocNaam(s);
+  if (!n.includes('edegem')) return false;
+  return (
+    n.includes('uza') ||
+    n.includes('uz antwerpen') ||
+    n.includes('uzantwerpen') ||
+    (n.includes('uz') && n.includes('antwerpen'))
+  );
+}
+
+/** RKV Sango → UZA Edegem: geen route-toeslag (forfaitroute). */
+export function isSangoNaarEdegemUzaRoute(fromName, toName) {
+  return heeftSangoInNaam(fromName) && heeftEdegemUzaInNaam(toName);
+}
+
+/** Beide richtingen: forfait €35 (excl. btw) i.p.v. km-formule. */
+export function isSangoUzaForfaitRoute(fromName, toName) {
+  return (
+    isSangoNaarEdegemUzaRoute(fromName, toName) ||
+    (heeftEdegemUzaInNaam(fromName) && heeftSangoInNaam(toName))
+  );
+}
+
+function vergoedingVoorRitAlleenKm(km, tijd) {
+  const k = Number(km) || 0;
+  const schijven = Math.ceil(k / KM_SCHIJF);
   const variabelDeel = schijven * VERGOEDING_PER_20KM;
   const variabelMetTarief = isNachtTariefTijd(tijd) ? variabelDeel * NACHT_TARIEF_FACTOR : variabelDeel;
   return Math.round((OPSTART_PREMIE + variabelMetTarief) * 100) / 100;
+}
+
+/**
+ * @param {number} km
+ * @param {string} [tijd]
+ * @param {{ fromName?: string, toName?: string }} [route] — bij vertrek/bestemming: Sango↔UZA-forfait + route-toeslag (behalve Sango→Edegem UZA).
+ */
+export function vergoedingVoorRit(km, tijd, route) {
+  const fromName = route?.fromName;
+  const toName = route?.toName;
+  const heeftBeideNamen =
+    String(fromName || '').trim().length > 0 && String(toName || '').trim().length > 0;
+
+  let kern;
+  if (heeftBeideNamen && isSangoUzaForfaitRoute(fromName, toName)) {
+    kern = FORFAIT_SANGO_UZA_EXCL_BTW;
+    if (isNachtTariefTijd(tijd)) {
+      kern = Math.round(kern * NACHT_TARIEF_FACTOR * 100) / 100;
+    }
+  } else {
+    kern = vergoedingVoorRitAlleenKm(km, tijd);
+  }
+
+  if (heeftBeideNamen && !isSangoNaarEdegemUzaRoute(fromName, toName)) {
+    kern = Math.round((kern + ROUTE_TOESLAG_EURO) * 100) / 100;
+  }
+  return kern;
 }
 
 /**
@@ -56,6 +122,44 @@ export function vergoedingUitsplitsingKmFormule(km, tijd) {
     nachtToeslagEuro,
     nachtToeslagPercent: NACHT_TOESLAG_PERCENT,
     vergoeding,
+  };
+}
+
+/**
+ * Zelfde logica als vergoedingVoorRit(km, tijd, route) voor uitleg in UI (forfait / route-toeslag / nacht).
+ */
+export function vergoedingUitsplitsingVoorRit(km, tijd, route) {
+  const fromName = route?.fromName;
+  const toName = route?.toName;
+  const heeftBeideNamen =
+    String(fromName || '').trim().length > 0 && String(toName || '').trim().length > 0;
+
+  if (heeftBeideNamen && isSangoUzaForfaitRoute(fromName, toName)) {
+    const basis = FORFAIT_SANGO_UZA_EXCL_BTW;
+    const nacht = isNachtTariefTijd(tijd);
+    const nachtToeslagEuro = Math.round(basis * (nacht ? NACHT_TARIEF_FACTOR - 1 : 0) * 100) / 100;
+    const naNacht = Math.round(basis * (nacht ? NACHT_TARIEF_FACTOR : 1) * 100) / 100;
+    const routeToeslag = isSangoNaarEdegemUzaRoute(fromName, toName) ? 0 : ROUTE_TOESLAG_EURO;
+    const vergoeding = Math.round((naNacht + routeToeslag) * 100) / 100;
+    return {
+      isSangoUzaForfait: true,
+      forfaitBasis: basis,
+      isNacht: nacht,
+      nachtToeslagEuro,
+      nachtToeslagPercent: NACHT_TOESLAG_PERCENT,
+      routeToeslagEuro: routeToeslag,
+      vergoeding,
+    };
+  }
+
+  const u = vergoedingUitsplitsingKmFormule(km, tijd);
+  const routeToeslag =
+    heeftBeideNamen && !isSangoNaarEdegemUzaRoute(fromName, toName) ? ROUTE_TOESLAG_EURO : 0;
+  return {
+    ...u,
+    isSangoUzaForfait: false,
+    routeToeslagEuro: routeToeslag,
+    vergoeding: Math.round((u.vergoeding + routeToeslag) * 100) / 100,
   };
 }
 
@@ -172,7 +276,13 @@ export function totalenVoorPeriode(period) {
   const b = filterByPeriod(brandstof, period);
   const o = filterByPeriod(overig, period);
 
-  const omzet = r.reduce((sum, rit) => sum + (rit.vergoeding ?? vergoedingVoorRit(rit.km, rit.tijd)), 0);
+  const omzet = r.reduce(
+    (sum, rit) =>
+      sum +
+      (rit.vergoeding ??
+        vergoedingVoorRit(rit.km, rit.tijd, { fromName: rit.fromName, toName: rit.toName })),
+    0
+  );
   const brandstofKosten = b.reduce((sum, x) => sum + (x.prijs || 0), 0);
   const overigeKosten = o.reduce((sum, x) => sum + (x.bedrag || 0), 0);
   const winst = omzet - brandstofKosten - overigeKosten;
@@ -210,7 +320,13 @@ export function getWeeklyFinancials(weeksBack = 8) {
     );
     const b = brandstof.filter((x) => new Date(x.datum) >= weekStart && new Date(x.datum) <= weekEnd);
     const o = overig.filter((x) => new Date(x.datum) >= weekStart && new Date(x.datum) <= weekEnd);
-    const omzet = r.reduce((sum, rit) => sum + (rit.vergoeding ?? vergoedingVoorRit(rit.km, rit.tijd)), 0);
+    const omzet = r.reduce(
+    (sum, rit) =>
+      sum +
+      (rit.vergoeding ??
+        vergoedingVoorRit(rit.km, rit.tijd, { fromName: rit.fromName, toName: rit.toName })),
+    0
+  );
     const brandstofKosten = b.reduce((sum, x) => sum + (x.prijs || 0), 0);
     const overigeKosten = o.reduce((sum, x) => sum + (x.bedrag || 0), 0);
     const winst = omzet - brandstofKosten - overigeKosten;
@@ -292,25 +408,25 @@ export function findPresetExact(presets, fromId, toId) {
 /**
  * Vergoeding: optioneel forfait op vaste route (minstens 1 km ingevuld), anders km-formule.
  */
-export function vergoedingFromPresetOrKm(preset, km, tijd) {
+export function vergoedingFromPresetOrKm(preset, km, tijd, route) {
   const raw = preset?.forfaitVergoeding;
   if (km >= 1 && raw != null && Number.isFinite(Number(raw))) {
     return Math.round(Number(raw) * 100) / 100;
   }
-  return vergoedingVoorRit(km, tijd);
+  return vergoedingVoorRit(km, tijd, route);
 }
 
 /**
  * Zelfde als rendabiliteitRit maar met optioneel forfait op preset (nieuwe-rit formulier).
  * Nachttoeslag in uitsplitsing alleen bij km-formule, niet bij forfait.
  */
-export function rendabiliteitRitForForm(km, tijd, preset) {
+export function rendabiliteitRitForForm(km, tijd, preset, route) {
   if (!km || km < 0) return null;
-  const vergoeding = vergoedingFromPresetOrKm(preset, km, tijd);
+  const vergoeding = vergoedingFromPresetOrKm(preset, km, tijd, route);
   const raw = preset?.forfaitVergoeding;
   const isForfait =
     km >= 1 && raw != null && Number.isFinite(Number(raw)) && Number(raw) >= 0;
-  const uitsplitsing = isForfait ? null : vergoedingUitsplitsingKmFormule(km, tijd);
+  const uitsplitsing = isForfait ? null : vergoedingUitsplitsingVoorRit(km, tijd, route);
   const literPrijs = getGemiddeldeLiterPrijsPerLiter();
   if (literPrijs == null) {
     return {

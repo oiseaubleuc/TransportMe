@@ -65,7 +65,10 @@ function fillDashboardDagBlok(refDate, ids, emptyMessage, voltooidOverride) {
 
   const voltooid = voltooidOverride ?? voltooideRittenOpKalenderdag(refDate);
   const omzet = voltooid.reduce(
-    (sum, rit) => sum + (rit.vergoeding ?? vergoedingVoorRit(rit.km || 0, rit.tijd)),
+    (sum, rit) =>
+      sum +
+      (rit.vergoeding ??
+        vergoedingVoorRit(rit.km || 0, rit.tijd, { fromName: rit.fromName, toName: rit.toName })),
     0
   );
   const kmSum = voltooid.reduce((sum, rit) => sum + (rit.km || 0), 0);
@@ -87,7 +90,10 @@ function fillDashboardDagBlok(refDate, ids, emptyMessage, voltooidOverride) {
   const meer = voltooid.length - tail.length;
   let html = tail
     .map((r) => {
-      const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0, r.tijd);
+      const verg =
+        r.vergoeding != null
+          ? r.vergoeding
+          : vergoedingVoorRit(r.km || 0, r.tijd, { fromName: r.fromName, toName: r.toName });
       const nr =
         r.volgordeNr != null && Number.isFinite(Number(r.volgordeNr))
           ? `<span class="dashboard-vandaag-rit-nr">#${r.volgordeNr}</span> `
@@ -214,7 +220,7 @@ export function updateFinancieelProfielOverzicht() {
             <input type="checkbox" class="fin-rit-factuur-cb" data-rit-id="${escapeHtml(rid)}" aria-label="Opnemen op factuur-PDF" />
           </label>
           <div class="financieel-profiel-rit-body">
-            <span class="financieel-profiel-rit-top">${bon} · ${escapeHtml(formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km || 0, r.tijd)))}</span>
+            <span class="financieel-profiel-rit-top">${bon} · ${escapeHtml(formatEuro(r.vergoeding ?? vergoedingVoorRit(r.km || 0, r.tijd, { fromName: r.fromName, toName: r.toName })))}</span>
             <span class="financieel-profiel-rit-meta">${escapeHtml(r.datum || '—')} · ${r.km || 0} km · ${route}</span>
           </div>
         </div>
@@ -464,7 +470,10 @@ export function updateRittenStatusLijst(onUpdate) {
   const meer = zichtbaar.length - tonen.length;
   let html = tonen
     .map((r) => {
-      const verg = r.vergoeding != null ? r.vergoeding : vergoedingVoorRit(r.km || 0, r.tijd);
+      const verg =
+        r.vergoeding != null
+          ? r.vergoeding
+          : vergoedingVoorRit(r.km || 0, r.tijd, { fromName: r.fromName, toName: r.toName });
       const chauffeur = r.chauffeurName || '—';
       const voertuig = r.voertuigName || '—';
       const isLopend = r.status === 'lopend';

@@ -1,5 +1,5 @@
 /**
- * PDF-factuur — layout afgestemd op factuursjabloon (logo, Van/Aan, tabel, QR, voet).
+ * PDF-factuur — layout afgestemd op factuursjabloon (logo, Van/Aan, tabel, voet).
  * Gegevens komen uit Meer → Factuur & logo (localStorage per profiel).
  */
 
@@ -35,29 +35,21 @@ function detectImageFormat(dataUrl) {
   return 'PNG';
 }
 
-function buildEpcSepaPayload(settings, amountEuro, remittance) {
-  const iban = String(settings.iban || '')
-    .replace(/\s/g, '')
-    .toUpperCase();
-  const name = String(settings.rekeninghouder || settings.bedrijfsnaam || '').trim().slice(0, 70);
-  if (!iban.startsWith('BE') || name.length < 2 || !Number.isFinite(amountEuro) || amountEuro <= 0) return '';
-  const amt = 'EUR' + amountEuro.toFixed(2);
-  const rem = String(remittance || '').trim().slice(0, 140);
-  return ['BCD', '002', '1', 'SCT', '', name, iban, amt, '', '', rem].join('\n');
-}
-
-async function paymentQrDataUrl(epcPayload) {
-  if (!epcPayload) return '';
-  const mod = await import('qrcode');
-  const toDataURL = mod.default?.toDataURL || mod.toDataURL;
-  return toDataURL(epcPayload, { margin: 1, width: 220, errorCorrectionLevel: 'M' });
-}
-
 /**
  * @param {object} opts
  * @param {Record<string, unknown>} opts.factuurSettings — uit getFactuurGegevens()
  * @param {{ factuurCode: string, orderDisplay: string, factuurDatum: Date, vervalDatum: Date }} opts.meta
- * @param {{ titel: string, detail: string, prijsExcl: number, totaal: number }[]} opts.regels
+ * @param {{
+ *   titel?: string,
+ *   detail?: string,
+ *   prijsExcl: number,
+ *   totaal: number,
+ *   datumWeergave?: string,
+ *   orderBon?: string,
+ *   ophaal?: string,
+ *   aflevering?: string,
+ *   km?: string,
+ * }[]} opts.regels
  */
 export async function generateFactuurPdfBlob(opts) {
   const jsPDF = await loadJsPDF();
@@ -76,16 +68,20 @@ export async function generateFactuurPdfBlob(opts) {
   const sumBtwBedrag = subtotaalExcl * (btwPct / 100);
   const teBetalenTotaal = subtotaalExcl + sumBtwBedrag;
 
-  const epc = buildEpcSepaPayload(S, teBetalenTotaal, `Factuur ${meta.factuurCode}`);
-  const qrUrl = await paymentQrDataUrl(epc);
-
   const drawHeaderBlock = (yStart, isContinuation) => {
-    let y = yStart;
+    /** Pagina 2+: geen factuurgegevens, geen Van/Aan — alleen tabel (kop staat op pagina 1). */
+    if (isContinuation) {
+      return yStart + 10;
+    }
+
     const logoSize = 18;
-    if (!isContinuation && S.logoDataUrl && String(S.logoDataUrl).startsWith('data:image')) {
+    const logoGap = 4;
+    const hasLogo = S.logoDataUrl && String(S.logoDataUrl).startsWith('data:image');
+
+    if (hasLogo) {
       try {
         const fmt = detectImageFormat(S.logoDataUrl);
-        doc.addImage(S.logoDataUrl, fmt, M.x, y, logoSize, logoSize, undefined, 'FAST');
+        doc.addImage(S.logoDataUrl, fmt, M.x, yStart, logoSize, logoSize, undefined, 'FAST');
       } catch {
         /* logo ongeldig */
       }
@@ -94,20 +90,17 @@ export async function generateFactuurPdfBlob(opts) {
     const rightX = 118;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
-    doc.text(`FACTUUR ${meta.factuurCode}`, rightX, y + 5);
+    doc.text(`FACTUUR ${meta.factuurCode}`, rightX, yStart + 5);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(`Factuurdatum: ${formatDatumNl(meta.factuurDatum)}`, rightX, y + 11);
-    doc.text(`Vervaldatum: ${formatDatumNl(meta.vervalDatum)}`, rightX, y + 16);
-    doc.text(`Ordernummer: ${meta.orderDisplay}`, rightX, y + 21);
-    if (isContinuation) {
-      doc.setFontSize(8);
-      doc.setTextColor(100);
-      doc.text('(vervolgpagina)', rightX, y + 26);
-      doc.setTextColor(0);
-    }
+    doc.text(`Factuurdatum: ${formatDatumNl(meta.factuurDatum)}`, rightX, yStart + 11);
+    doc.text(`Vervaldatum: ${formatDatumNl(meta.vervalDatum)}`, rightX, yStart + 16);
+    doc.text(`Ordernummer: ${meta.orderDisplay}`, rightX, yStart + 21);
 
-    y = Math.max(y + logoSize, y + 24) + 6;
+    /** Links: logo (indien aanwezig) staat boven het blok “Van” / bedrijfsnaam. */
+    let y = hasLogo
+      ? yStart + logoSize + logoGap
+      : Math.max(yStart + logoSize, yStart + 24) + 6;
 
     const colW = (M.w - 10) / 2;
     const mid = M.x + colW + 5;
@@ -172,29 +165,42 @@ export async function generateFactuurPdfBlob(opts) {
   let y = drawHeaderBlock(14, false);
 
   /**
-   * Vaste kolommen (mm) — te smalle tussenruimte zorgde voor overlappende tekst
-   * (Prijs / Btw / Aantal stonden visueel op elkaar).
+   * Factuurtabel: datum, ordernr., ophaal, aflevering, km, prijzen (mm vanaf M.x).
+   * Totaal nuttige breedte ≈ 180 mm (A4 met marge).
    */
-  const TAB = {
-    descL: M.x,
-    descW: 50,
-    prijsR: 90,
-    btwL: 95,
-    aantalC: 112,
+  const COL = {
+    datumL: M.x,
+    datumW: 17,
+    orderL: M.x + 17,
+    orderW: 20,
+    vanL: M.x + 37,
+    vanW: 40,
+    naarL: M.x + 77,
+    naarW: 40,
+    kmL: M.x + 117,
+    kmW: 9,
+    prijsR: M.x + 125,
+    prijsW: 17,
+    btwL: M.x + 143,
+    btwW: 10,
+    aantalC: M.x + 153.5,
+    aantalW: 7,
     totaalR: M.x2,
   };
 
   function drawTableHeader(yy) {
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text('Beschrijving', TAB.descL, yy);
     doc.setFontSize(7);
-    doc.text('Prijs excl. btw', TAB.prijsR, yy, { align: 'right' });
-    doc.text('Btw-tarief', TAB.btwL, yy);
-    doc.setFontSize(8);
-    doc.text('Aantal', TAB.aantalC, yy, { align: 'center' });
+    doc.text('Datum', COL.datumL, yy);
+    doc.text('Ordernr.', COL.orderL, yy);
+    doc.text('Ophaalpunt', COL.vanL, yy);
+    doc.text('Aflevering', COL.naarL, yy);
+    doc.text('Km', COL.kmL + COL.kmW, yy, { align: 'right' });
+    doc.text('Prijs excl.', COL.prijsR + COL.prijsW, yy, { align: 'right' });
+    doc.text('Btw', COL.btwL, yy);
+    doc.text('Aantal', COL.aantalC + COL.aantalW / 2, yy, { align: 'center' });
     const totLabel = btwPct > 0 ? 'Totaal incl.' : 'Totaal';
-    doc.text(totLabel, TAB.totaalR, yy, { align: 'right' });
+    doc.text(totLabel, COL.totaalR, yy, { align: 'right' });
     doc.setFont('helvetica', 'normal');
   }
 
@@ -205,16 +211,41 @@ export async function generateFactuurPdfBlob(opts) {
   y += 5;
 
   const rowMinY = 248;
-  const lineH = 4;
+  const lineGap = 3.35;
 
   for (const r of regels) {
-    const titel = String(r.titel || 'Dienstverlening: ziekenhuisvervoer');
-    const detail = String(r.detail || '—');
     const prijs = Number(r.prijsExcl ?? r.totaal) || 0;
     const tot = btwPct > 0 ? prijs * (1 + btwPct / 100) : prijs;
 
-    const detailLines = doc.splitTextToSize(detail, TAB.descW);
-    const blockH = lineH + detailLines.length * 3.6 + 2;
+    const hasKolommen =
+      r.datumWeergave != null || r.orderBon != null || r.ophaal != null || r.aflevering != null;
+
+    let blockH;
+    /** @type {string[]} */
+    let datumLines = [];
+    /** @type {string[]} */
+    let orderLines = [];
+    /** @type {string[]} */
+    let vanLines = [];
+    /** @type {string[]} */
+    let naarLines = [];
+    /** @type {string[]} */
+    let legacyLines = [];
+
+    if (hasKolommen) {
+      datumLines = doc.splitTextToSize(String(r.datumWeergave || '—'), COL.datumW - 1);
+      orderLines = doc.splitTextToSize(String(r.orderBon || '—'), COL.orderW - 1);
+      vanLines = doc.splitTextToSize(String(r.ophaal || '—'), COL.vanW - 1);
+      naarLines = doc.splitTextToSize(String(r.aflevering || '—'), COL.naarW - 1);
+      const nText = Math.max(datumLines.length, orderLines.length, vanLines.length, naarLines.length, 1);
+      blockH = 2 + nText * lineGap + 2;
+    } else {
+      const titel = String(r.titel || 'Dienstverlening: ziekenhuisvervoer');
+      const detail = String(r.detail || '—');
+      const legacyW = COL.naarL + COL.naarW - COL.datumL - 1;
+      legacyLines = doc.splitTextToSize(`${titel}\n${detail}`, legacyW);
+      blockH = 2 + Math.max(legacyLines.length, 1) * lineGap + 2;
+    }
 
     if (y + blockH > rowMinY) {
       doc.addPage();
@@ -225,20 +256,26 @@ export async function generateFactuurPdfBlob(opts) {
       y += 5;
     }
 
-    const yNums = y + lineH;
+    const y0 = y + 3;
+    const yNums = y0 + (blockH - 6) / 2 + 1;
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text(titel, TAB.descL, y);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(detailLines, TAB.descL, y + lineH);
 
-    doc.setFontSize(8);
-    doc.text(formatEuroPdf(prijs), TAB.prijsR, yNums, { align: 'right' });
-    doc.text(btwPct > 0 ? `${btwPct} %` : '0 %', TAB.btwL, yNums);
-    doc.text('1', TAB.aantalC, yNums, { align: 'center' });
-    doc.text(formatEuroPdf(tot), TAB.totaalR, yNums, { align: 'right' });
+    if (hasKolommen) {
+      doc.text(datumLines, COL.datumL, y0);
+      doc.text(orderLines, COL.orderL, y0);
+      doc.text(vanLines, COL.vanL, y0);
+      doc.text(naarLines, COL.naarL, y0);
+      doc.text(String(r.km != null ? r.km : '—'), COL.kmL + COL.kmW, yNums, { align: 'right' });
+    } else {
+      doc.text(legacyLines, COL.datumL, y0);
+    }
+
+    doc.text(formatEuroPdf(prijs), COL.prijsR + COL.prijsW, yNums, { align: 'right' });
+    doc.text(btwPct > 0 ? `${btwPct} %` : '0 %', COL.btwL, yNums);
+    doc.text('1', COL.aantalC + COL.aantalW / 2, yNums, { align: 'center' });
+    doc.text(formatEuroPdf(tot), COL.totaalR, yNums, { align: 'right' });
 
     y += blockH;
   }
@@ -251,19 +288,19 @@ export async function generateFactuurPdfBlob(opts) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text('Subtotaal excl. btw', M.x, y);
-    doc.text(formatEuroPdf(subtotaalExcl), TAB.totaalR, y, { align: 'right' });
+    doc.text(formatEuroPdf(subtotaalExcl), M.x2, y, { align: 'right' });
     y += 5;
     doc.text(`Btw ${btwPct} %`, M.x, y);
-    doc.text(formatEuroPdf(sumBtwBedrag), TAB.totaalR, y, { align: 'right' });
+    doc.text(formatEuroPdf(sumBtwBedrag), M.x2, y, { align: 'right' });
     y += 6;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     doc.text('Te betalen', M.x, y);
-    doc.text(formatEuroPdf(teBetalenTotaal), TAB.totaalR, y, { align: 'right' });
+    doc.text(formatEuroPdf(teBetalenTotaal), M.x2, y, { align: 'right' });
     y += 8;
   } else {
     doc.text('Te betalen', 128, y);
-    doc.text(formatEuroPdf(subtotaalExcl), TAB.totaalR, y, { align: 'right' });
+    doc.text(formatEuroPdf(subtotaalExcl), M.x2, y, { align: 'right' });
     y += 8;
   }
 
@@ -283,24 +320,9 @@ export async function generateFactuurPdfBlob(opts) {
     doc.setLineWidth(0.35);
     doc.line(M.x, footY - 22, M.x2, footY - 22);
 
-    const isLast = p === totalPages;
-    if (isLast && qrUrl) {
-      doc.setFontSize(8);
-      doc.text('Betaal met je bank-app', M.x, footY - 18);
-      try {
-        doc.addImage(qrUrl, 'PNG', M.x, footY - 16, 26, 26);
-      } catch {
-        /* */
-      }
-    }
-
     doc.setFontSize(8);
     const cx = 120;
-    const em = (S.email || '').trim();
-    const tel = (S.telefoon || '').trim();
-    if (em) doc.text(em, cx, footY - 14);
-    if (tel) doc.text(tel, cx, footY - 9);
-    doc.text(`Pagina ${p}/${totalPages}`, cx, footY - 2);
+    doc.text(`Pagina ${p}/${totalPages}`, cx, footY - 8);
   }
 
   return { blob: doc.output('blob'), invoiceNr: meta.factuurCode };

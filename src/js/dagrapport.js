@@ -49,7 +49,9 @@ export function buildWeekRapportBody(weekKey, labelDatumStr) {
     lines.push('Geen ritten in deze week.');
   } else {
     list.forEach((r, i) => {
-      const verg = r.vergoeding ?? vergoedingVoorRit(r.km || 0, r.tijd);
+      const verg =
+        r.vergoeding ??
+        vergoedingVoorRit(r.km || 0, r.tijd, { fromName: r.fromName, toName: r.toName });
       sumKm += Number(r.km) || 0;
       sumVerg += verg;
       const bon = Array.isArray(r.bestelArtikelen)
