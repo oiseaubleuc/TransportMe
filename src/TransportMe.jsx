@@ -12,6 +12,7 @@ import {
 } from "chart.js";
 import { Doughnut, Bar } from "react-chartjs-2";
 import "./transportme-theme.css";
+import { exportTransporteurData, applyImportPayload } from "./js/dataBackup.js";
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 ChartJS.defaults.font.family = "'DM Sans', -apple-system, sans-serif";
@@ -1211,8 +1212,9 @@ function Kosten({ D, sD, pid }) {
   );
 }
 
-function Meer({ D, sD, pid, sP, pr }) {
+function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   const [v, sV] = useState("m");
+  const backupFileRef = useRef(null);
   if (v !== "m")
     return (
       <div>
@@ -1239,8 +1241,48 @@ function Meer({ D, sD, pid, sP, pr }) {
         {v === "d" && (
           <div>
             <p style={{ marginBottom: 16, color: "var(--tx2)", fontSize: 14 }}>
-              {D.r.length} ritten · {D.b.length} tankbeurten · {(D.o || []).length} overige kosten
+              {D.r.length} ritten · {D.b.length} tankbeurten · {(D.o || []).length} overige kosten (actief profiel)
             </p>
+            <div className="card" style={{ marginBottom: 14, padding: 14, background: "var(--s2)" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Volledige backup</div>
+              <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
+                Alle profielen, TransportMe-data en klassieke app-gegevens in één .json-bestand. Bewaar dit op een
+                veilige plek (geen cloud in de app zelf).
+              </p>
+              <button type="button" className="btn btn-p btn-full" style={{ marginBottom: 8 }} onClick={() => exportTransporteurData()}>
+                Backup downloaden
+              </button>
+              <input
+                ref={backupFileRef}
+                type="file"
+                accept="application/json,.json"
+                style={{ display: "none" }}
+                onChange={async e => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f) return;
+                  try {
+                    const text = await f.text();
+                    const payload = JSON.parse(text);
+                    const volledig = confirm(
+                      "Volledige vervanging op dit toestel?\n\n" +
+                        "OK = eerst alle Transporteur- en TransportMe-data hier wissen, daarna de backup (aanbevolen bij nieuwe telefoon).\n" +
+                        "Annuleren = alleen de sleutels uit het bestand overschrijven (rest blijft staan)."
+                    );
+                    const n = applyImportPayload(payload, { replaceAll: volledig });
+                    alert(`Backup teruggezet (${n} onderdelen).`);
+                    onBackupImported?.();
+                  } catch (err) {
+                    console.error(err);
+                    alert("Importeren mislukt. Kies een .json-export van deze app.");
+                  }
+                }}
+              />
+              <button type="button" className="btn btn-o btn-full" onClick={() => backupFileRef.current?.click()}>
+                Backup terugzetten
+              </button>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--tx3)", marginBottom: 8 }}>Alleen huidig profiel</div>
             <button
               type="button"
               className="btn btn-o btn-full"
@@ -1251,22 +1293,23 @@ function Meer({ D, sD, pid, sP, pr }) {
                 a.href = URL.createObjectURL(b);
                 a.download = "transportme-" + pid + ".json";
                 a.click();
+                URL.revokeObjectURL(a.href);
               }}
             >
-              Exporteren
+              JSON export (dit profiel)
             </button>
             <button
               type="button"
               className="btn btn-r btn-full"
               onClick={() => {
-                if (confirm("Alle gegevens wissen?")) {
+                if (confirm("Alle gegevens van dit profiel wissen?")) {
                   const n = { r: [], b: [], o: [] };
                   sD(n);
                   sv(pid, n);
                 }
               }}
             >
-              Alles wissen
+              Alles wissen (dit profiel)
             </button>
           </div>
         )}
@@ -1278,7 +1321,7 @@ function Meer({ D, sD, pid, sP, pr }) {
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Instellingen</h1>
       {[
         { k: "p", t: "Profiel", s: pr.n + " · Wissel chauffeur" },
-        { k: "d", t: "Gegevens", s: "Exporteren & wissen" },
+        { k: "d", t: "Gegevens", s: "Backup, export & wissen" },
       ].map(m => (
         <button key={m.k} type="button" className="tm-mi" onClick={() => sV(m.k)}>
           <strong>{m.t}</strong>
@@ -1421,7 +1464,20 @@ export default function App() {
         {tab === "ritten" && <Ritten D={D} sD={sD} pid={pid} />}
         {tab === "fin" && <Financieel D={D} />}
         {tab === "kosten" && <Kosten D={D} sD={sD} pid={pid} />}
-        {tab === "meer" && <Meer D={D} sD={sD} pid={pid} sP={sw} pr={pr} />}
+        {tab === "meer" && (
+          <Meer
+            D={D}
+            sD={sD}
+            pid={pid}
+            sP={sw}
+            pr={pr}
+            onBackupImported={() => {
+              const id = initialProfileId();
+              sP(id);
+              sD(ld(id));
+            }}
+          />
+        )}
       </div>
       <nav className="tm-nav" aria-label="Hoofdnavigatie">
         {NAV_ITEMS.map(({ id, label, Icon }) => (

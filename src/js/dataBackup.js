@@ -1,17 +1,27 @@
 /**
  * Export / import van alle Transporteur-localStorage — zelfde data op telefoon en pc (geen cloud).
+ * Inclusief TransportMe-bundels (t_<profiel>) en actief profiel (tp).
  */
 
 const LS_PREFIX = 'transporteur_';
+
+/** Sleutels die in één backup-bestand horen (klassieke app + TransportMe). */
+export function isBackupStorageKey(k) {
+  if (typeof k !== 'string') return false;
+  if (k.startsWith(LS_PREFIX)) return true;
+  if (k.startsWith('t_')) return true;
+  if (k === 'tp') return true;
+  return false;
+}
 
 export function collectExportPayload() {
   const keys = {};
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
-    if (k && k.startsWith(LS_PREFIX)) keys[k] = localStorage.getItem(k);
+    if (k && isBackupStorageKey(k)) keys[k] = localStorage.getItem(k);
   }
   return {
-    transporteurBackupVersion: 1,
+    transporteurBackupVersion: 2,
     exportedAt: new Date().toISOString(),
     keys,
   };
@@ -44,19 +54,19 @@ export function applyImportPayload(payload, { replaceAll = false } = {}) {
     const toRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && k.startsWith(LS_PREFIX)) toRemove.push(k);
+      if (k && isBackupStorageKey(k)) toRemove.push(k);
     }
     toRemove.forEach((k) => localStorage.removeItem(k));
   }
 
   let n = 0;
   for (const [k, v] of Object.entries(rawKeys)) {
-    if (typeof k !== 'string' || !k.startsWith(LS_PREFIX)) continue;
+    if (typeof k !== 'string' || !isBackupStorageKey(k)) continue;
     if (typeof v !== 'string') continue;
     localStorage.setItem(k, v);
     n++;
   }
-  if (n === 0) throw new Error('Geen transporteur-sleutels gevonden');
+  if (n === 0) throw new Error('Geen geldige backup-sleutels gevonden');
   return n;
 }
 
@@ -78,7 +88,7 @@ export function initDataBackup(onImported) {
       const payload = JSON.parse(text);
       const volledig = confirm(
         'Volledige vervanging op dit toestel?\n\n' +
-          'OK = eerst alle Transporteur-data hier wissen, daarna de backup (aanbevolen bij nieuwe telefoon).\n' +
+          'OK = eerst alle Transporteur- en TransportMe-data hier wissen, daarna de backup (aanbevolen bij nieuwe telefoon).\n' +
           'Annuleren = alleen de sleutels uit het bestand overschrijven (rest blijft staan).'
       );
       const n = applyImportPayload(payload, { replaceAll: volledig });
