@@ -11,13 +11,16 @@
     "factuur:beheer": "node scripts/generate-beheer-factuur.mjs"
   },
   "dependencies": {
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
+    "chart.js": "^4.5.1",
     "jspdf": "^4.2.1",
+    "leaflet": "^1.9.4",
     "maplibre-gl": "^5.20.1",
     "pdfjs-dist": "^4.10.38",
+    "react": "^19.2.0",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^19.2.0",
     "tesseract.js": "^5.1.1"
   },
   "devDependencies": {
