@@ -68,6 +68,27 @@ export function isSangoUzaForfaitRoute(fromName, toName) {
   );
 }
 
+/** RKV Mechelen (geen AZ Mechelen): naam bevat mechelen + (rkv|reinier). */
+function heeftRkvMechelenInNaam(s) {
+  const n = normLocNaam(s);
+  if (!n.includes('mechelen')) return false;
+  if (n.includes('az') && n.includes('mechelen') && !n.includes('rkv')) return false;
+  return n.includes('rkv') || n.includes('reinier');
+}
+
+/** RKV Mechelen → UZA Edegem: zelfde uitzondering op route-toeslag als Sango → UZA. */
+export function isRkvMechelenNaarEdegemUzaRoute(fromName, toName) {
+  return heeftRkvMechelenInNaam(fromName) && heeftEdegemUzaInNaam(toName);
+}
+
+/** Beide richtingen: zelfde forfait €35 als Sango ↔ UZA (excl. btw), ’s nachts × nachttarief. */
+export function isRkvMechelenUzaForfaitRoute(fromName, toName) {
+  return (
+    isRkvMechelenNaarEdegemUzaRoute(fromName, toName) ||
+    (heeftEdegemUzaInNaam(fromName) && heeftRkvMechelenInNaam(toName))
+  );
+}
+
 function vergoedingVoorRitAlleenKm(km, tijd) {
   const k = Number(km) || 0;
   const schijven = Math.ceil(k / KM_SCHIJF);
@@ -88,7 +109,10 @@ export function vergoedingVoorRit(km, tijd, route) {
     String(fromName || '').trim().length > 0 && String(toName || '').trim().length > 0;
 
   let kern;
-  if (heeftBeideNamen && isSangoUzaForfaitRoute(fromName, toName)) {
+  const isUzaForfaitPaar =
+    heeftBeideNamen &&
+    (isSangoUzaForfaitRoute(fromName, toName) || isRkvMechelenUzaForfaitRoute(fromName, toName));
+  if (isUzaForfaitPaar) {
     kern = FORFAIT_SANGO_UZA_EXCL_BTW;
     if (isNachtTariefTijd(tijd)) {
       kern = Math.round(kern * NACHT_TARIEF_FACTOR * 100) / 100;
@@ -97,7 +121,9 @@ export function vergoedingVoorRit(km, tijd, route) {
     kern = vergoedingVoorRitAlleenKm(km, tijd);
   }
 
-  if (heeftBeideNamen && !isSangoNaarEdegemUzaRoute(fromName, toName)) {
+  const geenRouteToeslag =
+    isSangoNaarEdegemUzaRoute(fromName, toName) || isRkvMechelenNaarEdegemUzaRoute(fromName, toName);
+  if (heeftBeideNamen && !geenRouteToeslag) {
     kern = Math.round((kern + ROUTE_TOESLAG_EURO) * 100) / 100;
   }
   return kern;
@@ -134,12 +160,17 @@ export function vergoedingUitsplitsingVoorRit(km, tijd, route) {
   const heeftBeideNamen =
     String(fromName || '').trim().length > 0 && String(toName || '').trim().length > 0;
 
-  if (heeftBeideNamen && isSangoUzaForfaitRoute(fromName, toName)) {
+  const isUzaForfaitPaar =
+    heeftBeideNamen &&
+    (isSangoUzaForfaitRoute(fromName, toName) || isRkvMechelenUzaForfaitRoute(fromName, toName));
+  if (isUzaForfaitPaar) {
     const basis = FORFAIT_SANGO_UZA_EXCL_BTW;
     const nacht = isNachtTariefTijd(tijd);
     const nachtToeslagEuro = Math.round(basis * (nacht ? NACHT_TARIEF_FACTOR - 1 : 0) * 100) / 100;
     const naNacht = Math.round(basis * (nacht ? NACHT_TARIEF_FACTOR : 1) * 100) / 100;
-    const routeToeslag = isSangoNaarEdegemUzaRoute(fromName, toName) ? 0 : ROUTE_TOESLAG_EURO;
+    const geenRt =
+      isSangoNaarEdegemUzaRoute(fromName, toName) || isRkvMechelenNaarEdegemUzaRoute(fromName, toName);
+    const routeToeslag = geenRt ? 0 : ROUTE_TOESLAG_EURO;
     const vergoeding = Math.round((naNacht + routeToeslag) * 100) / 100;
     return {
       isSangoUzaForfait: true,
@@ -153,8 +184,9 @@ export function vergoedingUitsplitsingVoorRit(km, tijd, route) {
   }
 
   const u = vergoedingUitsplitsingKmFormule(km, tijd);
-  const routeToeslag =
-    heeftBeideNamen && !isSangoNaarEdegemUzaRoute(fromName, toName) ? ROUTE_TOESLAG_EURO : 0;
+  const geenRt =
+    isSangoNaarEdegemUzaRoute(fromName, toName) || isRkvMechelenNaarEdegemUzaRoute(fromName, toName);
+  const routeToeslag = heeftBeideNamen && !geenRt ? ROUTE_TOESLAG_EURO : 0;
   return {
     ...u,
     isSangoUzaForfait: false,

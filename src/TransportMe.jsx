@@ -13,6 +13,13 @@ import {
 import { Doughnut, Bar } from "react-chartjs-2";
 import "./transportme-theme.css";
 import { exportTransporteurData, applyImportPayload } from "./js/dataBackup.js";
+import { getFactuurGegevens, nextFactuurVolgNummer, saveFactuurGegevens } from "./js/storage.js";
+import { generateFactuurPdfBlob, triggerPdfDownload } from "./js/invoicePdf.js";
+import { vergoedingVoorRit, geschatteAfstandKm } from "./js/calculations.js";
+import { getRouteDistanceORS, hasOpenRouteApiKey } from "./js/ors.js";
+import { searchPlacesBelgium } from "./js/placeSearchFree.js";
+import { PRESET_ANCHOR_ZIEKENHUIZEN } from "./js/config.js";
+import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 ChartJS.defaults.font.family = "'DM Sans', -apple-system, sans-serif";
@@ -43,9 +50,6 @@ const TM_CHART_BASE = {
   },
 };
 
-const O = 15,
-  P2 = 25,
-  S = 20;
 const PR = [
   { id: "houdaifa", n: "Houdaifa", i: "H" },
   { id: "amine", n: "Amine", i: "A" },
@@ -82,12 +86,35 @@ const ui = () => Date.now() + "" + Math.random().toString(36).slice(2, 5);
 const isN = t => {
   if (!t) return false;
   const h = +String(t).split(":")[0];
-  return h >= 20 || h < 6;
+  return h >= 20 || h < 5;
 };
-const VG = (k, t) => {
-  const s = Math.ceil(k / S) * P2;
-  return Math.round((O + (isN(t) ? s * 1.3 : s)) * 100) / 100;
-};
+
+/** Zelfde regels als klassieke app (forfait Sango/RKV Mechelen ↔ UZA, route-toeslag, nacht). */
+function tmVergoeding(f, t, k, ti) {
+  const kk = Number(k) || 0;
+  return vergoedingVoorRit(kk, ti || "", { fromName: f, toName: t });
+}
+
+/** Lokale lijst: Vlaamse ziekenhuizen (OSM) + vaste ankertjes met coördinaten. */
+const TM_ZIEKENHUIZEN_LIJST = (() => {
+  const by = new Map();
+  for (const h of ziekenVlaanderen) {
+    const name = String(h.name || "").trim();
+    if (!name) continue;
+    by.set(name.toLowerCase(), { name, address: String(h.address || "").trim(), lat: h.lat, lng: h.lng });
+  }
+  for (const a of PRESET_ANCHOR_ZIEKENHUIZEN) {
+    const name = String(a.name || "").trim();
+    if (!name || by.has(name.toLowerCase())) continue;
+    by.set(name.toLowerCase(), {
+      name,
+      address: String(a.address || name).trim(),
+      lat: a.lat,
+      lng: a.lng,
+    });
+  }
+  return [...by.values()].sort((x, y) => x.name.localeCompare(y.name, "nl"));
+})();
 
 /** Kalenderdatum in lokale tijd (geen UTC-shift zoals toISOString → foutieve maand/week in EU). */
 function toIsoLocal(d) {
@@ -119,7 +146,31 @@ const grExt = p => (p === "all" ? ["1970-01-01", "2099-12-31"] : gr(p));
 
 function normData(x) {
   const o = x && typeof x === "object" ? x : {};
-  return { r: o.r || [], b: o.b || [], o: o.o || [] };
+  const xrRaw = Array.isArray(o.xr) ? o.xr : [];
+  const xr = xrRaw
+    .map((it, idx) => {
+      if (!it || typeof it !== "object") return null;
+      const f = String(it.f || "").trim();
+      const tt = String(it.t || "").trim();
+      const k = Number(it.k);
+      if (!f || !tt || !Number.isFinite(k) || k < 1) return null;
+      const id = it.id != null && String(it.id).trim() ? String(it.id).trim() : `xr-${idx}-${k}`;
+      const out = { id, f, t: tt, k };
+      const num = n => (n != null && Number.isFinite(Number(n)) ? Number(n) : null);
+      const la1 = num(it.la1),
+        lo1 = num(it.lo1),
+        la2 = num(it.la2),
+        lo2 = num(it.lo2);
+      if (la1 != null && lo1 != null && la2 != null && lo2 != null) {
+        out.la1 = la1;
+        out.lo1 = lo1;
+        out.la2 = la2;
+        out.lo2 = lo2;
+      }
+      return out;
+    })
+    .filter(Boolean);
+  return { r: o.r || [], b: o.b || [], o: o.o || [], xr };
 }
 
 /** Zelfde keys als src/js/config.js STORAGE_KEYS — data van de klassieke Transporteur-app op het toestel. */
@@ -194,7 +245,7 @@ function legacyRitToTm(r) {
   const f = (r.f || r.fromName || "").toString().trim() || "—";
   const t = (r.t || r.toName || "").toString().trim() || "—";
   let v = parseLooseNumber(r.v != null ? r.v : r.vergoeding);
-  if (!Number.isFinite(v)) v = VG(k, ti);
+  if (!Number.isFinite(v)) v = tmVergoeding(f, t, k, ti);
   const id = r.id != null && r.id !== "" ? String(r.id) : ui();
   const dr = (r.dr || r.chauffeurName || DR[0]).toString();
   const ca = (r.ca || r.voertuigName || CA[0]).toString();
@@ -251,17 +302,18 @@ const ld = p => {
   try {
     data = normData(JSON.parse(localStorage.getItem("t_" + p) || "null"));
   } catch {
-    data = { r: [], b: [], o: [] };
+    data = normData(null);
   }
   if (isTmStoreLeeg(data)) {
     const leg = leesLegacyBundel(p);
     if (leg.r.length > 0 || leg.b.length > 0 || leg.o.length > 0) {
+      const merged = normData({ ...leg, xr: data.xr });
       try {
-        localStorage.setItem("t_" + p, JSON.stringify(leg));
+        localStorage.setItem("t_" + p, JSON.stringify(merged));
       } catch {
         /* quota */
       }
-      return leg;
+      return merged;
     }
   }
   return data;
@@ -298,6 +350,119 @@ function Badge({ s }) {
   };
   const [l, c] = m[s] || m.voltooid;
   return <span className={"badge " + c}>{l}</span>;
+}
+
+function useDebouncedValue(v, ms) {
+  const [x, setX] = useState(v);
+  useEffect(() => {
+    const t = setTimeout(() => setX(v), ms);
+    return () => clearTimeout(t);
+  }, [v, ms]);
+  return x;
+}
+
+/** Ziekenhuizen (Vlaanderen + ankertjes) + optioneel zoeken heel België via OSM. */
+function PlaatsPicker({ label, gekozen, onKies, lijst }) {
+  const [q, setQ] = useState(gekozen?.name || "");
+  const [remote, setRemote] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const qDeb = useDebouncedValue(q.trim(), 1000);
+
+  useEffect(() => {
+    setQ(gekozen?.name || "");
+  }, [gekozen?.name]);
+
+  useEffect(() => {
+    let cancel = false;
+    if (qDeb.length < 3) {
+      setRemote([]);
+      return;
+    }
+    (async () => {
+      setBusy(true);
+      try {
+        const r = await searchPlacesBelgium(qDeb);
+        if (!cancel) setRemote(Array.isArray(r) ? r : []);
+      } catch {
+        if (!cancel) setRemote([]);
+      } finally {
+        if (!cancel) setBusy(false);
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [qDeb]);
+
+  const localHits = useMemo(() => {
+    const qq = q.trim().toLowerCase();
+    if (!qq) return [];
+    return lijst
+      .filter(h => h.name.toLowerCase().includes(qq) || (h.address || "").toLowerCase().includes(qq))
+      .slice(0, 30);
+  }, [q, lijst]);
+
+  const kies = p => {
+    onKies(p);
+    setQ(p.name);
+    setRemote([]);
+  };
+
+  const showHits = q.trim().length > 0 && (localHits.length > 0 || remote.length > 0 || busy);
+
+  return (
+    <div className="tm-fg">
+      <label className="fl">{label}</label>
+      <input
+        type="text"
+        value={q}
+        placeholder="Zoek ziekenhuis of adres (België)…"
+        autoComplete="off"
+        onChange={e => setQ(e.target.value)}
+      />
+      {gekozen?.name && (
+        <div style={{ fontSize: 11, color: "var(--acc)", marginTop: 4 }}>
+          Gekozen: {gekozen.name}
+          {gekozen.lat != null ? " · coördinaten OK" : ""}
+        </div>
+      )}
+      {showHits && (
+        <div
+          className="tm-prs"
+          style={{ maxHeight: 160, marginTop: 6, border: "1px solid var(--bd)", borderRadius: 8, padding: 6 }}
+        >
+          {localHits.map(h => (
+            <button
+              key={h.name + (h.address || "")}
+              type="button"
+              className="tm-pr"
+              style={{ marginBottom: 4 }}
+              onClick={() => kies({ name: h.name, lat: h.lat, lng: h.lng, address: h.address })}
+            >
+              <span>{h.name}</span>
+              <span className="tm-pk" style={{ maxWidth: "45%", textAlign: "right" }}>
+                {(h.address || "").slice(0, 36)}
+                {(h.address || "").length > 36 ? "…" : ""}
+              </span>
+            </button>
+          ))}
+          {localHits.length > 0 && remote.length > 0 && (
+            <div style={{ fontSize: 10, color: "var(--tx3)", padding: "4px 0" }}>— ook in heel België —</div>
+          )}
+          {busy && qDeb.length >= 3 && <div style={{ fontSize: 11, color: "var(--tx3)", padding: 6 }}>Zoeken…</div>}
+          {remote.map((h, i) => (
+            <button key={i} type="button" className="tm-pr" style={{ marginBottom: 4 }} onClick={() => kies(h)}>
+              <span>{h.name}</span>
+              <span className="tm-pk" style={{ maxWidth: "45%", textAlign: "right" }}>
+                {(h.address || "").slice(0, 36)}
+                {(h.address || "").length > 36 ? "…" : ""}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function RitMap({ la1, lo1, la2, lo2, labelF, labelT }) {
@@ -365,7 +530,7 @@ function statCard(label, value, color, sub) {
       <div className="sc-v" style={{ color }}>
         {value}
       </div>
-      {sub && <div className="sc-s">{sub}</div>}
+      {sub ? <div className="sc-s">{sub}</div> : null}
     </div>
   );
 }
@@ -527,8 +692,8 @@ function ritWeekBuckets(rides) {
     periodEnd.setDate(periodEnd.getDate() - w * 7);
     const periodStart = new Date(periodEnd);
     periodStart.setDate(periodStart.getDate() - 6);
-    const s = periodStart.toISOString().slice(0, 10);
-    const e = periodEnd.toISOString().slice(0, 10);
+    const s = toIsoLocal(periodStart);
+    const e = toIsoLocal(periodEnd);
     let c = 0,
       k = 0;
     voltooid.forEach(r => {
@@ -681,8 +846,8 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
   return (
     <div className="tm-ritten-charts">
       <p className="tm-chart-lead">
-        <strong>{rides.length}</strong> ritten in totaal. Grafieken tonen al je data; kies hieronder een filter om de
-        lijst te openen.
+        <strong>{rides.length}</strong> ritten in totaal. Weekbalk = voltooide ritten per kalenderweek (lokale datum).
+        Open de lijst via een filter hieronder.
       </p>
       <div className="tm-chart-grid">
         <div className="tm-chart-card tm-chart-card--donut">
@@ -732,6 +897,28 @@ function Ritten({ D, sD, pid }) {
   const [fl, sF] = useState("alle");
   const [pane, sPane] = useState("overzicht");
   const [sh, sSh] = useState(false);
+  const [placeA, setPlaceA] = useState(null);
+  const [placeB, setPlaceB] = useState(null);
+  const [routeBusy, setRouteBusy] = useState(false);
+  const mergedRoutes = useMemo(() => {
+    const built = ROUTES.map(r => ({ ...r, __map: true }));
+    const custom = (D.xr || []).map(r => {
+      const hasMap =
+        r.la1 != null && r.lo1 != null && r.la2 != null && r.lo2 != null && Number.isFinite(Number(r.la1));
+      return {
+        f: r.f,
+        t: r.t,
+        k: r.k,
+        la1: r.la1,
+        lo1: r.lo1,
+        la2: r.la2,
+        lo2: r.lo2,
+        __map: hasMap,
+        __id: r.id,
+      };
+    });
+    return [...built, ...custom];
+  }, [D.xr]);
   const mkIni = () => ({
     ri: -1,
     f: "",
@@ -746,11 +933,14 @@ function Ritten({ D, sD, pid }) {
   });
   const [fm, sM] = useState(mkIni);
   const pk = i => {
-    const r = ROUTES[i];
+    const r = mergedRoutes[i];
+    if (!r) return;
+    setPlaceA(null);
+    setPlaceB(null);
     sM(m => ({ ...m, ri: i, f: r.f, t: r.t, k: String(r.k) }));
   };
   const svR = () => {
-    if (fm.ri < 0 || !fm.f || !fm.t || !fm.k) return;
+    if (!fm.f || !fm.t || !fm.k) return;
     const k = +fm.k;
     if (k <= 0) return;
     const trip = {
@@ -763,7 +953,7 @@ function Ritten({ D, sD, pid }) {
       dr: fm.dr,
       ca: fm.ca,
       s: fm.s,
-      v: VG(k, fm.ti),
+      v: tmVergoeding(fm.f, fm.t, k, fm.ti),
     };
     const b = String(fm.bon || "").trim();
     if (b) trip.bon = b;
@@ -771,14 +961,66 @@ function Ritten({ D, sD, pid }) {
     sD(nd);
     sv(pid, nd);
     sM(mkIni());
+    setPlaceA(null);
+    setPlaceB(null);
     sSh(false);
   };
-  const canBevestig = fm.ri >= 0 && !!(fm.f && fm.t && fm.k && +fm.k > 0);
+  const canBevestig = !!(fm.f && fm.t && fm.k && +fm.k > 0);
   const openNieuw = () => {
     sM(mkIni());
+    setPlaceA(null);
+    setPlaceB(null);
     sSh(true);
   };
-  const sel = fm.ri >= 0 ? ROUTES[fm.ri] : null;
+  const sel = fm.ri >= 0 ? mergedRoutes[fm.ri] : null;
+  const mapCoords =
+    placeA?.lat != null &&
+    placeA?.lng != null &&
+    placeB?.lat != null &&
+    placeB?.lng != null &&
+    fm.ri < 0
+      ? { la1: placeA.lat, lo1: placeA.lng, la2: placeB.lat, lo2: placeB.lng, labelF: placeA.name, labelT: placeB.name }
+      : sel && sel.__map
+        ? { la1: sel.la1, lo1: sel.lo1, la2: sel.la2, lo2: sel.lo2, labelF: sel.f, labelT: sel.t }
+        : null;
+
+  const berekenKortsteWeg = async () => {
+    if (placeA?.lat == null || placeB?.lat == null) {
+      alert("Kies twee locaties met coördinaten (uit de lijst of via zoeken in België).");
+      return;
+    }
+    setRouteBusy(true);
+    try {
+      let km;
+      if (hasOpenRouteApiKey()) {
+        const r = await getRouteDistanceORS(
+          { lat: placeA.lat, lng: placeA.lng },
+          { lat: placeB.lat, lng: placeB.lng }
+        );
+        km = r.km;
+      } else {
+        km = geschatteAfstandKm(
+          { lat: placeA.lat, lng: placeA.lng },
+          { lat: placeB.lat, lng: placeB.lng }
+        );
+      }
+      if (km != null && Number.isFinite(km) && km >= 1) {
+        sM(m => ({ ...m, k: String(km), f: placeA.name, t: placeB.name, ri: -1 }));
+      } else {
+        alert("Kon geen afstand berekenen.");
+      }
+    } catch (e) {
+      console.error(e);
+      const est = geschatteAfstandKm(
+        { lat: placeA.lat, lng: placeA.lng },
+        { lat: placeB.lat, lng: placeB.lng }
+      );
+      if (est != null) sM(m => ({ ...m, k: String(est), f: placeA.name, t: placeB.name, ri: -1 }));
+      else alert("Route kon niet opgehaald worden. Controleer internet of zet VITE_OPENROUTE_API_KEY voor exacte km.");
+    } finally {
+      setRouteBusy(false);
+    }
+  };
   const act = (id, a) => {
     const rr = [...D.r];
     const i = rr.findIndex(x => x.id === id);
@@ -883,30 +1125,67 @@ function Ritten({ D, sD, pid }) {
             </div>
             <div className="tm-mb">
               <div className="tm-rit-map-slot">
-                {sel ? (
+                {mapCoords ? (
                   <RitMap
-                    la1={sel.la1}
-                    lo1={sel.lo1}
-                    la2={sel.la2}
-                    lo2={sel.lo2}
-                    labelF={sel.f}
-                    labelT={sel.t}
+                    la1={mapCoords.la1}
+                    lo1={mapCoords.lo1}
+                    la2={mapCoords.la2}
+                    lo2={mapCoords.lo2}
+                    labelF={mapCoords.labelF}
+                    labelT={mapCoords.labelT}
                   />
+                ) : fm.ri >= 0 && sel && !sel.__map ? (
+                  <div className="tm-rit-map-ph">Eigen opgeslagen route zonder kaart.</div>
                 ) : (
-                  <div className="tm-rit-map-ph">Kies een vaste route hieronder om de kaart te tonen.</div>
+                  <div className="tm-rit-map-ph">Kies vertrek &amp; bestemming of een vaste route voor de kaart.</div>
                 )}
               </div>
-              <div className="fl">Vaste route</div>
+              <div className="fl">Vertrek &amp; bestemming (ziekenhuizen België)</div>
+              <p style={{ fontSize: 11, color: "var(--tx3)", margin: "0 0 8px", lineHeight: 1.4 }}>
+                Lokale lijst (Vlaanderen + ankertjes) en zoeken in heel België (OSM). Daarna: kortste weg als km (ORS indien
+                sleutel, anders schatting).
+              </p>
+              <PlaatsPicker
+                label="Vertrek"
+                gekozen={placeA}
+                onKies={p => {
+                  setPlaceA(p);
+                  sM(m => ({ ...m, ri: -1, f: p.name }));
+                }}
+                lijst={TM_ZIEKENHUIZEN_LIJST}
+              />
+              <PlaatsPicker
+                label="Bestemming"
+                gekozen={placeB}
+                onKies={p => {
+                  setPlaceB(p);
+                  sM(m => ({ ...m, ri: -1, t: p.name }));
+                }}
+                lijst={TM_ZIEKENHUIZEN_LIJST}
+              />
+              <button
+                type="button"
+                className="btn btn-o btn-full"
+                style={{ marginBottom: 12 }}
+                disabled={routeBusy}
+                onClick={berekenKortsteWeg}
+              >
+                {routeBusy ? "Route berekenen…" : "Kortste weg berekenen (km)"}
+              </button>
+              <div className="fl">Of: vaste route</div>
               <div className="tm-prs">
-                {ROUTES.map((r, i) => (
+                {mergedRoutes.map((r, i) => (
                   <button
-                    key={i}
+                    key={r.__map ? `b-${i}` : r.__id}
                     type="button"
                     className={"tm-pr" + (fm.ri === i ? " on" : "")}
                     onClick={() => pk(i)}
                   >
                     <span>
                       {r.f} → {r.t}
+                      {!r.__map && (
+                        <span style={{ fontSize: 9, color: "var(--acc)", marginLeft: 6 }}>(eigen)</span>
+                      )}
                     </span>
                     <b className="tm-pk">{r.k} km</b>
                   </button>
@@ -954,7 +1233,7 @@ function Ritten({ D, sD, pid }) {
                   </select>
                 </div>
               </div>
-              {sel && (
+              {canBevestig && (
                 <div className="card tm-rit-sum">
                   <div className="tm-rvi">
                     <span>Route</span>
@@ -969,8 +1248,10 @@ function Ritten({ D, sD, pid }) {
                   <div className="tm-rvi">
                     <span>Vergoeding</span>
                     <b>
-                      {E(VG(+fm.k, fm.ti))}
-                      {isN(fm.ti) && <span style={{ fontSize: 12, color: "var(--am)", fontWeight: 500 }}> +30% nacht</span>}
+                      {E(tmVergoeding(fm.f, fm.t, +fm.k, fm.ti))}
+                      {isN(fm.ti) && (
+                        <span style={{ fontSize: 12, color: "var(--am)", fontWeight: 500 }}> nachttarief</span>
+                      )}
                     </b>
                   </div>
                 </div>
@@ -988,23 +1269,27 @@ function Ritten({ D, sD, pid }) {
   );
 }
 
-function Financieel({ D }) {
+function Financieel({ D, pid }) {
   const [p, sP] = useState("month");
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [s, e] = gr(p);
   const all = D.r;
   const done = all.filter(r => r.s === "voltooid" && iR(r.d, s, e));
   const cancelled = all.filter(r => r.s === "geannuleerd" && iR(r.d, s, e));
   const omzet = done.reduce((a, r) => a + money(r.v), 0);
-  const totKm = done.reduce((a, r) => a + r.k, 0);
+  const totKm = done.reduce((a, r) => a + Number(r.k) || 0, 0);
   const brandstof = D.b.filter(b => iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0);
   const overig = (D.o || []).filter(x => iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
   const kosten = brandstof + overig;
   const winst = omzet - kosten;
   const verlies = cancelled.reduce((a, r) => a + money(r.v), 0);
-  const nachtRitten = done.filter(r => isN(r.ti));
-  const nachtOmzet = nachtRitten.reduce((a, r) => a + money(r.v), 0);
-  const gemPerRit = done.length > 0 ? Math.round((omzet / done.length) * 100) / 100 : 0;
-  const gemKmPerRit = done.length > 0 ? Math.round(totKm / done.length) : 0;
+  const doneChron = useMemo(
+    () => [...done].sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || ""))),
+    [done]
+  );
+  const periodFactuurStem = `${p}-${s}`.replace(/[^\w.-]+/g, "_");
+  const periodLabel =
+    p === "day" ? `Dag ${s}` : p === "week" ? `Week ${s} t/m ${e}` : `Maand ${s.slice(0, 7)} (${s} t/m ${e})`;
 
   const finBarData = useMemo(
     () => ({
@@ -1054,55 +1339,88 @@ function Financieel({ D }) {
     []
   );
 
+  const showChart = omzet > 0 || kosten > 0;
+
   return (
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Financieel overzicht</h1>
       <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 14px", lineHeight: 1.4 }}>
-        Periode = lokale datum op dit toestel. Totalen = som van opgeslagen bedragen (geen schatting).
+        Periode = lokale datum op dit toestel. Bedragen = wat je zelf hebt opgeslagen bij ritten en kosten.
       </p>
       <PP v={p} set={sP} />
 
-      <div className="tm-chart-card tm-fin-chart">
-        <div className="tm-chart-hd">Grafiek — geselecteerde periode</div>
-        <div className="tm-chart-body tm-chart-body--bar tm-chart-body--fin">
-          <Bar data={finBarData} options={finBarOpts} />
+      {showChart && (
+        <div className="tm-chart-card tm-fin-chart">
+          <div className="tm-chart-hd">Omzet, kosten en netto (deze periode)</div>
+          <div className="tm-chart-body tm-chart-body--bar tm-chart-body--fin">
+            <Bar data={finBarData} options={finBarOpts} />
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="sh">Resultaat</div>
       <div className="stat-grid">
-        {statCard("Totale omzet", E(omzet), "var(--acc)", done.length + " voltooide ritten")}
-        {statCard("Totale kosten", "− " + E(kosten), "var(--rd)", "Brandstof + overig")}
-        {statCard("Netto winst", E(winst), winst >= 0 ? "var(--gn)" : "var(--rd)", omzet > 0 ? Math.round((winst / omzet) * 100) + "% marge" : "")}
         {statCard(
-          "Gemist (annulering)",
-          E(verlies),
-          "var(--am)",
-          cancelled.length + " ritten · niet afgetrokken van netto"
+          "Omzet",
+          done.length > 0 ? E(omzet) : "—",
+          "var(--acc)",
+          done.length > 0 ? `${done.length} voltooide ritten${totKm > 0 ? ` · ${totKm} km` : ""}` : "Geen voltooide ritten in deze periode"
         )}
+        {statCard(
+          "Kosten",
+          kosten > 0 ? "− " + E(kosten) : "—",
+          "var(--rd)",
+          kosten > 0 ? `Brandstof ${E(brandstof)} · overig ${E(overig)}` : "Geen kosten in deze periode"
+        )}
+        {statCard(
+          "Netto",
+          done.length > 0 || kosten > 0 ? E(winst) : "—",
+          winst >= 0 ? "var(--gn)" : "var(--rd)",
+          done.length > 0 && omzet > 0 ? `Omzet minus kosten (${Math.round((winst / omzet) * 100)}%)` : null
+        )}
+        {cancelled.length > 0 && verlies > 0
+          ? statCard("Annuleringen (info)", E(verlies), "var(--am)", `${cancelled.length} ritten · telt niet mee in netto`)
+          : null}
       </div>
 
-      <div className="sh" style={{ marginTop: 8 }}>
-        Ritten analyse
-      </div>
-      <div className="stat-grid">
-        {statCard("Voltooide ritten", "" + done.length, "var(--acc)", totKm + " km totaal")}
-        {statCard("Gemiddeld per rit", E(gemPerRit), "var(--tx)", gemKmPerRit + " km gemiddeld")}
-        {statCard(
-          "Nachtpremies",
-          "" + nachtRitten.length,
-          "var(--am)",
-          nachtRitten.length > 0 ? E(nachtOmzet) + " nachttarief" : "Geen nachtritten"
-        )}
-        {statCard("Totale kilometers", totKm + " km", "var(--tx2)", done.length > 0 ? gemKmPerRit + " km/rit" : "")}
-      </div>
-
-      <div className="sh" style={{ marginTop: 8 }}>
-        Kosten details
-      </div>
-      <div className="stat-grid">
-        {statCard("Brandstof", "− " + E(brandstof), "var(--rd)", D.b.length + " tankbeurten")}
-        {statCard("Overige kosten", "− " + E(overig), "var(--rd)", (D.o || []).length + " posten")}
+      <div className="card" style={{ marginTop: 16, padding: 14, background: "var(--s2)" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Factuur (deze periode)</div>
+        <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
+          <strong>{periodLabel}</strong> — alleen voltooide ritten ({doneChron.length}). PDF gebruikt{" "}
+          <strong>Meer → Factuur &amp; logo</strong> in deze app (profiel {pid}). Nummer stijgt per PDF.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            type="button"
+            className="btn btn-o btn-full"
+            disabled={doneChron.length === 0}
+            onClick={() => downloadFactuurCsv(doneChron, periodFactuurStem)}
+          >
+            CSV (deze periode)
+          </button>
+          <button
+            type="button"
+            className="btn btn-p btn-full"
+            disabled={doneChron.length === 0 || pdfBusy}
+            onClick={async () => {
+              setPdfBusy(true);
+              try {
+                const S = getFactuurGegevens(pid);
+                const meta = buildTmFactuurMeta(S, pid);
+                const regels = tmRittenNaarFactuurRegels(doneChron);
+                const { blob } = await generateFactuurPdfBlob({ factuurSettings: S, meta, regels });
+                triggerPdfDownload(blob, `factuur-${meta.factuurCode}.pdf`);
+              } catch (err) {
+                console.error(err);
+                alert("PDF mislukt: " + (err?.message || err));
+              } finally {
+                setPdfBusy(false);
+              }
+            }}
+          >
+            {pdfBusy ? "PDF…" : "PDF-factuur (deze periode)"}
+          </button>
+        </div>
       </div>
 
       {done.length > 0 && (
@@ -1146,16 +1464,86 @@ function PPh({ v, set }) {
   );
 }
 
-function Historiek({ D }) {
-  const [p, sP] = useState("month");
+function buildTmFactuurMeta(settings, profileId) {
+  const n = nextFactuurVolgNummer(profileId);
+  const factuurDatum = new Date();
+  const verval = new Date(factuurDatum.getTime());
+  const dagen = Number(settings?.vervalDagen);
+  verval.setDate(verval.getDate() + (Number.isFinite(dagen) && dagen >= 0 ? dagen : 30));
+  return {
+    factuurCode: n.factuurCode,
+    orderDisplay: n.orderDisplay,
+    factuurDatum,
+    vervalDatum: verval,
+  };
+}
+
+function tmRittenNaarFactuurRegels(ritten) {
+  const sorted = [...ritten].sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
+  return sorted.map(r => {
+    const bedrag = money(r.v);
+    const bon = r.bon != null ? String(r.bon).trim() : "";
+    return {
+      titel: "Dienstverlening: ziekenhuisvervoer",
+      prijsExcl: bedrag,
+      totaal: bedrag,
+      datumWeergave: `${r.d}${r.ti ? " · " + r.ti : ""}`,
+      orderBon: bon || "—",
+      ophaal: String(r.f || "").trim() || "—",
+      aflevering: String(r.t || "").trim() || "—",
+      km: r.k != null && Number.isFinite(Number(r.k)) ? String(r.k) : "—",
+    };
+  });
+}
+
+function downloadFactuurCsv(ritten, fileStem) {
+  const esc = c => `"${String(c ?? "").replace(/"/g, '""')}"`;
+  const row = cells => cells.map(esc).join(";") + "\r\n";
+  let t = "\uFEFF";
+  t += row(["Datum", "Tijd", "Van", "Naar", "Km", "Bon", "Bedrag_EUR", "Chauffeur", "Voertuig"]);
+  const sorted = [...ritten].sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
+  for (const r of sorted) {
+    t += row([
+      r.d,
+      r.ti || "",
+      r.f,
+      r.t,
+      r.k,
+      r.bon || "",
+      money(r.v).toFixed(2).replace(".", ","),
+      r.dr || "",
+      r.ca || "",
+    ]);
+  }
+  const blob = new Blob([t], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  const safe = String(fileStem || "export").replace(/[^\w.-]+/g, "_").slice(0, 48);
+  a.download = `factuur-export-${safe}.csv`;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
+function Historiek({ D, pid }) {
+  const [p, sP] = useState("all");
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [s, e] = grExt(p);
   const trips = useMemo(() => {
     return [...D.r]
       .filter(r => iR(r.d, s, e))
       .sort((a, b) => (b.d + (b.ti || "")).localeCompare(a.d + (a.ti || "")));
   }, [D.r, s, e]);
-  const voltooid = trips.filter(r => r.s === "voltooid");
-  const omzet = voltooid.reduce((a, r) => a + money(r.v), 0);
+  const voltooidChron = useMemo(
+    () =>
+      trips
+        .filter(r => r.s === "voltooid")
+        .sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || ""))),
+    [trips]
+  );
+  const omzet = voltooidChron.reduce((a, r) => a + money(r.v), 0);
   const brandstofL = useMemo(
     () => [...D.b].filter(b => iR(b.d, s, e)).sort((a, b) => b.d.localeCompare(a.d)),
     [D.b, s, e]
@@ -1210,6 +1598,50 @@ function Historiek({ D }) {
           Dagen en maanden volgens je toestel (lokale tijd). “Gemist (annulering)” op Financieel is alleen informatief
           over geannuleerde ritten — wordt <em>niet</em> van netto afgetrokken.
         </p>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16, padding: 14, background: "var(--s2)" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Export voor facturen</div>
+        <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
+          Alleen <strong>voltooide</strong> ritten in de gekozen periode ({voltooidChron.length} stuks). CSV voor Excel of
+          je boekhouder; PDF gebruikt je gegevens uit <strong>Meer → Factuur &amp; logo</strong> (TransportMe of klassieke
+          app, zelfde opslag, profiel <code style={{ fontSize: 11 }}>{pid}</code>). Elke PDF verhoogt het factuurnummer.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            type="button"
+            className="btn btn-o btn-full"
+            disabled={voltooidChron.length === 0}
+            onClick={() => {
+              const stem = `${p}-${s}`.replace(/[^\w.-]+/g, "_");
+              downloadFactuurCsv(voltooidChron, stem);
+            }}
+          >
+            CSV downloaden (Excel / boekhouder)
+          </button>
+          <button
+            type="button"
+            className="btn btn-p btn-full"
+            disabled={voltooidChron.length === 0 || pdfBusy}
+            onClick={async () => {
+              setPdfBusy(true);
+              try {
+                const S = getFactuurGegevens(pid);
+                const meta = buildTmFactuurMeta(S, pid);
+                const regels = tmRittenNaarFactuurRegels(voltooidChron);
+                const { blob } = await generateFactuurPdfBlob({ factuurSettings: S, meta, regels });
+                triggerPdfDownload(blob, `factuur-${meta.factuurCode}.pdf`);
+              } catch (err) {
+                console.error(err);
+                alert("PDF mislukt: " + (err?.message || err));
+              } finally {
+                setPdfBusy(false);
+              }
+            }}
+          >
+            {pdfBusy ? "PDF wordt gemaakt…" : "PDF-factuur downloaden"}
+          </button>
+        </div>
       </div>
 
       <div className="sh">Ritten ({trips.length})</div>
@@ -1269,10 +1701,13 @@ function Historiek({ D }) {
 
 function Kosten({ D, sD, pid }) {
   const [type, sT] = useState("brandstof");
+  const [fuelDet, sFuelDet] = useState(false);
   const [fm, sM] = useState({ d: td(), l: "", p: "", a: "", desc: "" });
   useEffect(() => {
-    if (fm.l && fm.p) sM(m => ({ ...m, a: (parseFloat(fm.l) * parseFloat(fm.p)).toFixed(2) }));
-  }, [fm.l, fm.p]);
+    if (!fuelDet || !fm.l || !fm.p) return;
+    const tot = parseFloat(fm.l) * parseFloat(fm.p);
+    if (Number.isFinite(tot)) sM(m => ({ ...m, a: tot.toFixed(2) }));
+  }, [fm.l, fm.p, fuelDet]);
 
   const saveFuel = () => {
     if (!fm.a) return;
@@ -1315,24 +1750,34 @@ function Kosten({ D, sD, pid }) {
       {type === "brandstof" && (
         <div className="card">
           <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Tankbeurt registreren</div>
-          <div className="tm-g3">
-            <div className="tm-fg">
-              <label className="fl">Datum</label>
-              <input type="date" value={fm.d} onChange={e => sM(m => ({ ...m, d: e.target.value }))} />
-            </div>
-            <div className="tm-fg">
-              <label className="fl">Liter</label>
-              <input type="number" step="0.01" value={fm.l} onChange={e => sM(m => ({ ...m, l: e.target.value }))} />
-            </div>
-            <div className="tm-fg">
-              <label className="fl">€/L</label>
-              <input type="number" step="0.001" value={fm.p} onChange={e => sM(m => ({ ...m, p: e.target.value }))} />
-            </div>
+          <div className="tm-fg">
+            <label className="fl">Datum</label>
+            <input type="date" value={fm.d} onChange={e => sM(m => ({ ...m, d: e.target.value }))} />
           </div>
           <div className="tm-fg">
-            <label className="fl">Totaal</label>
-            <input type="number" step="0.01" value={fm.a} onChange={e => sM(m => ({ ...m, a: e.target.value }))} />
+            <label className="fl">Bedrag (€)</label>
+            <input type="number" step="0.01" min="0" value={fm.a} onChange={e => sM(m => ({ ...m, a: e.target.value }))} />
           </div>
+          <button
+            type="button"
+            className="btn btn-gh btn-full"
+            style={{ marginBottom: 10 }}
+            onClick={() => sFuelDet(v => !v)}
+          >
+            {fuelDet ? "Verberg liter & prijs" : "Liter & prijs (optioneel — vult bedrag)"}
+          </button>
+          {fuelDet && (
+            <div className="tm-g2">
+              <div className="tm-fg">
+                <label className="fl">Liter</label>
+                <input type="number" step="0.1" min="0" value={fm.l} onChange={e => sM(m => ({ ...m, l: e.target.value }))} />
+              </div>
+              <div className="tm-fg">
+                <label className="fl">€/L</label>
+                <input type="number" step="0.01" min="0" value={fm.p} onChange={e => sM(m => ({ ...m, p: e.target.value }))} />
+              </div>
+            </div>
+          )}
           <button type="button" className="btn btn-p btn-full" disabled={!fm.a} onClick={saveFuel}>
             Opslaan
           </button>
@@ -1401,16 +1846,403 @@ function Kosten({ D, sD, pid }) {
   );
 }
 
+const MAX_TM_LOGO_CHARS = 450000;
+
+function readTmFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result || ""));
+    r.onerror = () => reject(new Error("Lezen mislukt"));
+    r.readAsDataURL(file);
+  });
+}
+
+function downscaleTmLogoDataUrl(dataUrl, maxSide, jpegQuality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let { width, height } = img;
+        const scale = Math.min(1, maxSide / Math.max(width, height));
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", jpegQuality));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => reject(new Error("Afbeelding"));
+    img.src = dataUrl;
+  });
+}
+
+/** Zelfde velden als klassieke app (factuurGegevensMeer.js) — localStorage per profiel. */
+function FactuurGegevensScherm({ pid }) {
+  const [S, setS] = useState(() => getFactuurGegevens(pid));
+  const [hint, setHint] = useState(false);
+  const logoInpRef = useRef(null);
+
+  useEffect(() => {
+    setS(getFactuurGegevens(pid));
+  }, [pid]);
+
+  const persistAll = () => {
+    const verval = Number.parseInt(String(S.vervalDagen), 10);
+    const btwTariefRaw = Number.parseFloat(String(S.factuurBtwTarief ?? 21));
+    const btwTarief = Number.isFinite(btwTariefRaw) ? Math.min(100, Math.max(0, btwTariefRaw)) : 21;
+    const klantBedrijf = String(S.klantBedrijfsnaam || "").trim();
+    saveFactuurGegevens(
+      {
+        bedrijfsnaam: String(S.bedrijfsnaam || "").trim(),
+        adresStraat: String(S.adresStraat || "").trim(),
+        adresPostcodeStad: String(S.adresPostcodeStad || "").trim(),
+        land: String(S.land || "").trim() || "België",
+        btwNummer: String(S.btwNummer || "").trim(),
+        rekeninghouder: String(S.rekeninghouder || "").trim(),
+        iban: String(S.iban || "").trim(),
+        email: String(S.email || "").trim(),
+        telefoon: String(S.telefoon || "").trim(),
+        klantBedrijfsnaam: klantBedrijf,
+        klantNaam: klantBedrijf,
+        klantContactpersoon: String(S.klantContactpersoon || "").trim(),
+        klantBtw: String(S.klantBtw || "").trim(),
+        klantAdres: String(S.klantAdres || "").trim(),
+        klantLand: String(S.klantLand || "").trim() || "België",
+        factuurBtwAanrekenen: Boolean(S.factuurBtwAanrekenen),
+        factuurBtwTarief: btwTarief,
+        btwVrijstellingTekst: String(S.btwVrijstellingTekst || "").trim(),
+        vervalDagen: Number.isFinite(verval) && verval >= 0 ? verval : 30,
+        dagrapportEmailAan: Boolean(S.dagrapportEmailAan),
+        dagrapportOntvanger: String(S.dagrapportOntvanger || "").trim(),
+      },
+      pid
+    );
+    setS(getFactuurGegevens(pid));
+    setHint(true);
+    setTimeout(() => setHint(false), 2500);
+  };
+
+  const onLogoChange = async e => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!f.type.startsWith("image/")) {
+      alert("Kies een afbeeldingsbestand (PNG, JPG, …).");
+      return;
+    }
+    try {
+      let dataUrl = await readTmFileAsDataUrl(f);
+      if (dataUrl.length > MAX_TM_LOGO_CHARS) {
+        dataUrl = await downscaleTmLogoDataUrl(dataUrl, 400, 0.82);
+      }
+      if (dataUrl.length > MAX_TM_LOGO_CHARS) {
+        alert("Logo is te groot na verkleinen. Kies een kleiner bestand.");
+        return;
+      }
+      saveFactuurGegevens({ logoDataUrl: dataUrl }, pid);
+      setS(getFactuurGegevens(pid));
+    } catch (err) {
+      console.error(err);
+      alert("Logo kon niet worden geladen.");
+    }
+  };
+
+  const clearLogo = () => {
+    saveFactuurGegevens({ logoDataUrl: "" }, pid);
+    setS(getFactuurGegevens(pid));
+  };
+
+  const hasLogo = S.logoDataUrl && String(S.logoDataUrl).startsWith("data:image");
+  const fg = (key, label, ph, type = "text") => (
+    <div className="tm-fg">
+      <label className="fl">{label}</label>
+      <input
+        type={type}
+        value={S[key] ?? ""}
+        placeholder={ph}
+        onChange={e => setS(prev => ({ ...prev, [key]: e.target.value }))}
+      />
+    </div>
+  );
+
+  return (
+    <div>
+      <p style={{ fontSize: 13, color: "var(--tx2)", marginBottom: 14, lineHeight: 1.45 }}>
+        Zelfde opslag als de grote Transporteur-app (<code style={{ fontSize: 11 }}>transporteur_factuur_gegevens_{pid}</code>
+        ). Logo en teksten verschijnen op je PDF-factuur (Historiek / Financieel).
+      </p>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Logo</div>
+        {hasLogo ? (
+          <img
+            src={S.logoDataUrl}
+            alt="Bedrijfslogo"
+            style={{
+              maxWidth: 140,
+              maxHeight: 120,
+              objectFit: "contain",
+              marginBottom: 12,
+              borderRadius: 8,
+              border: "1px solid var(--bd)",
+              background: "var(--s1)",
+            }}
+          />
+        ) : (
+          <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px" }}>Nog geen logo — optioneel voor de PDF.</p>
+        )}
+        <input ref={logoInpRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onLogoChange} />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" className="btn btn-o" onClick={() => logoInpRef.current?.click()}>
+            Logo kiezen
+          </button>
+          {hasLogo && (
+            <button type="button" className="btn btn-gh" onClick={clearLogo}>
+              Logo wissen
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Van (jouw gegevens op de factuur)</div>
+        {fg("bedrijfsnaam", "Bedrijfsnaam", "")}
+        {fg("adresStraat", "Adres (straat + nr)", "")}
+        {fg("adresPostcodeStad", "Postcode en gemeente", "")}
+        {fg("land", "Land", "België")}
+        {fg("btwNummer", "BTW-nummer", "")}
+        {fg("rekeninghouder", "Rekeninghouder", "")}
+        {fg("iban", "IBAN", "")}
+        {fg("email", "E-mail", "", "email")}
+        {fg("telefoon", "Telefoon", "")}
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Aan (klant op de factuur)</div>
+        {fg("klantBedrijfsnaam", "Bedrijfsnaam / instantie", "")}
+        {fg("klantContactpersoon", "Contactpersoon (t.a.v.)", "")}
+        {fg("klantAdres", "Adres klant", "")}
+        {fg("klantLand", "Land klant", "België")}
+        {fg("klantBtw", "BTW-nummer klant", "")}
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>BTW &amp; verval op PDF</div>
+        <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={Boolean(S.factuurBtwAanrekenen)}
+            onChange={e => setS(prev => ({ ...prev, factuurBtwAanrekenen: e.target.checked }))}
+          />
+          <span>BTW aanrekenen op ritbedragen (PDF toont % en verhoogt te betalen)</span>
+        </label>
+        {S.factuurBtwAanrekenen && (
+          <div className="tm-fg">
+            <label className="fl">BTW-tarief (%)</label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              max="100"
+              value={S.factuurBtwTarief ?? 21}
+              onChange={e => setS(prev => ({ ...prev, factuurBtwTarief: e.target.value }))}
+            />
+          </div>
+        )}
+        <div className="tm-fg">
+          <label className="fl">Vrijstellings-/ voetnoottekst (onderaan factuur)</label>
+          <textarea
+            rows={3}
+            value={S.btwVrijstellingTekst ?? ""}
+            onChange={e => setS(prev => ({ ...prev, btwVrijstellingTekst: e.target.value }))}
+            style={{ width: "100%", padding: 12, background: "var(--s2)", border: "1px solid var(--bd)", borderRadius: 8, color: "var(--tx)" }}
+          />
+        </div>
+        <div className="tm-fg">
+          <label className="fl">Vervaldagen na factuurdatum</label>
+          <input
+            type="number"
+            min="0"
+            max="365"
+            value={S.vervalDagen ?? 30}
+            onChange={e => setS(prev => ({ ...prev, vervalDagen: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Weekrapport (klassieke app)</div>
+        <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.4 }}>
+          Alleen relevant als je de grote app nog gebruikt voor het maandag-mailtje.
+        </p>
+        <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={Boolean(S.dagrapportEmailAan)}
+            onChange={e => setS(prev => ({ ...prev, dagrapportEmailAan: e.target.checked }))}
+          />
+          <span>Conceptmail weekrapport inschakelen</span>
+        </label>
+        {fg("dagrapportOntvanger", "E-mail ontvanger", "")}
+      </div>
+
+      <button type="button" className="btn btn-p btn-full" onClick={persistAll}>
+        Factuurgegevens opslaan
+      </button>
+      {hint && (
+        <p style={{ fontSize: 13, color: "var(--gn)", marginTop: 12, textAlign: "center" }}>
+          Opgeslagen voor dit profiel.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   const [v, sV] = useState("m");
+  const [erA, setErA] = useState(null);
+  const [erB, setErB] = useState(null);
+  const [erK, setErK] = useState("");
+  const [erBusy, setErBusy] = useState(false);
+  const [ritZoek, setRitZoek] = useState("");
+  const [bonEdit, setBonEdit] = useState({});
   const backupFileRef = useRef(null);
+
+  const rittenBeheer = useMemo(() => {
+    const q = ritZoek.trim().toLowerCase();
+    let rows = [...D.r];
+    if (q) {
+      rows = rows.filter(r => {
+        const blob = `${r.d} ${r.f} ${r.t} ${r.bon || ""} ${r.dr || ""}`.toLowerCase();
+        return blob.includes(q);
+      });
+    }
+    return rows.sort((a, b) => (b.d + (b.ti || "")).localeCompare(a.d + (a.ti || "")));
+  }, [D.r, ritZoek]);
+
+  const saveRitBon = id => {
+    const raw = bonEdit[id] !== undefined ? bonEdit[id] : D.r.find(x => x.id === id)?.bon || "";
+    const b = String(raw).trim();
+    const rr = D.r.map(r => {
+      if (r.id !== id) return r;
+      const o = { ...r };
+      if (b) o.bon = b;
+      else delete o.bon;
+      return o;
+    });
+    const nd = normData({ ...D, r: rr });
+    sD(nd);
+    sv(pid, nd);
+    setBonEdit(m => {
+      const n = { ...m };
+      delete n[id];
+      return n;
+    });
+  };
+
+  const verwijderRit = id => {
+    if (!confirm("Deze rit permanent verwijderen?")) return;
+    const nd = normData({ ...D, r: D.r.filter(x => x.id !== id) });
+    sD(nd);
+    sv(pid, nd);
+    setBonEdit(m => {
+      const n = { ...m };
+      delete n[id];
+      return n;
+    });
+  };
+
+  const berekenEigenKm = async () => {
+    if (erA?.lat == null || erB?.lat == null) {
+      alert("Kies twee locaties met coördinaten, of vul km handmatig.");
+      return;
+    }
+    setErBusy(true);
+    try {
+      let km;
+      if (hasOpenRouteApiKey()) {
+        const r = await getRouteDistanceORS(
+          { lat: erA.lat, lng: erA.lng },
+          { lat: erB.lat, lng: erB.lng }
+        );
+        km = r.km;
+      } else {
+        km = geschatteAfstandKm(
+          { lat: erA.lat, lng: erA.lng },
+          { lat: erB.lat, lng: erB.lng }
+        );
+      }
+      if (km != null && Number.isFinite(km) && km >= 1) setErK(String(km));
+      else alert("Kon geen afstand berekenen.");
+    } catch (e) {
+      console.error(e);
+      const est = geschatteAfstandKm(
+        { lat: erA.lat, lng: erA.lng },
+        { lat: erB.lat, lng: erB.lng }
+      );
+      if (est != null) setErK(String(est));
+      else alert("Route mislukt. Probeer VITE_OPENROUTE_API_KEY of vul km zelf in.");
+    } finally {
+      setErBusy(false);
+    }
+  };
+
+  const addEigenRoute = () => {
+    const f = (erA?.name || "").trim();
+    const t = (erB?.name || "").trim();
+    const k = Number(String(erK).replace(",", "."));
+    if (!f || !t) {
+      alert("Kies vertrek en bestemming via de zoeklijst.");
+      return;
+    }
+    if (!Number.isFinite(k) || k < 1) {
+      alert("Vul een geldige afstand (km), of gebruik ‘Kortste weg’.");
+      return;
+    }
+    const dup =
+      ROUTES.some(r => r.f === f && r.t === t) || (D.xr || []).some(r => r.f === f && r.t === t);
+    if (dup) {
+      alert("Deze route staat al in de lijst (standaard of eigen).");
+      return;
+    }
+    const row = { id: ui(), f, t, k };
+    if (erA?.lat != null && erB?.lat != null) {
+      row.la1 = erA.lat;
+      row.lo1 = erA.lng;
+      row.la2 = erB.lat;
+      row.lo2 = erB.lng;
+    }
+    const nd = normData({ ...D, xr: [...(D.xr || []), row] });
+    sD(nd);
+    sv(pid, nd);
+    setErA(null);
+    setErB(null);
+    setErK("");
+  };
+
+  const delEigenRoute = id => {
+    const nd = normData({ ...D, xr: (D.xr || []).filter(x => x.id !== id) });
+    sD(nd);
+    sv(pid, nd);
+  };
   if (v !== "m")
     return (
       <div>
         <button type="button" className="btn btn-gh" style={{ marginBottom: 12 }} onClick={() => sV("m")}>
           ← Terug
         </button>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 14 }}>{v === "p" ? "Profiel" : "Gegevens"}</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 14 }}>
+          {v === "p" ? "Profiel" : v === "f" ? "Factuur & logo" : "Gegevens"}
+        </h1>
         {v === "p" && (
           <div className="tm-pg">
             {PR.map(p => (
@@ -1427,6 +2259,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
             ))}
           </div>
         )}
+        {v === "f" && <FactuurGegevensScherm pid={pid} />}
         {v === "d" && (
           <div>
             <p style={{ marginBottom: 16, color: "var(--tx2)", fontSize: 14 }}>
@@ -1500,8 +2333,9 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
                   ) {
                     return;
                   }
-                  sD(leg);
-                  sv(pid, leg);
+                  const merged = normData({ ...leg, xr: D.xr || [] });
+                  sD(merged);
+                  sv(pid, merged);
                   alert("Herstel uit klassieke opslag voltooid.");
                 }}
               >
@@ -1529,7 +2363,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
               className="btn btn-r btn-full"
               onClick={() => {
                 if (confirm("Alle gegevens van dit profiel wissen?")) {
-                  const n = { r: [], b: [], o: [] };
+                  const n = normData({ r: [], b: [], o: [], xr: [] });
                   sD(n);
                   sv(pid, n);
                 }
@@ -1547,6 +2381,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Instellingen</h1>
       {[
         { k: "p", t: "Profiel", s: pr.n + " · Wissel chauffeur" },
+        { k: "f", t: "Factuur & logo", s: "Van/Aan, btw, logo — zelfde als grote app" },
         { k: "d", t: "Gegevens", s: "Backup, export & wissen" },
       ].map(m => (
         <button key={m.k} type="button" className="tm-mi" onClick={() => sV(m.k)}>
@@ -1555,19 +2390,119 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
         </button>
       ))}
       <div className="card" style={{ marginTop: 12 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Ritten beheren</div>
+        <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
+          Bonnummers wijzigen of ritten verwijderen (alle statussen). Zoek op datum, route of bon.
+        </p>
+        <div className="tm-fg">
+          <label className="fl">Zoeken</label>
+          <input
+            type="text"
+            placeholder="Filter…"
+            value={ritZoek}
+            onChange={e => setRitZoek(e.target.value)}
+          />
+        </div>
+        {rittenBeheer.length === 0 ? (
+          <p style={{ fontSize: 12, color: "var(--tx3)", margin: 0 }}>Geen ritten gevonden.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+            {rittenBeheer.slice(0, 80).map(r => (
+              <div
+                key={r.id}
+                className="tm-brow"
+                style={{ flexDirection: "column", alignItems: "stretch", gap: 8, padding: "10px 0" }}
+              >
+                <div style={{ fontSize: 12, color: "var(--tx3)" }}>
+                  {r.d}
+                  {r.ti ? " · " + r.ti : ""} · <Badge s={r.s} />
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  {r.f} → {r.t}
+                </div>
+                <div className="tm-g2" style={{ alignItems: "flex-end" }}>
+                  <div className="tm-fg" style={{ marginBottom: 0 }}>
+                    <label className="fl">Bon</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={bonEdit[r.id] !== undefined ? bonEdit[r.id] : r.bon || ""}
+                      onChange={e => setBonEdit(m => ({ ...m, [r.id]: e.target.value }))}
+                      placeholder="—"
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <button type="button" className="btn btn-o" onClick={() => saveRitBon(r.id)}>
+                      Bon opslaan
+                    </button>
+                    <button type="button" className="btn btn-gh" style={{ color: "var(--rd)" }} onClick={() => verwijderRit(r.id)}>
+                      Verwijder rit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {rittenBeheer.length > 80 && (
+              <p style={{ fontSize: 11, color: "var(--tx3)", margin: 0 }}>Toont 80 van {rittenBeheer.length} — verfijn zoeken.</p>
+            )}
+          </div>
+        )}
+      </div>
+      <div className="card" style={{ marginTop: 12 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Eigen vaste routes</div>
+        <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
+          Zelfde ziekenhuiskeuze als bij <strong>Nieuwe rit</strong>. Optioneel kortste weg (rij-km) berekenen; coördinaten
+          worden bewaard voor de kaart.
+        </p>
+        <PlaatsPicker label="Vertrek" gekozen={erA} onKies={setErA} lijst={TM_ZIEKENHUIZEN_LIJST} />
+        <PlaatsPicker label="Bestemming" gekozen={erB} onKies={setErB} lijst={TM_ZIEKENHUIZEN_LIJST} />
+        <button type="button" className="btn btn-o btn-full" style={{ marginBottom: 10 }} disabled={erBusy} onClick={berekenEigenKm}>
+          {erBusy ? "Bezig…" : "Kortste weg berekenen (km)"}
+        </button>
+        <div className="tm-fg">
+          <label className="fl">Afstand (km)</label>
+          <input type="number" min="1" step="1" placeholder="Handmatig of via knop hierboven" value={erK} onChange={e => setErK(e.target.value)} />
+        </div>
+        <button type="button" className="btn btn-p btn-full" style={{ marginBottom: 14 }} onClick={addEigenRoute}>
+          Route toevoegen
+        </button>
+        {(D.xr || []).length === 0 ? (
+          <p style={{ fontSize: 12, color: "var(--tx3)", margin: 0 }}>Nog geen eigen routes.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {(D.xr || []).map(r => (
+              <div
+                key={r.id}
+                className="tm-brow"
+                style={{ alignItems: "center", flexWrap: "nowrap", gap: 8 }}
+              >
+                <span style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
+                  {r.f} → {r.t} · {r.k} km
+                </span>
+                <button type="button" className="btn btn-gh" onClick={() => delEigenRoute(r.id)} aria-label="Verwijderen">
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="card" style={{ marginTop: 12 }}>
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Vergoedingsregels</div>
         {[
           { l: "Opstartpremie", v: "€ 15,00" },
           { l: "Per 20 km", v: "€ 25,00" },
-          { l: "Nachttoeslag (20:00–05:59)", v: "+30%" },
+          { l: "Nachttoeslag (20:00–04:59)", v: "+30% op km-deel / forfait" },
+          { l: "Forfait RKV Sango of RKV Mechelen ↔ UZA Edegem", v: "€ 35,00 (+ nacht indien van toepassing)" },
+          { l: "Route-toeslag", v: "€ 15 (niet op Sango/Mechelen → UZA Edegem)" },
         ].map(r => (
           <div key={r.l} className="sep">
             <span className="lbl">{r.l}</span>
             <span className="val">{r.v}</span>
           </div>
         ))}
-        <div style={{ fontSize: 14, color: "var(--acc)", fontWeight: 600, marginTop: 12 }}>
-          Voorbeeld: 45 km → €15 + 3×€25 = €90
+        <div style={{ fontSize: 13, color: "var(--acc)", fontWeight: 600, marginTop: 12 }}>
+          Voorbeeld km-formule: 45 km → €15 + 3×€25 = €90 (excl. toeslagen/forfait)
         </div>
       </div>
     </div>
@@ -1705,8 +2640,8 @@ export default function App() {
           <Home D={D} pr={pr} onPlanRit={() => sT("ritten")} />
         )}
         {tab === "ritten" && <Ritten D={D} sD={sD} pid={pid} />}
-        {tab === "fin" && <Financieel D={D} />}
-        {tab === "hist" && <Historiek D={D} />}
+        {tab === "fin" && <Financieel D={D} pid={pid} />}
+        {tab === "hist" && <Historiek D={D} pid={pid} />}
         {tab === "kosten" && <Kosten D={D} sD={sD} pid={pid} />}
         {tab === "meer" && (
           <Meer

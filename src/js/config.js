@@ -13,8 +13,8 @@ export const NACHT_TOESLAG_PERCENT = Math.round((NACHT_TARIEF_FACTOR - 1) * 100)
 export const GESCHAT_VERBRUIK_L_PER_100KM = 5;
 /** Nachttarief vanaf dit uur (inclusief), bv. 20 → vanaf 20:00. */
 export const NACHT_START_UUR = 20;
-/** Dagtarief vanaf dit uur ’s ochtends: uur &lt; deze waarde = nacht (dus t/m 05:59 bij waarde 6). */
-export const NACHT_EIND_UUR = 6;
+/** Dagtarief vanaf dit uur ’s ochtends: uur &lt; deze waarde = nacht (dus t/m 04:59 bij waarde 5 → nacht eindigt om 5:00). */
+export const NACHT_EIND_UUR = 5;
 
 /** Forfait RKV Sango ↔ UZA Edegem (excl. btw), per rit. */
 export const FORFAIT_SANGO_UZA_EXCL_BTW = 35;

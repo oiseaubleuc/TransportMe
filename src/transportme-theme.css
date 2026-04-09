@@ -592,7 +592,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 140px;
+  max-height: min(52vh, 320px);
   overflow-y: auto;
   margin-bottom: 8px;
 }

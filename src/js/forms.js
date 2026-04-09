@@ -150,7 +150,8 @@ export function initFormRit(onSubmit) {
     const tijd = getEffectiveRitTijd();
     if (isNachtTariefTijd(tijd)) {
       nachtHintTijd.hidden = false;
-      nachtHintTijd.textContent = `Nachttarief actief: +${NACHT_TOESLAG_PERCENT}% op het km-deel of op het forfait RKV Sango ↔ UZA Edegem (niet op de opstartpremie van ${formatEuro(OPSTART_PREMIE)}). Venster: ${String(NACHT_START_UUR).padStart(2, '0')}:00 – 05:59 ’s ochtends (tot vóór ${String(NACHT_EIND_UUR).padStart(2, '0')}:00).`;
+      const nachtLaatsteUur = NACHT_EIND_UUR > 0 ? NACHT_EIND_UUR - 1 : 23;
+      nachtHintTijd.textContent = `Nachttarief actief: +${NACHT_TOESLAG_PERCENT}% op het km-deel of op het forfait RKV Sango ↔ UZA Edegem (niet op de opstartpremie van ${formatEuro(OPSTART_PREMIE)}). Venster: ${String(NACHT_START_UUR).padStart(2, '0')}:00 – ${String(nachtLaatsteUur).padStart(2, '0')}:59 ’s ochtends (dagtarief vanaf ${String(NACHT_EIND_UUR).padStart(2, '0')}:00).`;
     } else {
       nachtHintTijd.hidden = true;
       nachtHintTijd.textContent = '';

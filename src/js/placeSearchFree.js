@@ -43,6 +43,42 @@ export async function searchPlaces(query) {
 }
 
 /**
+ * Zoeken beperkt tot België (countrycodes=be) — Wallonië, Brussel, Vlaanderen.
+ */
+export async function searchPlacesBelgium(query) {
+  const q = String(query).trim();
+  if (!q || q.length < 2) return [];
+
+  const params = new URLSearchParams({
+    q,
+    format: 'json',
+    limit: '10',
+    addressdetails: '1',
+    countrycodes: 'be',
+  });
+
+  const res = await fetch(`${NOMINATIM_URL}?${params}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
+  });
+
+  if (!res.ok) return [];
+  const data = await res.json();
+  if (!Array.isArray(data)) return [];
+
+  return data.map((item) => {
+    const name = item.name || item.display_name?.split(',')[0]?.trim() || item.display_name || 'Plaats';
+    const address = item.display_name || '';
+    return {
+      name,
+      address,
+      lat: parseFloat(item.lat),
+      lng: parseFloat(item.lon),
+    };
+  });
+}
+
+/**
  * Koppel gratis zoeken aan een input: bij typen suggesties tonen, bij keuze callback met place.
  * @param {string} inputId - ID van het zoekveld
  * @param {string} resultsContainerId - ID van de div waar suggesties komen (wordt leeg/getoond/verborgen)
