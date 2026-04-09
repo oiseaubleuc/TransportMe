@@ -231,17 +231,21 @@ const ld = p => {
 const sv = (p, d) => localStorage.setItem("t_" + p, JSON.stringify(d));
 
 function initialProfileId() {
-  const tp = localStorage.getItem("tp");
-  const cur = localStorage.getItem(LS_LEGACY_PROFILE);
-  const ok = id => PR.some(x => x.id === id);
-  if (ok(tp)) return tp;
-  if (ok(cur)) {
-    try {
-      localStorage.setItem("tp", cur);
-    } catch {
-      /* ignore */
+  try {
+    const tp = localStorage.getItem("tp");
+    const cur = localStorage.getItem(LS_LEGACY_PROFILE);
+    const ok = id => PR.some(x => x.id === id);
+    if (ok(tp)) return tp;
+    if (ok(cur)) {
+      try {
+        localStorage.setItem("tp", cur);
+      } catch {
+        /* ignore */
+      }
+      return cur;
     }
-    return cur;
+  } catch {
+    /* private mode / blocked storage */
   }
   return "houdaifa";
 }

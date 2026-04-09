@@ -1,9 +1,17 @@
-const CACHE_NAME = "transportme-v1";
-const ASSETS = ["/", "/index.html", "/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png"];
+/**
+ * TransportMe PWA — voorkomt wit scherm na deploy:
+ * index + Vite /assets/* worden netwerk-eerst geladen (hashed bestandsnamen wijzigen per build).
+ */
+const CACHE_NAME = "transportme-v3";
+const PRECACHE_URLS = ["/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(() => self.skipWaiting())
+      .catch(() => self.skipWaiting())
   );
 });
 
@@ -16,19 +24,52 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+function maybeCache(cache, request, response) {
+  if (!response || response.status !== 200 || response.type !== "basic") {
+    return Promise.resolve(response);
+  }
+  return cache.put(request, response.clone()).then(() => response);
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return;
+  }
+  if (url.origin !== self.location.origin) return;
+
+  const path = url.pathname;
+  const isNavigate = request.mode === "navigate";
+  const isHtmlShell = path === "/" || path === "/index.html";
+  const isViteAsset = path.startsWith("/assets/") || path.endsWith(".js") || path.endsWith(".css");
+
+  if (isNavigate || isHtmlShell || isViteAsset) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) =>
+        fetch(request)
+          .then((res) => maybeCache(cache, request, res))
+          .catch(() => cache.match(request))
+          .then((res) => {
+            if (res) return res;
+            if (isNavigate || isHtmlShell) return cache.match("/index.html");
+            return new Response("", { status: 504, statusText: "Offline" });
+          })
+      )
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;
-      return fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          return response;
-        })
-        .catch(() => caches.match("/index.html"));
+      return caches.open(CACHE_NAME).then((cache) =>
+        fetch(request).then((res) => maybeCache(cache, request, res))
+      );
     })
   );
 });
