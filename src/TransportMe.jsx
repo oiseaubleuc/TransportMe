@@ -74,13 +74,11 @@ const ROUTES = [
   { f: "UZ Leuven", t: "AZ Diest", k: 28, la1: 50.8814, lo1: 4.671, la2: 50.9894, lo2: 5.0506 },
 ];
 
-const td = () => new Date().toISOString().slice(0, 10);
 const nt = () => {
   const d = new Date();
   return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 };
 const ui = () => Date.now() + "" + Math.random().toString(36).slice(2, 5);
-const E = n => "€" + Number(n).toFixed(2).replace(".", ",");
 const isN = t => {
   if (!t) return false;
   const h = +String(t).split(":")[0];
@@ -90,24 +88,34 @@ const VG = (k, t) => {
   const s = Math.ceil(k / S) * P2;
   return Math.round((O + (isN(t) ? s * 1.3 : s)) * 100) / 100;
 };
+
+/** Kalenderdatum in lokale tijd (geen UTC-shift zoals toISOString → foutieve maand/week in EU). */
+function toIsoLocal(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+const td = () => toIsoLocal(new Date());
 const wk = () => {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   const y = d.getDay();
   d.setDate(d.getDate() - (y === 0 ? 6 : y - 1));
-  const e = new Date(d);
-  e.setDate(d.getDate() + 6);
-  return [d.toISOString().slice(0, 10), e.toISOString().slice(0, 10)];
+  const start = new Date(d);
+  const end = new Date(d);
+  end.setDate(end.getDate() + 6);
+  return [toIsoLocal(start), toIsoLocal(end)];
 };
 const mo = () => {
   const d = new Date();
-  return [
-    new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10),
-    new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10),
-  ];
+  const start = new Date(d.getFullYear(), d.getMonth(), 1);
+  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return [toIsoLocal(start), toIsoLocal(end)];
 };
 const iR = (d, s, e) => d >= s && d <= e;
 const gr = p => (p === "day" ? [td(), td()] : p === "week" ? wk() : mo());
+const grExt = p => (p === "all" ? ["1970-01-01", "2099-12-31"] : gr(p));
 
 function normData(x) {
   const o = x && typeof x === "object" ? x : {};
@@ -153,6 +161,19 @@ function parseLooseNumber(val) {
   }
   const n = Number(s);
   return Number.isFinite(n) ? n : NaN;
+}
+
+/** Veilige euro voor totalen (geen NaN door corrupte strings). */
+function money(x) {
+  if (x == null || x === "") return 0;
+  if (typeof x === "number") return Number.isFinite(x) ? x : 0;
+  const n = parseLooseNumber(x);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function E(n) {
+  const x = money(n);
+  return "€" + x.toFixed(2).replace(".", ",");
 }
 
 function isTmStoreLeeg(data) {
@@ -434,10 +455,10 @@ function Home({ D, pr, onPlanRit }) {
   const [p, sP] = useState("week");
   const [s, e] = gr(p);
   const vl = D.r.filter(r => r.s === "voltooid" && iR(r.d, s, e));
-  const om = vl.reduce((a, r) => a + r.v, 0);
+  const om = vl.reduce((a, r) => a + money(r.v), 0);
   const km = vl.reduce((a, r) => a + r.k, 0);
-  const fc = D.b.filter(b => iR(b.d, s, e)).reduce((a, b) => a + b.a, 0);
-  const oc = (D.o || []).filter(x => iR(x.d, s, e)).reduce((a, x) => a + x.a, 0);
+  const fc = D.b.filter(b => iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0);
+  const oc = (D.o || []).filter(x => iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
   const kosten = fc + oc;
   const up = D.r
     .filter(r => r.s === "komend" || r.s === "lopend")
@@ -973,15 +994,15 @@ function Financieel({ D }) {
   const all = D.r;
   const done = all.filter(r => r.s === "voltooid" && iR(r.d, s, e));
   const cancelled = all.filter(r => r.s === "geannuleerd" && iR(r.d, s, e));
-  const omzet = done.reduce((a, r) => a + r.v, 0);
+  const omzet = done.reduce((a, r) => a + money(r.v), 0);
   const totKm = done.reduce((a, r) => a + r.k, 0);
-  const brandstof = D.b.filter(b => iR(b.d, s, e)).reduce((a, b) => a + b.a, 0);
-  const overig = (D.o || []).filter(x => iR(x.d, s, e)).reduce((a, x) => a + x.a, 0);
+  const brandstof = D.b.filter(b => iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0);
+  const overig = (D.o || []).filter(x => iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
   const kosten = brandstof + overig;
   const winst = omzet - kosten;
-  const verlies = cancelled.reduce((a, r) => a + (r.v || 0), 0);
+  const verlies = cancelled.reduce((a, r) => a + money(r.v), 0);
   const nachtRitten = done.filter(r => isN(r.ti));
-  const nachtOmzet = nachtRitten.reduce((a, r) => a + r.v, 0);
+  const nachtOmzet = nachtRitten.reduce((a, r) => a + money(r.v), 0);
   const gemPerRit = done.length > 0 ? Math.round((omzet / done.length) * 100) / 100 : 0;
   const gemKmPerRit = done.length > 0 ? Math.round(totKm / done.length) : 0;
 
@@ -1035,7 +1056,10 @@ function Financieel({ D }) {
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Financieel overzicht</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Financieel overzicht</h1>
+      <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 14px", lineHeight: 1.4 }}>
+        Periode = lokale datum op dit toestel. Totalen = som van opgeslagen bedragen (geen schatting).
+      </p>
       <PP v={p} set={sP} />
 
       <div className="tm-chart-card tm-fin-chart">
@@ -1050,7 +1074,12 @@ function Financieel({ D }) {
         {statCard("Totale omzet", E(omzet), "var(--acc)", done.length + " voltooide ritten")}
         {statCard("Totale kosten", "− " + E(kosten), "var(--rd)", "Brandstof + overig")}
         {statCard("Netto winst", E(winst), winst >= 0 ? "var(--gn)" : "var(--rd)", omzet > 0 ? Math.round((winst / omzet) * 100) + "% marge" : "")}
-        {statCard("Gemist (annulering)", E(verlies), "var(--am)", cancelled.length + " geannuleerde ritten")}
+        {statCard(
+          "Gemist (annulering)",
+          E(verlies),
+          "var(--am)",
+          cancelled.length + " ritten · niet afgetrokken van netto"
+        )}
       </div>
 
       <div className="sh" style={{ marginTop: 8 }}>
@@ -1096,6 +1125,144 @@ function Financieel({ D }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function PPh({ v, set }) {
+  return (
+    <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+      {[
+        ["day", "Dag"],
+        ["week", "Week"],
+        ["month", "Maand"],
+        ["all", "Alles"],
+      ].map(([k, l]) => (
+        <button key={k} type="button" className={"btn " + (v === k ? "btn-p" : "btn-o")} onClick={() => set(k)}>
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Historiek({ D }) {
+  const [p, sP] = useState("month");
+  const [s, e] = grExt(p);
+  const trips = useMemo(() => {
+    return [...D.r]
+      .filter(r => iR(r.d, s, e))
+      .sort((a, b) => (b.d + (b.ti || "")).localeCompare(a.d + (a.ti || "")));
+  }, [D.r, s, e]);
+  const voltooid = trips.filter(r => r.s === "voltooid");
+  const omzet = voltooid.reduce((a, r) => a + money(r.v), 0);
+  const brandstofL = useMemo(
+    () => [...D.b].filter(b => iR(b.d, s, e)).sort((a, b) => b.d.localeCompare(a.d)),
+    [D.b, s, e]
+  );
+  const overigL = useMemo(
+    () => [...(D.o || [])].filter(x => iR(x.d, s, e)).sort((a, b) => b.d.localeCompare(a.d)),
+    [D.o, s, e]
+  );
+  const brandstof = brandstofL.reduce((a, b) => a + money(b.a), 0);
+  const overig = overigL.reduce((a, x) => a + money(x.a), 0);
+  const kosten = brandstof + overig;
+  const netto = omzet - kosten;
+  const periodLabel =
+    p === "all"
+      ? "Alle data"
+      : p === "day"
+        ? `Dag ${s}`
+        : p === "week"
+          ? `${s} t/m ${e}`
+          : `${s.slice(0, 7)} (${s} t/m ${e})`;
+
+  return (
+    <div>
+      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Historiek</h1>
+      <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 14px", lineHeight: 1.45 }}>
+        Elk bedrag komt rechtstreeks uit je opgeslagen ritten en kosten. Totalen = <strong>som van de lijnen</strong>{" "}
+        (zelfde rekenregels als Financieel).
+      </p>
+      <PPh v={p} set={sP} />
+      <div className="card tm-rit-sum" style={{ marginBottom: 16 }}>
+        <div className="tm-rvi">
+          <span>Periode</span>
+          <b>{periodLabel}</b>
+        </div>
+        <div className="tm-rvi">
+          <span>Omzet (alleen voltooid)</span>
+          <b style={{ color: "var(--acc)" }}>{E(omzet)}</b>
+        </div>
+        <div className="tm-rvi">
+          <span>Brandstof (som tankbeurten)</span>
+          <b style={{ color: "var(--rd)" }}>− {E(brandstof)}</b>
+        </div>
+        <div className="tm-rvi">
+          <span>Overig (som posten)</span>
+          <b style={{ color: "var(--rd)" }}>− {E(overig)}</b>
+        </div>
+        <div className="tm-rvi">
+          <span>Netto</span>
+          <b style={{ color: netto >= 0 ? "var(--gn)" : "var(--rd)" }}>{E(netto)}</b>
+        </div>
+        <p style={{ fontSize: 11, color: "var(--tx3)", margin: "10px 0 0", lineHeight: 1.35 }}>
+          Dagen en maanden volgens je toestel (lokale tijd). “Gemist (annulering)” op Financieel is alleen informatief
+          over geannuleerde ritten — wordt <em>niet</em> van netto afgetrokken.
+        </p>
+      </div>
+
+      <div className="sh">Ritten ({trips.length})</div>
+      {trips.length === 0 && <p className="tm-em">Geen ritten in deze periode.</p>}
+      {trips.map(r => (
+        <div key={r.id} className="card card-l" style={{ marginBottom: 8, padding: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: "var(--tx3)" }}>
+                {r.d}
+                {r.ti ? " · " + r.ti : ""}
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
+                {r.f} → {r.t}
+              </div>
+              {r.bon && <div style={{ fontSize: 11, color: "var(--tx2)", marginTop: 2 }}>Bon {r.bon}</div>}
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <Badge s={r.s} />
+              <div style={{ fontSize: 16, fontWeight: 700, marginTop: 6 }} className="acc">
+                {E(r.v)}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--tx3)" }}>{r.k} km</div>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div className="sh" style={{ marginTop: 16 }}>
+        Tankbeurten ({brandstofL.length})
+      </div>
+      {brandstofL.length === 0 && <p className="tm-em">Geen tankbeurten in deze periode.</p>}
+      {brandstofL.map(b => (
+        <div key={b.id} className="tm-f-row" style={{ flexWrap: "wrap", alignItems: "center" }}>
+          <span className="tm-f-date">{b.d}</span>
+          <span style={{ flex: 1, minWidth: 100 }}>
+            {money(b.l)} L × {E(money(b.p))}/L
+          </span>
+          <span className="tm-f-eur">{E(b.a)}</span>
+        </div>
+      ))}
+
+      <div className="sh" style={{ marginTop: 16 }}>
+        Overige kosten ({overigL.length})
+      </div>
+      {overigL.length === 0 && <p className="tm-em">Geen posten in deze periode.</p>}
+      {overigL.map(x => (
+        <div key={x.id} className="tm-f-row" style={{ flexWrap: "wrap" }}>
+          <span className="tm-f-date">{x.d}</span>
+          <span style={{ flex: 1, minWidth: 120 }}>{x.desc || "—"}</span>
+          <span className="tm-f-eur">{E(x.a)}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1407,6 +1574,22 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   );
 }
 
+function IconNavHistoriek() {
+  return (
+    <svg className="tm-nav-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M8 7V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M5 11h14M5 21h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.65"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M9 15h6M9 18h4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function IconNavHome() {
   return (
     <svg className="tm-nav-svg" viewBox="0 0 24 24" aria-hidden="true">
@@ -1485,6 +1668,7 @@ const NAV_ITEMS = [
   { id: "home", label: "Home", Icon: IconNavHome },
   { id: "ritten", label: "Ritten", Icon: IconNavRitten },
   { id: "fin", label: "Financieel", Icon: IconNavFin },
+  { id: "hist", label: "Historiek", Icon: IconNavHistoriek },
   { id: "kosten", label: "Kosten", Icon: IconNavKosten },
   { id: "meer", label: "Meer", Icon: IconNavMeer },
 ];
@@ -1522,6 +1706,7 @@ export default function App() {
         )}
         {tab === "ritten" && <Ritten D={D} sD={sD} pid={pid} />}
         {tab === "fin" && <Financieel D={D} />}
+        {tab === "hist" && <Historiek D={D} />}
         {tab === "kosten" && <Kosten D={D} sD={sD} pid={pid} />}
         {tab === "meer" && (
           <Meer
