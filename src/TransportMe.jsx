@@ -138,6 +138,23 @@ function padTijd(t) {
   return `${String(h).padStart(2, "0")}:${m[2]}`;
 }
 
+/** getallen uit oude data (1.234,56 of 90,50 of 90.5) */
+function parseLooseNumber(val) {
+  if (val == null || val === "") return NaN;
+  if (typeof val === "number" && Number.isFinite(val)) return val;
+  const s0 = String(val).trim().replace(/\s/g, "");
+  const hasComma = s0.includes(",");
+  const hasDot = s0.includes(".");
+  let s = s0;
+  if (hasComma && (!hasDot || s0.lastIndexOf(",") > s0.lastIndexOf("."))) {
+    s = s0.replace(/\./g, "").replace(",", ".");
+  } else if (hasComma && hasDot) {
+    s = s0.replace(/,/g, "");
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+
 function isTmStoreLeeg(data) {
   const n = normData(data);
   return n.r.length === 0 && n.b.length === 0 && (n.o || []).length === 0;
@@ -155,7 +172,7 @@ function legacyRitToTm(r) {
   if (!["komend", "lopend", "voltooid", "geannuleerd"].includes(s)) s = "voltooid";
   const f = (r.f || r.fromName || "").toString().trim() || "—";
   const t = (r.t || r.toName || "").toString().trim() || "—";
-  let v = Number(r.v != null ? r.v : r.vergoeding);
+  let v = parseLooseNumber(r.v != null ? r.v : r.vergoeding);
   if (!Number.isFinite(v)) v = VG(k, ti);
   const id = r.id != null && r.id !== "" ? String(r.id) : ui();
   const dr = (r.dr || r.chauffeurName || DR[0]).toString();
@@ -174,11 +191,12 @@ function legacyBrandstofToTm(x) {
   const d = (x.d || x.datum || "").toString();
   const d10 = d.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d10)) return null;
-  const l = Number(x.l != null ? x.l : x.liter);
-  const p = Number(x.p != null ? x.p : x.prijs);
+  const l = parseLooseNumber(x.l != null ? x.l : x.liter);
+  const p = parseLooseNumber(x.p != null ? x.p : x.prijs);
   if (!Number.isFinite(l) || l <= 0 || !Number.isFinite(p) || p < 0) return null;
   const id = x.id != null && x.id !== "" ? String(x.id) : ui();
-  const a = Number.isFinite(Number(x.a)) ? Number(x.a) : Math.round(l * p * 100) / 100;
+  const aDirect = parseLooseNumber(x.a);
+  const a = Number.isFinite(aDirect) ? aDirect : Math.round(l * p * 100) / 100;
   return { id, d: d10, l, p, a };
 }
 
@@ -186,7 +204,7 @@ function legacyOverigToTm(x) {
   if (!x || typeof x !== "object") return null;
   const d = (x.d || x.datum || "").toString();
   const d10 = d.slice(0, 10);
-  const a = Number(x.a != null ? x.a : x.bedrag);
+  const a = parseLooseNumber(x.a != null ? x.a : x.bedrag);
   const desc = (x.desc || x.omschrijving || "").toString().trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d10) || !Number.isFinite(a) || a < 0) return null;
   const id = x.id != null && x.id !== "" ? String(x.id) : ui();
@@ -1284,6 +1302,43 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
               />
               <button type="button" className="btn btn-o btn-full" onClick={() => backupFileRef.current?.click()}>
                 Backup terugzetten
+              </button>
+            </div>
+            <div
+              className="card"
+              style={{ marginBottom: 14, padding: 14, background: "var(--s2)", borderColor: "var(--am)" }}
+            >
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Herstel uit klassieke app</div>
+              <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
+                Vervangt de TransportMe-gegevens van <strong>{pr.n}</strong> opnieuw vanuit de oude localStorage (
+                transporteur_*). Gebruik dit als bedragen verkeerd lijken (bijv. door import). Alleen ritten die{" "}
+                <em>alleen</em> in TransportMe stonden, gaan verloren.
+              </p>
+              <button
+                type="button"
+                className="btn btn-o btn-full"
+                onClick={() => {
+                  const leg = leesLegacyBundel(pid);
+                  const n = leg.r.length + leg.b.length + leg.o.length;
+                  if (n === 0) {
+                    alert(
+                      "Geen gegevens in klassieke opslag voor dit profiel. Probeer een ander profiel, of zet een .json-backup terug."
+                    );
+                    return;
+                  }
+                  if (
+                    !confirm(
+                      `Vervangen door ${leg.r.length} ritten, ${leg.b.length} tankbeurten, ${leg.o.length} overige kosten uit de klassieke app?`
+                    )
+                  ) {
+                    return;
+                  }
+                  sD(leg);
+                  sv(pid, leg);
+                  alert("Herstel uit klassieke opslag voltooid.");
+                }}
+              >
+                Opnieuw importeren uit klassieke opslag
               </button>
             </div>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--tx3)", marginBottom: 8 }}>Alleen huidig profiel</div>
