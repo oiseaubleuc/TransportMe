@@ -112,14 +112,138 @@ function normData(x) {
   const o = x && typeof x === "object" ? x : {};
   return { r: o.r || [], b: o.b || [], o: o.o || [] };
 }
-const ld = p => {
+
+/** Zelfde keys als src/js/config.js STORAGE_KEYS — data van de klassieke Transporteur-app op het toestel. */
+const LS_RITTEN = "transporteur_ritten";
+const LS_BRANDSTOF = "transporteur_brandstof";
+const LS_OVERIG = "transporteur_overig";
+const LS_LEGACY_PROFILE = "transporteur_current_profile";
+
+function safeParseJsonArray(raw) {
   try {
-    return normData(JSON.parse(localStorage.getItem("t_" + p) || "null"));
+    const x = JSON.parse(raw || "[]");
+    return Array.isArray(x) ? x : [];
   } catch {
-    return { r: [], b: [], o: [] };
+    return [];
   }
+}
+
+function padTijd(t) {
+  if (t == null || typeof t !== "string") return "";
+  const m = String(t).trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return "";
+  const h = Number(m[1]);
+  if (!Number.isFinite(h) || h < 0 || h > 23) return "";
+  return `${String(h).padStart(2, "0")}:${m[2]}`;
+}
+
+function isTmStoreLeeg(data) {
+  const n = normData(data);
+  return n.r.length === 0 && n.b.length === 0 && (n.o || []).length === 0;
+}
+
+function legacyRitToTm(r) {
+  if (!r || typeof r !== "object") return null;
+  const d = (r.d || r.datum || "").toString();
+  const d10 = d.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d10)) return null;
+  const k = Number(r.k != null ? r.k : r.km);
+  if (!Number.isFinite(k) || k < 1) return null;
+  const ti = padTijd(r.ti ?? r.tijd ?? "");
+  let s = r.s ?? r.status;
+  if (!["komend", "lopend", "voltooid", "geannuleerd"].includes(s)) s = "voltooid";
+  const f = (r.f || r.fromName || "").toString().trim() || "—";
+  const t = (r.t || r.toName || "").toString().trim() || "—";
+  let v = Number(r.v != null ? r.v : r.vergoeding);
+  if (!Number.isFinite(v)) v = VG(k, ti);
+  const id = r.id != null && r.id !== "" ? String(r.id) : ui();
+  const dr = (r.dr || r.chauffeurName || DR[0]).toString();
+  const ca = (r.ca || r.voertuigName || CA[0]).toString();
+  const out = { id, d: d10, ti, f, t, k, dr, ca, s, v };
+  const bon = (r.bon ?? r.bonnummer ?? "").toString().trim();
+  if (bon) out.bon = bon;
+  ["pr", "pc", "tel", "wc", "deur", "bag", "nt"].forEach(key => {
+    if (r[key] != null && r[key] !== "") out[key] = r[key];
+  });
+  return out;
+}
+
+function legacyBrandstofToTm(x) {
+  if (!x || typeof x !== "object") return null;
+  const d = (x.d || x.datum || "").toString();
+  const d10 = d.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d10)) return null;
+  const l = Number(x.l != null ? x.l : x.liter);
+  const p = Number(x.p != null ? x.p : x.prijs);
+  if (!Number.isFinite(l) || l <= 0 || !Number.isFinite(p) || p < 0) return null;
+  const id = x.id != null && x.id !== "" ? String(x.id) : ui();
+  const a = Number.isFinite(Number(x.a)) ? Number(x.a) : Math.round(l * p * 100) / 100;
+  return { id, d: d10, l, p, a };
+}
+
+function legacyOverigToTm(x) {
+  if (!x || typeof x !== "object") return null;
+  const d = (x.d || x.datum || "").toString();
+  const d10 = d.slice(0, 10);
+  const a = Number(x.a != null ? x.a : x.bedrag);
+  const desc = (x.desc || x.omschrijving || "").toString().trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d10) || !Number.isFinite(a) || a < 0) return null;
+  const id = x.id != null && x.id !== "" ? String(x.id) : ui();
+  return { id, d: d10, a, desc };
+}
+
+function leesLegacyBundel(profileId) {
+  const r = safeParseJsonArray(localStorage.getItem(`${LS_RITTEN}_${profileId}`))
+    .map(legacyRitToTm)
+    .filter(Boolean);
+  const b = safeParseJsonArray(localStorage.getItem(`${LS_BRANDSTOF}_${profileId}`))
+    .map(legacyBrandstofToTm)
+    .filter(Boolean);
+  const o = safeParseJsonArray(localStorage.getItem(`${LS_OVERIG}_${profileId}`))
+    .map(legacyOverigToTm)
+    .filter(Boolean);
+  return { r, b, o };
+}
+
+/** Laadt TransportMe-bundel `t_<profiel>`; als die leeg is, éénmalig importeren uit legacy localStorage. */
+const ld = p => {
+  let data;
+  try {
+    data = normData(JSON.parse(localStorage.getItem("t_" + p) || "null"));
+  } catch {
+    data = { r: [], b: [], o: [] };
+  }
+  if (isTmStoreLeeg(data)) {
+    const leg = leesLegacyBundel(p);
+    if (leg.r.length > 0 || leg.b.length > 0 || leg.o.length > 0) {
+      try {
+        localStorage.setItem("t_" + p, JSON.stringify(leg));
+      } catch {
+        /* quota */
+      }
+      return leg;
+    }
+  }
+  return data;
 };
+
 const sv = (p, d) => localStorage.setItem("t_" + p, JSON.stringify(d));
+
+function initialProfileId() {
+  const tp = localStorage.getItem("tp");
+  const cur = localStorage.getItem(LS_LEGACY_PROFILE);
+  const ok = id => PR.some(x => x.id === id);
+  if (ok(tp)) return tp;
+  if (ok(cur)) {
+    try {
+      localStorage.setItem("tp", cur);
+    } catch {
+      /* ignore */
+    }
+    return cur;
+  }
+  return "houdaifa";
+}
 
 function Badge({ s }) {
   const m = {
@@ -1265,15 +1389,28 @@ const NAV_ITEMS = [
 
 export default function App() {
   const [tab, sT] = useState("home");
-  const [pid, sP] = useState(() => localStorage.getItem("tp") || "houdaifa");
-  const [D, sD] = useState(() => ld(pid));
+  const [pid, sP] = useState(() => initialProfileId());
+  const [D, sD] = useState(() => ld(initialProfileId()));
   const pr = PR.find(p => p.id === pid) || PR[0];
   const sw = id => {
     sP(id);
-    localStorage.setItem("tp", id);
+    try {
+      localStorage.setItem("tp", id);
+      localStorage.setItem(LS_LEGACY_PROFILE, id);
+    } catch {
+      /* ignore */
+    }
     sD(ld(id));
   };
   useEffect(() => sD(ld(pid)), [pid]);
+  /** Legacy-data voor alle profielen naar t_* trekken zodat profielwissel meteen gevuld is. */
+  useEffect(() => {
+    try {
+      PR.forEach(p => ld(p.id));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   return (
     <div className="tm-app">
