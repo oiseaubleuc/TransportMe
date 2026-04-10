@@ -18,12 +18,12 @@ import { generateFactuurPdfBlob, triggerPdfDownload } from "./js/invoicePdf.js";
 import { vergoedingVoorRit, geschatteAfstandKm } from "./js/calculations.js";
 import { getRouteDistanceORS, hasOpenRouteApiKey } from "./js/ors.js";
 import { searchPlacesBelgium } from "./js/placeSearchFree.js";
-import { PRESET_ANCHOR_ZIEKENHUIZEN } from "./js/config.js";
+import { PRESET_ANCHOR_ZIEKENHUIZEN, GESCHAT_VERBRUIK_L_PER_100KM } from "./js/config.js";
 import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 
 ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 ChartJS.defaults.font.family = "'DM Sans', -apple-system, sans-serif";
-ChartJS.defaults.color = "#9a9a92";
+ChartJS.defaults.color = "#a3a3a3";
 
 const TM_CHART_BASE = {
   responsive: true,
@@ -141,8 +141,21 @@ const mo = () => {
   return [toIsoLocal(start), toIsoLocal(end)];
 };
 const iR = (d, s, e) => d >= s && d <= e;
+/** Totalen op Home/Financieel: alleen data vanaf deze datum (YYYY-MM-DD). */
+const TM_STATS_FROM = "2026-03-31";
+const statsVenster = d => typeof d === "string" && d.slice(0, 10) >= TM_STATS_FROM;
 const gr = p => (p === "day" ? [td(), td()] : p === "week" ? wk() : mo());
 const grExt = p => (p === "all" ? ["1970-01-01", "2099-12-31"] : gr(p));
+
+/** Korte datum voor Home-overzicht (nl-BE). */
+function fmtNlShort(iso) {
+  if (!iso || iso.length < 10) return iso || "";
+  const y = +iso.slice(0, 4);
+  const m = +iso.slice(5, 7) - 1;
+  const d = +iso.slice(8, 10);
+  const dt = new Date(y, m, d);
+  return dt.toLocaleDateString("nl-BE", { day: "numeric", month: "short" });
+}
 
 function normData(x) {
   const o = x && typeof x === "object" ? x : {};
@@ -479,12 +492,12 @@ function RitMap({ la1, lo1, la2, lo2, labelF, labelT }) {
         [la1, lo1],
         [la2, lo2],
       ],
-      { color: "#7d8550", weight: 4, opacity: 0.92 }
+      { color: "#A4C639", weight: 4, opacity: 0.92 }
     ).addTo(map);
     const pin = (lat, lng, letter, tip) =>
       L.circleMarker([lat, lng], {
         radius: 9,
-        fillColor: "#7d8550",
+        fillColor: "#A4C639",
         color: "#141414",
         weight: 2,
         fillOpacity: 1,
@@ -619,50 +632,81 @@ function TripCard({ r, onAct }) {
 function Home({ D, pr, onPlanRit }) {
   const [p, sP] = useState("week");
   const [s, e] = gr(p);
-  const vl = D.r.filter(r => r.s === "voltooid" && iR(r.d, s, e));
+  const vl = D.r.filter(r => r.s === "voltooid" && statsVenster(r.d) && iR(r.d, s, e));
   const om = vl.reduce((a, r) => a + money(r.v), 0);
-  const km = vl.reduce((a, r) => a + r.k, 0);
-  const fc = D.b.filter(b => iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0);
-  const oc = (D.o || []).filter(x => iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
-  const kosten = fc + oc;
+  const km = vl.reduce((a, r) => a + Number(r.k) || 0, 0);
+  const kosten =
+    D.b.filter(b => statsVenster(b.d) && iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0) +
+    (D.o || []).filter(x => statsVenster(x.d) && iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
+  const nettoBoek = om - kosten;
+  const tanksInPeriode = D.b.filter(b => statsVenster(b.d) && iR(b.d, s, e));
+  const tanksMetL = tanksInPeriode.filter(b => money(b.l) > 0 && money(b.p) >= 0);
+  const avgPl = tanksMetL.length
+    ? tanksMetL.reduce((a, b) => a + money(b.p), 0) / tanksMetL.length
+    : 2.3;
+  const geschatBrandstofRitten =
+    Math.round(km * (GESCHAT_VERBRUIK_L_PER_100KM / 100) * avgPl * 100) / 100;
+  const geschatWinst = Math.round((om - geschatBrandstofRitten) * 100) / 100;
+  const periodKicker = p === "day" ? "Dag" : p === "week" ? "Week" : "Maand";
+  const periodDetail =
+    p === "day"
+      ? fmtNlShort(s)
+      : p === "week"
+        ? `${fmtNlShort(s)} t/m ${fmtNlShort(e)}`
+        : `${fmtNlShort(s)} t/m ${fmtNlShort(e)}`;
   const up = D.r
     .filter(r => r.s === "komend" || r.s === "lopend")
     .sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
 
   return (
-    <div>
-      <div className="tm-welcome-sub">Welkom terug,</div>
-      <div className="tm-welcome-name">{pr.n}</div>
-      <PP v={p} set={sP} />
-      <div className="tm-kpi-row">
-        <div className="kpi">
-          <div className="kpi-l">Omzet</div>
-          <div className="kpi-v" style={{ color: "var(--acc)" }}>
-            {E(om)}
-          </div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-l">Netto</div>
-          <div className="kpi-v" style={{ color: "var(--gn)" }}>
-            {E(om - kosten)}
-          </div>
-        </div>
+    <div className="tm-home-page">
+      <header className="tm-home-hello">
+        <div className="tm-home-hello-sub">Welkom terug</div>
+        <h1 className="tm-home-hello-name">{pr.n}</h1>
+      </header>
+      <div className="tm-home-pp">
+        <PP v={p} set={sP} />
       </div>
-      <div className="tm-kpi-row" style={{ marginBottom: 20 }}>
-        <div className="kpi">
-          <div className="kpi-l">Kosten</div>
-          <div className="kpi-v" style={{ color: "var(--rd)" }}>
-            {E(kosten)}
+      <section className="tm-home-overview" aria-label="Overzicht periode">
+        <header className="tm-home-overview-head">
+          <span className="tm-home-overview-kicker">{periodKicker}</span>
+          <span className="tm-home-overview-period">{periodDetail}</span>
+        </header>
+        <dl className="tm-home-metric-list">
+          <div className="tm-home-metric tm-home-metric--omzet">
+            <dt>Omzet</dt>
+            <dd className="tm-home-metric-val tm-home-metric-val--xl">{E(om)}</dd>
           </div>
-          <div className="kpi-s">Brandstof: {E(fc)}</div>
-        </div>
-        <div className="kpi">
-          <div className="kpi-l">Ritten</div>
-          <div className="kpi-v">{vl.length}</div>
-          <div className="kpi-s">{km} km totaal</div>
-        </div>
-      </div>
-      <button type="button" className="btn btn-p btn-full" style={{ marginBottom: 20 }} onClick={onPlanRit}>
+          <div className="tm-home-metric">
+            <dt className="tm-home-metric-labels">
+              <span className="tm-home-metric-ttl">Winst</span>
+              <span className="tm-home-metric-hint">Na geschatte brandstof</span>
+            </dt>
+            <dd
+              className={
+                "tm-home-metric-val " +
+                (geschatWinst >= 0 ? "tm-home-stat-pos" : "tm-home-stat-neg")
+              }
+            >
+              {E(geschatWinst)}
+            </dd>
+          </div>
+          <div className="tm-home-metric tm-home-metric--last">
+            <dt className="tm-home-metric-labels">
+              <span className="tm-home-metric-ttl">Netto</span>
+              <span className="tm-home-metric-hint">Na alle geregistreerde kosten</span>
+            </dt>
+            <dd
+              className={
+                "tm-home-metric-val " + (nettoBoek >= 0 ? "tm-home-stat-pos" : "tm-home-stat-neg")
+              }
+            >
+              {E(nettoBoek)}
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <button type="button" className="btn btn-p btn-full tm-home-plan" onClick={onPlanRit}>
         Rit plannen
       </button>
       {up.length > 0 && (
@@ -718,9 +762,9 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
         {
           data: [cnt.komend, cnt.lopend, cnt.voltooid, cnt.geannuleerd],
           backgroundColor: [
-            "rgba(125, 133, 80, 0.9)",
-            "rgba(154, 171, 110, 0.88)",
-            "rgba(120, 124, 112, 0.95)",
+            "rgba(164, 198, 57, 0.88)",
+            "rgba(184, 217, 74, 0.75)",
+            "rgba(130, 150, 60, 0.85)",
             "rgba(239, 68, 68, 0.72)",
           ],
           borderColor: "#141414",
@@ -738,8 +782,8 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
         {
           label: "Voltooid",
           data: week.counts,
-          backgroundColor: "rgba(125, 133, 80, 0.5)",
-          borderColor: "#7d8550",
+          backgroundColor: "rgba(164, 198, 57, 0.45)",
+          borderColor: "#A4C639",
           borderWidth: 1,
           borderRadius: 6,
         },
@@ -796,8 +840,8 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
         {
           label: "Ritten",
           data: topRoutes.map(([, v]) => v),
-          backgroundColor: "rgba(125, 133, 80, 0.42)",
-          borderColor: "#5c6340",
+          backgroundColor: "rgba(164, 198, 57, 0.35)",
+          borderColor: "#8fb030",
           borderWidth: 1,
           borderRadius: 4,
         },
@@ -1274,12 +1318,12 @@ function Financieel({ D, pid }) {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [s, e] = gr(p);
   const all = D.r;
-  const done = all.filter(r => r.s === "voltooid" && iR(r.d, s, e));
-  const cancelled = all.filter(r => r.s === "geannuleerd" && iR(r.d, s, e));
+  const done = all.filter(r => r.s === "voltooid" && statsVenster(r.d) && iR(r.d, s, e));
+  const cancelled = all.filter(r => r.s === "geannuleerd" && statsVenster(r.d) && iR(r.d, s, e));
   const omzet = done.reduce((a, r) => a + money(r.v), 0);
   const totKm = done.reduce((a, r) => a + Number(r.k) || 0, 0);
-  const brandstof = D.b.filter(b => iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0);
-  const overig = (D.o || []).filter(x => iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
+  const brandstof = D.b.filter(b => statsVenster(b.d) && iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0);
+  const overig = (D.o || []).filter(x => statsVenster(x.d) && iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
   const kosten = brandstof + overig;
   const winst = omzet - kosten;
   const verlies = cancelled.reduce((a, r) => a + money(r.v), 0);
@@ -1298,8 +1342,8 @@ function Financieel({ D, pid }) {
         {
           label: "€",
           data: [omzet, kosten, winst],
-          backgroundColor: ["rgba(125, 133, 80, 0.62)", "rgba(239, 68, 68, 0.5)", "rgba(154, 171, 110, 0.55)"],
-          borderColor: ["#7d8550", "#ef4444", winst >= 0 ? "#9aab6e" : "#ef4444"],
+          backgroundColor: ["rgba(164, 198, 57, 0.55)", "rgba(239, 68, 68, 0.5)", "rgba(184, 217, 74, 0.5)"],
+          borderColor: ["#A4C639", "#ef4444", winst >= 0 ? "#B8D94A" : "#ef4444"],
           borderWidth: 1,
           borderRadius: 8,
         },
@@ -1345,7 +1389,8 @@ function Financieel({ D, pid }) {
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Financieel overzicht</h1>
       <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 14px", lineHeight: 1.4 }}>
-        Periode = lokale datum op dit toestel. Bedragen = wat je zelf hebt opgeslagen bij ritten en kosten.
+        Periode = lokale datum. Totalen alleen vanaf <strong>{TM_STATS_FROM.split("-").reverse().join("/")}</strong>. Bedragen =
+        opgeslagen ritten en kosten.
       </p>
       <PP v={p} set={sP} />
 
