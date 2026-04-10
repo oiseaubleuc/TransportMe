@@ -7,10 +7,13 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
+  Filler,
   Tooltip,
   Legend,
 } from "chart.js";
-import { Doughnut, Bar } from "react-chartjs-2";
+import { Doughnut, Bar, Line } from "react-chartjs-2";
 import "./transportme-theme.css";
 import { exportTransporteurData, applyImportPayload } from "./js/dataBackup.js";
 import { getFactuurGegevens, nextFactuurVolgNummer, saveFactuurGegevens } from "./js/storage.js";
@@ -21,9 +24,33 @@ import { searchPlacesBelgium } from "./js/placeSearchFree.js";
 import { PRESET_ANCHOR_ZIEKENHUIZEN, GESCHAT_VERBRUIK_L_PER_100KM } from "./js/config.js";
 import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 
-ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(
+  ArcElement,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Filler,
+  Tooltip,
+  Legend
+);
 ChartJS.defaults.font.family = "'DM Sans', -apple-system, sans-serif";
 ChartJS.defaults.color = "#a3a3a3";
+
+/** Thema-olijfgroen (donkerder) — zelfde basis als --acc in transportme-theme.css */
+const TM_ACC = "#6d8528";
+const TM_ACC2 = "#556b1f";
+const TM_GN = "#92a84a";
+const tmAccRgba = a => `rgba(109, 133, 40, ${a})`;
+
+/** Donut “Verdeling status”: elke categorie eigen kleur (niet allemaal groen). */
+const TM_DONUT_STATUS_BG = [
+  "rgba(56, 189, 248, 0.9)", // Gepland — hemelsblauw
+  "rgba(251, 191, 36, 0.9)", // Onderweg — amber
+  tmAccRgba(0.92), // Voltooid — themagroen
+  "rgba(239, 68, 68, 0.82)", // Geannuleerd — rood
+];
 
 const TM_CHART_BASE = {
   responsive: true,
@@ -116,12 +143,63 @@ const TM_ZIEKENHUIZEN_LIJST = (() => {
   return [...by.values()].sort((x, y) => x.name.localeCompare(y.name, "nl"));
 })();
 
+/** Unieke sleutel voor een vaste route (dedupe archief / actieve lijst). */
+function tmRouteKey(r) {
+  return `${String(r.f || "")
+    .toLowerCase()
+    .trim()}\t${String(r.t || "")
+    .toLowerCase()
+    .trim()}\t${Number(r.k)}`;
+}
+
+/** Ziekenhuizenlijst + eindpunten uit verwijderde eigen routes (Meer → archief). */
+function ziekenLijstMetArchief(baseLijst, xrArch) {
+  const seen = new Set(baseLijst.map(h => String(h.name || "").toLowerCase()));
+  const extra = [];
+  for (const r of xrArch || []) {
+    const ends = [
+      { n: r.f, la: r.la1, lo: r.lo1 },
+      { n: r.t, la: r.la2, lo: r.lo2 },
+    ];
+    for (const { n, la, lo } of ends) {
+      const name = String(n || "").trim();
+      const k = name.toLowerCase();
+      if (!name || seen.has(k)) continue;
+      seen.add(k);
+      const lat = la != null && Number.isFinite(Number(la)) ? Number(la) : undefined;
+      const lng = lo != null && Number.isFinite(Number(lo)) ? Number(lo) : undefined;
+      extra.push({ name, address: "", lat, lng });
+    }
+  }
+  extra.sort((a, b) => a.name.localeCompare(b.name, "nl"));
+  return [...baseLijst, ...extra];
+}
+
 /** Kalenderdatum in lokale tijd (geen UTC-shift zoals toISOString → foutieve maand/week in EU). */
 function toIsoLocal(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+/** Alle kalenderdagen van isoStart t/m isoEnd (YYYY-MM-DD), inclusief. */
+function eachDayInclusive(isoStart, isoEnd) {
+  const out = [];
+  const a = isoStart.slice(0, 10);
+  const b = isoEnd.slice(0, 10);
+  if (a > b) return out;
+  const [y1, m1, d1] = a.split("-").map(Number);
+  const [y2, m2, d2] = b.split("-").map(Number);
+  let cur = new Date(y1, m1 - 1, d1);
+  cur.setHours(12, 0, 0, 0);
+  const end = new Date(y2, m2 - 1, d2);
+  end.setHours(12, 0, 0, 0);
+  while (cur <= end) {
+    out.push(toIsoLocal(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
 }
 const td = () => toIsoLocal(new Date());
 const wk = () => {
@@ -157,33 +235,47 @@ function fmtNlShort(iso) {
   return dt.toLocaleDateString("nl-BE", { day: "numeric", month: "short" });
 }
 
+/** Volledige datum vandaag voor Home (altijd dagoverzicht). */
+function fmtNlVandaagLong() {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  return d.toLocaleDateString("nl-BE", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function parseXrLikeRow(it, idx, idPrefix) {
+  if (!it || typeof it !== "object") return null;
+  const f = String(it.f || "").trim();
+  const tt = String(it.t || "").trim();
+  const k = Number(it.k);
+  if (!f || !tt || !Number.isFinite(k) || k < 1) return null;
+  const id = it.id != null && String(it.id).trim() ? String(it.id).trim() : `${idPrefix}-${idx}-${k}`;
+  const out = { id, f, t: tt, k };
+  const num = n => (n != null && Number.isFinite(Number(n)) ? Number(n) : null);
+  const la1 = num(it.la1),
+    lo1 = num(it.lo1),
+    la2 = num(it.la2),
+    lo2 = num(it.lo2);
+  if (la1 != null && lo1 != null && la2 != null && lo2 != null) {
+    out.la1 = la1;
+    out.lo1 = lo1;
+    out.la2 = la2;
+    out.lo2 = lo2;
+  }
+  return out;
+}
+
 function normData(x) {
   const o = x && typeof x === "object" ? x : {};
   const xrRaw = Array.isArray(o.xr) ? o.xr : [];
-  const xr = xrRaw
-    .map((it, idx) => {
-      if (!it || typeof it !== "object") return null;
-      const f = String(it.f || "").trim();
-      const tt = String(it.t || "").trim();
-      const k = Number(it.k);
-      if (!f || !tt || !Number.isFinite(k) || k < 1) return null;
-      const id = it.id != null && String(it.id).trim() ? String(it.id).trim() : `xr-${idx}-${k}`;
-      const out = { id, f, t: tt, k };
-      const num = n => (n != null && Number.isFinite(Number(n)) ? Number(n) : null);
-      const la1 = num(it.la1),
-        lo1 = num(it.lo1),
-        la2 = num(it.la2),
-        lo2 = num(it.lo2);
-      if (la1 != null && lo1 != null && la2 != null && lo2 != null) {
-        out.la1 = la1;
-        out.lo1 = lo1;
-        out.la2 = la2;
-        out.lo2 = lo2;
-      }
-      return out;
-    })
-    .filter(Boolean);
-  return { r: o.r || [], b: o.b || [], o: o.o || [], xr };
+  const xr = xrRaw.map((it, idx) => parseXrLikeRow(it, idx, "xr")).filter(Boolean);
+  const xrArchRaw = Array.isArray(o.xrArch) ? o.xrArch : [];
+  const xrArch = xrArchRaw.map((it, idx) => parseXrLikeRow(it, idx, "xra")).filter(Boolean).slice(0, 40);
+  return { r: o.r || [], b: o.b || [], o: o.o || [], xr, xrArch };
 }
 
 /** Zelfde keys als src/js/config.js STORAGE_KEYS — data van de klassieke Transporteur-app op het toestel. */
@@ -320,7 +412,7 @@ const ld = p => {
   if (isTmStoreLeeg(data)) {
     const leg = leesLegacyBundel(p);
     if (leg.r.length > 0 || leg.b.length > 0 || leg.o.length > 0) {
-      const merged = normData({ ...leg, xr: data.xr });
+      const merged = normData({ ...leg, xr: data.xr, xrArch: data.xrArch || [] });
       try {
         localStorage.setItem("t_" + p, JSON.stringify(merged));
       } catch {
@@ -333,6 +425,19 @@ const ld = p => {
 };
 
 const sv = (p, d) => localStorage.setItem("t_" + p, JSON.stringify(d));
+
+/**
+ * Start (go) / voltooien (ok). Annuleren (no) of ✕ (x): rit wordt verwijderd — geen status “geannuleerd”, telt nergens mee.
+ */
+function applyTripAction(rides, id, a) {
+  const i = rides.findIndex(x => x.id === id);
+  if (i < 0) return rides;
+  const rr = [...rides];
+  if (a === "go") rr[i] = { ...rr[i], s: "lopend" };
+  else if (a === "ok") rr[i] = { ...rr[i], s: "voltooid" };
+  else rr.splice(i, 1);
+  return rr;
+}
 
 function initialProfileId() {
   try {
@@ -492,12 +597,12 @@ function RitMap({ la1, lo1, la2, lo2, labelF, labelT }) {
         [la1, lo1],
         [la2, lo2],
       ],
-      { color: "#A4C639", weight: 4, opacity: 0.92 }
+      { color: TM_ACC, weight: 4, opacity: 0.92 }
     ).addTo(map);
     const pin = (lat, lng, letter, tip) =>
       L.circleMarker([lat, lng], {
         radius: 9,
-        fillColor: "#A4C639",
+        fillColor: TM_ACC,
         color: "#141414",
         weight: 2,
         fillOpacity: 1,
@@ -536,6 +641,71 @@ function PP({ v, set }) {
   );
 }
 
+/** Vandaag / deze week — dropdown zoals een periodeselector in een dashboard. */
+function HomeSumPeriodSelect({ v, set }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const labels = { day: "Vandaag", week: "Deze week" };
+
+  useEffect(() => {
+    const close = ev => {
+      if (wrapRef.current && !wrapRef.current.contains(ev.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", close, true);
+    return () => document.removeEventListener("pointerdown", close, true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  return (
+    <div className="tm-home-sum-dd" ref={wrapRef}>
+      <button
+        type="button"
+        className="tm-home-sum-dd-btn"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label="Periode kiezen"
+        onClick={() => setOpen(o => !o)}
+      >
+        <span>{labels[v] || "Vandaag"}</span>
+        <span className="tm-home-sum-dd-chev" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <ul className="tm-home-sum-dd-menu" role="listbox">
+          {[
+            ["day", "Vandaag"],
+            ["week", "Deze week"],
+          ].map(([k, l]) => (
+            <li key={k} role="none">
+              <button
+                type="button"
+                role="option"
+                aria-selected={v === k}
+                className={"tm-home-sum-dd-opt" + (v === k ? " on" : "")}
+                onClick={() => {
+                  set(k);
+                  setOpen(false);
+                }}
+              >
+                {l}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function statCard(label, value, color, sub) {
   return (
     <div className="stat-card" style={{ borderTopColor: color }}>
@@ -548,10 +718,91 @@ function statCard(label, value, color, sub) {
   );
 }
 
+const TM_SWIPE_MAX = 92;
+const TM_SWIPE_COMMIT = 52;
+
+/** Lopende rit: horizontaal vegen → rechts voltooien, links annuleren (zelfde als knoppen). */
+function LopendTripSwipe({ ritId, onAct, className, style, children }) {
+  const [dx, setDx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dxRef = useRef(0);
+  const startXRef = useRef(0);
+  const startDxRef = useRef(0);
+  const ptrRef = useRef(null);
+
+  const finish = (el, e) => {
+    if (ptrRef.current == null || e.pointerId !== ptrRef.current) return;
+    try {
+      el.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    ptrRef.current = null;
+    setDragging(false);
+    const x = dxRef.current;
+    if (x >= TM_SWIPE_COMMIT) onAct(ritId, "ok");
+    else if (x <= -TM_SWIPE_COMMIT) onAct(ritId, "no");
+    dxRef.current = 0;
+    setDx(0);
+  };
+
+  return (
+    <div className="tm-trip-swipe-wrap">
+      <div className="tm-trip-swipe-rail" aria-hidden="true">
+        <div className="tm-trip-swipe-zone tm-trip-swipe-zone--ok">
+          <span className="tm-trip-swipe-zone-ic" aria-hidden="true">
+            ✓
+          </span>
+          <span className="tm-trip-swipe-zone-txt">Voltooien</span>
+        </div>
+        <div className="tm-trip-swipe-spacer" />
+        <div className="tm-trip-swipe-zone tm-trip-swipe-zone--no">
+          <span className="tm-trip-swipe-zone-ic" aria-hidden="true">
+            ✕
+          </span>
+          <span className="tm-trip-swipe-zone-txt">Annuleer</span>
+        </div>
+      </div>
+      <div
+        className={className + " tm-trip-swipe-front"}
+        style={{
+          ...style,
+          transform: `translateX(${dx}px)`,
+          touchAction: "none",
+          transition: dragging ? "none" : "transform 0.22s cubic-bezier(0.25, 0.85, 0.25, 1)",
+        }}
+        onPointerDown={e => {
+          if (e.button !== 0) return;
+          const t = e.target;
+          if (t instanceof Element && t.closest("button")) return;
+          ptrRef.current = e.pointerId;
+          startXRef.current = e.clientX;
+          startDxRef.current = dxRef.current;
+          setDragging(true);
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }}
+        onPointerMove={e => {
+          if (e.pointerId !== ptrRef.current) return;
+          const delta = e.clientX - startXRef.current;
+          let next = startDxRef.current + delta;
+          next = Math.max(-TM_SWIPE_MAX, Math.min(TM_SWIPE_MAX, next));
+          dxRef.current = next;
+          setDx(next);
+        }}
+        onPointerUp={e => finish(e.currentTarget, e)}
+        onPointerCancel={e => finish(e.currentTarget, e)}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function TripCard({ r, onAct }) {
   const bc = r.s === "komend" ? "cl-a" : r.s === "lopend" ? "cl-g" : r.s === "geannuleerd" ? "cl-r" : "cl-v";
-  return (
-    <div className={"card card-l " + bc} style={{ opacity: r.s === "geannuleerd" ? 0.45 : 1, marginBottom: 8 }}>
+  const cardStyle = { opacity: r.s === "geannuleerd" ? 0.45 : 1 };
+  const inner = (
+    <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 4 }}>
         <span style={{ fontSize: 14, fontWeight: 600 }}>
           {r.f} → {r.t}
@@ -600,7 +851,12 @@ function TripCard({ r, onAct }) {
               <button type="button" className="btn btn-s" onClick={() => onAct(r.id, "ok")}>
                 ✓ Klaar
               </button>
-              <button type="button" className="btn btn-gh" onClick={() => onAct(r.id, "no")}>
+              <button
+                type="button"
+                className="btn btn-gh"
+                onClick={() => onAct(r.id, "no")}
+                title="Rit verwijderen — telt niet in totalen of grafieken"
+              >
                 Annuleer
               </button>
             </>
@@ -610,7 +866,12 @@ function TripCard({ r, onAct }) {
               <button type="button" className="btn btn-g" onClick={() => onAct(r.id, "ok")}>
                 ✓ Klaar
               </button>
-              <button type="button" className="btn btn-gh" onClick={() => onAct(r.id, "no")}>
+              <button
+                type="button"
+                className="btn btn-gh"
+                onClick={() => onAct(r.id, "no")}
+                title="Rit verwijderen — telt niet in totalen of grafieken"
+              >
                 Annuleer
               </button>
             </>
@@ -619,20 +880,145 @@ function TripCard({ r, onAct }) {
             type="button"
             className="btn btn-gh"
             style={{ color: "var(--rd)", marginLeft: "auto" }}
+            title="Rit permanent verwijderen"
             onClick={() => onAct(r.id, "x")}
           >
             ✕
           </button>
         </div>
       )}
+      {r.s === "lopend" && onAct && (
+        <p className="tm-trip-swipe-hint">Veeg naar rechts: voltooien · naar links: annuleren</p>
+      )}
+    </>
+  );
+
+  if (r.s === "lopend" && onAct) {
+    return (
+      <LopendTripSwipe ritId={r.id} onAct={onAct} className={"card card-l " + bc} style={cardStyle}>
+        {inner}
+      </LopendTripSwipe>
+    );
+  }
+
+  return (
+    <div className={"card card-l " + bc} style={{ ...cardStyle, marginBottom: 8 }}>
+      {inner}
     </div>
   );
 }
 
-function Home({ D, pr, onPlanRit }) {
-  const [p, sP] = useState("week");
-  const [s, e] = gr(p);
+function Home({ D, pr, onPlanRit, onTripAct }) {
+  const [sumP, setSumP] = useState("day");
+  const [s, e] = gr(sumP === "week" ? "week" : "day");
   const vl = D.r.filter(r => r.s === "voltooid" && statsVenster(r.d) && iR(r.d, s, e));
+  const homeOmzetLine = useMemo(() => {
+    const border = TM_ACC;
+    const fill = tmAccRgba(0.22);
+    if (sumP === "week") {
+      const days = eachDayInclusive(s, e);
+      const labels = days.map(day => {
+        const dt = new Date(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10));
+        dt.setHours(12, 0, 0, 0);
+        return dt.toLocaleDateString("nl-BE", { weekday: "short", day: "numeric" });
+      });
+      const data = days.map(day => vl.filter(r => r.d === day).reduce((a, r) => a + money(r.v), 0));
+      return {
+        labels,
+        datasets: [
+          {
+            label: "Omzet",
+            data,
+            borderColor: border,
+            backgroundColor: fill,
+            fill: true,
+            tension: 0.35,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            pointBackgroundColor: border,
+            borderWidth: 2,
+          },
+        ],
+      };
+    }
+    const sorted = [...vl].sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
+    if (sorted.length === 0) {
+      return {
+        labels: ["—"],
+        datasets: [
+          {
+            label: "Omzet",
+            data: [0],
+            borderColor: border,
+            backgroundColor: fill,
+            fill: true,
+            tension: 0.25,
+            pointRadius: 0,
+            borderWidth: 2,
+          },
+        ],
+      };
+    }
+    let cum = 0;
+    const data = sorted.map(r => {
+      cum += money(r.v);
+      return cum;
+    });
+    const labels = sorted.map((r, i) => (sorted.length <= 10 ? r.ti || `Rit ${i + 1}` : String(i + 1)));
+    return {
+      labels,
+      datasets: [
+        {
+          label: "Omzet",
+          data,
+          borderColor: border,
+          backgroundColor: fill,
+          fill: true,
+          tension: 0.35,
+          pointRadius: Math.min(4, Math.max(2, 12 - sorted.length)),
+          pointHoverRadius: 6,
+          pointBackgroundColor: border,
+          borderWidth: 2,
+        },
+      ],
+    };
+  }, [sumP, s, e, D.r]);
+  const homeLineOpts = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: "index" },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TM_CHART_BASE.plugins.tooltip,
+          callbacks: {
+            label: ctx => "Omzet " + E(Number(ctx.parsed.y ?? ctx.raw) || 0),
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: "#8a8a82",
+            maxRotation: sumP === "week" ? 0 : 40,
+            font: { size: 10 },
+          },
+          grid: { color: "rgba(60, 60, 60, 0.35)" },
+        },
+        y: {
+          ticks: {
+            color: "#8a8a82",
+            font: { size: 10 },
+            callback: v => "€" + v,
+          },
+          grid: { color: "rgba(60, 60, 60, 0.4)" },
+          beginAtZero: true,
+        },
+      },
+    }),
+    [sumP]
+  );
   const om = vl.reduce((a, r) => a + money(r.v), 0);
   const km = vl.reduce((a, r) => a + Number(r.k) || 0, 0);
   const kosten =
@@ -647,16 +1033,16 @@ function Home({ D, pr, onPlanRit }) {
   const geschatBrandstofRitten =
     Math.round(km * (GESCHAT_VERBRUIK_L_PER_100KM / 100) * avgPl * 100) / 100;
   const geschatWinst = Math.round((om - geschatBrandstofRitten) * 100) / 100;
-  const periodKicker = p === "day" ? "Dag" : p === "week" ? "Week" : "Maand";
-  const periodDetail =
-    p === "day"
-      ? fmtNlShort(s)
-      : p === "week"
-        ? `${fmtNlShort(s)} t/m ${fmtNlShort(e)}`
-        : `${fmtNlShort(s)} t/m ${fmtNlShort(e)}`;
-  const up = D.r
-    .filter(r => r.s === "komend" || r.s === "lopend")
+  const periodRangeLabel =
+    sumP === "day" ? fmtNlVandaagLong() : `${fmtNlShort(s)} t/m ${fmtNlShort(e)}`;
+  const nettoHint = sumP === "day" ? "Na alle kosten vandaag" : "Na alle kosten deze week";
+  const lopend = D.r
+    .filter(r => r.s === "lopend")
     .sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
+  const komend = D.r
+    .filter(r => r.s === "komend")
+    .sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
+  const heeftRitten = lopend.length > 0 || komend.length > 0;
 
   return (
     <div className="tm-home-page">
@@ -664,61 +1050,90 @@ function Home({ D, pr, onPlanRit }) {
         <div className="tm-home-hello-sub">Welkom terug</div>
         <h1 className="tm-home-hello-name">{pr.n}</h1>
       </header>
-      <div className="tm-home-pp">
-        <PP v={p} set={sP} />
-      </div>
-      <section className="tm-home-overview" aria-label="Overzicht periode">
-        <header className="tm-home-overview-head">
-          <span className="tm-home-overview-kicker">{periodKicker}</span>
-          <span className="tm-home-overview-period">{periodDetail}</span>
+
+      {heeftRitten && (
+        <section className="tm-home-ritten" aria-label="Actieve en geplande ritten">
+          {lopend.length > 0 && (
+            <div className="tm-home-onderweg">
+              <div className="tm-home-onderweg-hd">
+                <span className="tm-home-onderweg-pulse" aria-hidden="true" />
+                <span>Nu onderweg</span>
+                <span className="tm-home-onderweg-c">{lopend.length}</span>
+              </div>
+              <p className="tm-home-onderweg-lead">
+                Start, voltooien of annuleren hieronder. Annuleren verwijdert de rit (telt niet mee).
+              </p>
+              {lopend.map(r => (
+                <TripCard key={r.id} r={r} onAct={onTripAct} />
+              ))}
+            </div>
+          )}
+          {komend.length > 0 && (
+            <div className={lopend.length > 0 ? "tm-home-gepland" : undefined}>
+              <div className="sh">
+                Gepland <span className="sh-c">{komend.length}</span>
+              </div>
+              {komend.slice(0, 6).map(r => (
+                <TripCard key={r.id} r={r} onAct={onTripAct} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      <section className="tm-home-sum" aria-label="Omzetoverzicht">
+        <header className="tm-home-sum-head">
+          <h2 className="tm-home-sum-title">Omzetoverzicht</h2>
+          <HomeSumPeriodSelect v={sumP} set={setSumP} />
         </header>
-        <dl className="tm-home-metric-list">
-          <div className="tm-home-metric tm-home-metric--omzet">
-            <dt>Omzet</dt>
-            <dd className="tm-home-metric-val tm-home-metric-val--xl">{E(om)}</dd>
+        <p className="tm-home-sum-range">{periodRangeLabel}</p>
+        <div className="tm-home-sum-body">
+          <div className="tm-home-sum-hero">
+            <div className="tm-home-sum-hero-inner">
+              <span className="tm-home-sum-hero-lab">Omzet</span>
+              <span className="tm-home-sum-hero-val tm-home-sum-hero-val--acc">{E(om)}</span>
+              <div
+                className="tm-home-sum-line-wrap"
+                role="img"
+                aria-label={
+                  sumP === "week" ? "Omzet per dag in de gekozen week" : "Cumulatieve omzet per rit vandaag"
+                }
+              >
+                <Line data={homeOmzetLine} options={homeLineOpts} />
+              </div>
+              <span className="tm-home-sum-hero-sub">Alleen voltooide ritten in deze periode</span>
+            </div>
           </div>
-          <div className="tm-home-metric">
-            <dt className="tm-home-metric-labels">
-              <span className="tm-home-metric-ttl">Winst</span>
-              <span className="tm-home-metric-hint">Na geschatte brandstof</span>
-            </dt>
-            <dd
-              className={
-                "tm-home-metric-val " +
-                (geschatWinst >= 0 ? "tm-home-stat-pos" : "tm-home-stat-neg")
-              }
-            >
-              {E(geschatWinst)}
-            </dd>
+          <div className="tm-home-sum-split">
+            <div className="tm-home-sum-cell">
+              <span className="tm-home-sum-cell-lab">Winst</span>
+              <span className="tm-home-sum-cell-hint">Na geschatte brandstof</span>
+              <span
+                className={
+                  "tm-home-sum-cell-val " + (geschatWinst >= 0 ? "tm-home-stat-pos" : "tm-home-stat-neg")
+                }
+              >
+                {E(geschatWinst)}
+              </span>
+            </div>
+            <div className="tm-home-sum-cell">
+              <span className="tm-home-sum-cell-lab">Netto</span>
+              <span className="tm-home-sum-cell-hint">{nettoHint}</span>
+              <span
+                className={
+                  "tm-home-sum-cell-val " + (nettoBoek >= 0 ? "tm-home-stat-pos" : "tm-home-stat-neg")
+                }
+              >
+                {E(nettoBoek)}
+              </span>
+            </div>
           </div>
-          <div className="tm-home-metric tm-home-metric--last">
-            <dt className="tm-home-metric-labels">
-              <span className="tm-home-metric-ttl">Netto</span>
-              <span className="tm-home-metric-hint">Na alle geregistreerde kosten</span>
-            </dt>
-            <dd
-              className={
-                "tm-home-metric-val " + (nettoBoek >= 0 ? "tm-home-stat-pos" : "tm-home-stat-neg")
-              }
-            >
-              {E(nettoBoek)}
-            </dd>
-          </div>
-        </dl>
+        </div>
       </section>
+
       <button type="button" className="btn btn-p btn-full tm-home-plan" onClick={onPlanRit}>
         Rit plannen
       </button>
-      {up.length > 0 && (
-        <>
-          <div className="sh">
-            Komende ritten <span className="sh-c">{up.length}</span>
-          </div>
-          {up.slice(0, 5).map(r => (
-            <TripCard key={r.id} r={r} />
-          ))}
-        </>
-      )}
     </div>
   );
 }
@@ -761,12 +1176,7 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
       datasets: [
         {
           data: [cnt.komend, cnt.lopend, cnt.voltooid, cnt.geannuleerd],
-          backgroundColor: [
-            "rgba(164, 198, 57, 0.88)",
-            "rgba(184, 217, 74, 0.75)",
-            "rgba(130, 150, 60, 0.85)",
-            "rgba(239, 68, 68, 0.72)",
-          ],
+          backgroundColor: [...TM_DONUT_STATUS_BG],
           borderColor: "#141414",
           borderWidth: 2,
           hoverOffset: 8,
@@ -782,8 +1192,8 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
         {
           label: "Voltooid",
           data: week.counts,
-          backgroundColor: "rgba(164, 198, 57, 0.45)",
-          borderColor: "#A4C639",
+          backgroundColor: tmAccRgba(0.45),
+          borderColor: TM_ACC,
           borderWidth: 1,
           borderRadius: 6,
         },
@@ -840,8 +1250,8 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
         {
           label: "Ritten",
           data: topRoutes.map(([, v]) => v),
-          backgroundColor: "rgba(164, 198, 57, 0.35)",
-          borderColor: "#8fb030",
+          backgroundColor: tmAccRgba(0.35),
+          borderColor: TM_ACC2,
           borderWidth: 1,
           borderRadius: 4,
         },
@@ -941,9 +1351,6 @@ function Ritten({ D, sD, pid }) {
   const [fl, sF] = useState("alle");
   const [pane, sPane] = useState("overzicht");
   const [sh, sSh] = useState(false);
-  const [placeA, setPlaceA] = useState(null);
-  const [placeB, setPlaceB] = useState(null);
-  const [routeBusy, setRouteBusy] = useState(false);
   const mergedRoutes = useMemo(() => {
     const built = ROUTES.map(r => ({ ...r, __map: true }));
     const custom = (D.xr || []).map(r => {
@@ -961,8 +1368,27 @@ function Ritten({ D, sD, pid }) {
         __id: r.id,
       };
     });
-    return [...built, ...custom];
-  }, [D.xr]);
+    const activeKeys = new Set((D.xr || []).map(tmRouteKey));
+    const arch = (D.xrArch || [])
+      .filter(r => !activeKeys.has(tmRouteKey(r)))
+      .map(r => {
+        const hasMap =
+          r.la1 != null && r.lo1 != null && r.la2 != null && r.lo2 != null && Number.isFinite(Number(r.la1));
+        return {
+          f: r.f,
+          t: r.t,
+          k: r.k,
+          la1: r.la1,
+          lo1: r.lo1,
+          la2: r.la2,
+          lo2: r.lo2,
+          __map: hasMap,
+          __arch: true,
+          id: r.id,
+        };
+      });
+    return [...built, ...custom, ...arch];
+  }, [D.xr, D.xrArch]);
   const mkIni = () => ({
     ri: -1,
     f: "",
@@ -979,8 +1405,6 @@ function Ritten({ D, sD, pid }) {
   const pk = i => {
     const r = mergedRoutes[i];
     if (!r) return;
-    setPlaceA(null);
-    setPlaceB(null);
     sM(m => ({ ...m, ri: i, f: r.f, t: r.t, k: String(r.k) }));
   };
   const svR = () => {
@@ -1001,78 +1425,26 @@ function Ritten({ D, sD, pid }) {
     };
     const b = String(fm.bon || "").trim();
     if (b) trip.bon = b;
-    const nd = { ...D, r: [...D.r, trip] };
+    const nd = normData({ ...D, r: [...D.r, trip] });
     sD(nd);
     sv(pid, nd);
     sM(mkIni());
-    setPlaceA(null);
-    setPlaceB(null);
     sSh(false);
   };
   const canBevestig = !!(fm.f && fm.t && fm.k && +fm.k > 0);
   const openNieuw = () => {
     sM(mkIni());
-    setPlaceA(null);
-    setPlaceB(null);
     sSh(true);
   };
   const sel = fm.ri >= 0 ? mergedRoutes[fm.ri] : null;
   const mapCoords =
-    placeA?.lat != null &&
-    placeA?.lng != null &&
-    placeB?.lat != null &&
-    placeB?.lng != null &&
-    fm.ri < 0
-      ? { la1: placeA.lat, lo1: placeA.lng, la2: placeB.lat, lo2: placeB.lng, labelF: placeA.name, labelT: placeB.name }
-      : sel && sel.__map
-        ? { la1: sel.la1, lo1: sel.lo1, la2: sel.la2, lo2: sel.lo2, labelF: sel.f, labelT: sel.t }
-        : null;
+    sel && sel.__map
+      ? { la1: sel.la1, lo1: sel.lo1, la2: sel.la2, lo2: sel.lo2, labelF: sel.f, labelT: sel.t }
+      : null;
 
-  const berekenKortsteWeg = async () => {
-    if (placeA?.lat == null || placeB?.lat == null) {
-      alert("Kies twee locaties met coördinaten (uit de lijst of via zoeken in België).");
-      return;
-    }
-    setRouteBusy(true);
-    try {
-      let km;
-      if (hasOpenRouteApiKey()) {
-        const r = await getRouteDistanceORS(
-          { lat: placeA.lat, lng: placeA.lng },
-          { lat: placeB.lat, lng: placeB.lng }
-        );
-        km = r.km;
-      } else {
-        km = geschatteAfstandKm(
-          { lat: placeA.lat, lng: placeA.lng },
-          { lat: placeB.lat, lng: placeB.lng }
-        );
-      }
-      if (km != null && Number.isFinite(km) && km >= 1) {
-        sM(m => ({ ...m, k: String(km), f: placeA.name, t: placeB.name, ri: -1 }));
-      } else {
-        alert("Kon geen afstand berekenen.");
-      }
-    } catch (e) {
-      console.error(e);
-      const est = geschatteAfstandKm(
-        { lat: placeA.lat, lng: placeA.lng },
-        { lat: placeB.lat, lng: placeB.lng }
-      );
-      if (est != null) sM(m => ({ ...m, k: String(est), f: placeA.name, t: placeB.name, ri: -1 }));
-      else alert("Route kon niet opgehaald worden. Controleer internet of zet VITE_OPENROUTE_API_KEY voor exacte km.");
-    } finally {
-      setRouteBusy(false);
-    }
-  };
   const act = (id, a) => {
-    const rr = [...D.r];
-    const i = rr.findIndex(x => x.id === id);
-    if (i < 0) return;
-    if (a === "go") rr[i] = { ...rr[i], s: "lopend" };
-    else if (a === "ok") rr[i] = { ...rr[i], s: "voltooid" };
-    else if (a === "no") rr[i] = { ...rr[i], s: "geannuleerd" };
-    else rr.splice(i, 1);
+    const rr = applyTripAction(D.r, id, a);
+    if (rr === D.r) return;
     const nd = { ...D, r: rr };
     sD(nd);
     sv(pid, nd);
@@ -1179,61 +1551,71 @@ function Ritten({ D, sD, pid }) {
                     labelT={mapCoords.labelT}
                   />
                 ) : fm.ri >= 0 && sel && !sel.__map ? (
-                  <div className="tm-rit-map-ph">Eigen opgeslagen route zonder kaart.</div>
+                  <div className="tm-rit-map-ph">Eigen of archiefroute zonder kaartcoördinaten.</div>
                 ) : (
-                  <div className="tm-rit-map-ph">Kies vertrek &amp; bestemming of een vaste route voor de kaart.</div>
+                  <div className="tm-rit-map-ph">Kies een vaste route hieronder voor de kaart (indien coördinaten bekend).</div>
                 )}
               </div>
-              <div className="fl">Vertrek &amp; bestemming (ziekenhuizen België)</div>
-              <p style={{ fontSize: 11, color: "var(--tx3)", margin: "0 0 8px", lineHeight: 1.4 }}>
-                Lokale lijst (Vlaanderen + ankertjes) en zoeken in heel België (OSM). Daarna: kortste weg als km (ORS indien
-                sleutel, anders schatting).
+              <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 10px", lineHeight: 1.45 }}>
+                Kies een <strong>vaste route</strong> of vul handmatig vertrek, bestemming en km in.{" "}
+                <strong>Zoeken</strong> in heel België (OSM) en kortste weg berekenen doe je via{" "}
+                <strong>Meer → Eigen vaste routes</strong>.
               </p>
-              <PlaatsPicker
-                label="Vertrek"
-                gekozen={placeA}
-                onKies={p => {
-                  setPlaceA(p);
-                  sM(m => ({ ...m, ri: -1, f: p.name }));
-                }}
-                lijst={TM_ZIEKENHUIZEN_LIJST}
-              />
-              <PlaatsPicker
-                label="Bestemming"
-                gekozen={placeB}
-                onKies={p => {
-                  setPlaceB(p);
-                  sM(m => ({ ...m, ri: -1, t: p.name }));
-                }}
-                lijst={TM_ZIEKENHUIZEN_LIJST}
-              />
-              <button
-                type="button"
-                className="btn btn-o btn-full"
-                style={{ marginBottom: 12 }}
-                disabled={routeBusy}
-                onClick={berekenKortsteWeg}
-              >
-                {routeBusy ? "Route berekenen…" : "Kortste weg berekenen (km)"}
-              </button>
-              <div className="fl">Of: vaste route</div>
+              <div className="fl">Vaste routes</div>
               <div className="tm-prs">
                 {mergedRoutes.map((r, i) => (
                   <button
-                    key={r.__map ? `b-${i}` : r.__id}
+                    key={r.__id ? `xr-${r.__id}` : r.__arch ? `ar-${r.id}` : `rt-${i}`}
                     type="button"
                     className={"tm-pr" + (fm.ri === i ? " on" : "")}
                     onClick={() => pk(i)}
                   >
                     <span>
                       {r.f} → {r.t}
-                      {!r.__map && (
+                      {r.__id && !r.__arch && (
                         <span style={{ fontSize: 9, color: "var(--acc)", marginLeft: 6 }}>(eigen)</span>
+                      )}
+                      {r.__arch && (
+                        <span style={{ fontSize: 9, color: "var(--am)", marginLeft: 6 }}>(archief)</span>
                       )}
                     </span>
                     <b className="tm-pk">{r.k} km</b>
                   </button>
                 ))}
+              </div>
+              <div className="fl" style={{ marginTop: 14 }}>
+                Handmatig (geen zoekfunctie hier)
+              </div>
+              <div className="tm-g2">
+                <div className="tm-fg">
+                  <label className="fl">Vertrek (naam)</label>
+                  <input
+                    type="text"
+                    placeholder="Bv. UZ Brussel"
+                    value={fm.f}
+                    onChange={e => sM(m => ({ ...m, f: e.target.value, ri: -1 }))}
+                  />
+                </div>
+                <div className="tm-fg">
+                  <label className="fl">Bestemming (naam)</label>
+                  <input
+                    type="text"
+                    placeholder="Bv. UZ Leuven"
+                    value={fm.t}
+                    onChange={e => sM(m => ({ ...m, t: e.target.value, ri: -1 }))}
+                  />
+                </div>
+              </div>
+              <div className="tm-fg">
+                <label className="fl">Afstand (km)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="Km"
+                  value={fm.k}
+                  onChange={e => sM(m => ({ ...m, k: e.target.value, ri: -1 }))}
+                />
               </div>
               <div className="tm-fg" style={{ marginTop: 10 }}>
                 <label className="fl">Bonnummer</label>
@@ -1342,8 +1724,8 @@ function Financieel({ D, pid }) {
         {
           label: "€",
           data: [omzet, kosten, winst],
-          backgroundColor: ["rgba(164, 198, 57, 0.55)", "rgba(239, 68, 68, 0.5)", "rgba(184, 217, 74, 0.5)"],
-          borderColor: ["#A4C639", "#ef4444", winst >= 0 ? "#B8D94A" : "#ef4444"],
+          backgroundColor: [tmAccRgba(0.55), "rgba(239, 68, 68, 0.5)", "rgba(146, 168, 74, 0.5)"],
+          borderColor: [TM_ACC, "#ef4444", winst >= 0 ? TM_GN : "#ef4444"],
           borderWidth: 1,
           borderRadius: 8,
         },
@@ -1640,8 +2022,9 @@ function Historiek({ D, pid }) {
           <b style={{ color: netto >= 0 ? "var(--gn)" : "var(--rd)" }}>{E(netto)}</b>
         </div>
         <p style={{ fontSize: 11, color: "var(--tx3)", margin: "10px 0 0", lineHeight: 1.35 }}>
-          Dagen en maanden volgens je toestel (lokale tijd). “Gemist (annulering)” op Financieel is alleen informatief
-          over geannuleerde ritten — wordt <em>niet</em> van netto afgetrokken.
+          Dagen en maanden volgens je toestel (lokale tijd). <strong>Annuleren</strong> op Home of Ritten{" "}
+          <strong>verwijdert</strong> de rit (telt nergens mee). “Gemist (annulering)” op Financieel geldt alleen nog voor
+          oude/import-ritten met status geannuleerd.
         </p>
       </div>
 
@@ -2161,6 +2544,10 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   const [ritZoek, setRitZoek] = useState("");
   const [bonEdit, setBonEdit] = useState({});
   const backupFileRef = useRef(null);
+  const ziekenVoorMeer = useMemo(
+    () => ziekenLijstMetArchief(TM_ZIEKENHUIZEN_LIJST, D.xrArch || []),
+    [D.xrArch]
+  );
 
   const rittenBeheer = useMemo(() => {
     const q = ritZoek.trim().toLowerCase();
@@ -2275,7 +2662,17 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   };
 
   const delEigenRoute = id => {
-    const nd = normData({ ...D, xr: (D.xr || []).filter(x => x.id !== id) });
+    const hit = (D.xr || []).find(x => x.id === id);
+    const rest = (D.xr || []).filter(x => x.id !== id);
+    let xrArch = [...(D.xrArch || [])];
+    if (hit) {
+      const snap = parseXrLikeRow(hit, 0, "xra");
+      if (snap) {
+        const rk = tmRouteKey(snap);
+        xrArch = [snap, ...xrArch.filter(x => tmRouteKey(x) !== rk)].slice(0, 40);
+      }
+    }
+    const nd = normData({ ...D, xr: rest, xrArch });
     sD(nd);
     sv(pid, nd);
   };
@@ -2408,7 +2805,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
               className="btn btn-r btn-full"
               onClick={() => {
                 if (confirm("Alle gegevens van dit profiel wissen?")) {
-                  const n = normData({ r: [], b: [], o: [], xr: [] });
+                  const n = normData({ r: [], b: [], o: [], xr: [], xrArch: [] });
                   sD(n);
                   sv(pid, n);
                 }
@@ -2496,11 +2893,12 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
       <div className="card" style={{ marginTop: 12 }}>
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Eigen vaste routes</div>
         <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
-          Zelfde ziekenhuiskeuze als bij <strong>Nieuwe rit</strong>. Optioneel kortste weg (rij-km) berekenen; coördinaten
-          worden bewaard voor de kaart.
+          Hier kun je <strong>zoeken in heel België</strong> (OSM) en de kortste weg berekenen. Locaties uit{" "}
+          <strong>verwijderde</strong> routes staan automatisch in de lijst. Bij <strong>Ritten → Nieuw</strong> is alleen
+          kiezen of handmatig invullen (geen zoeken).
         </p>
-        <PlaatsPicker label="Vertrek" gekozen={erA} onKies={setErA} lijst={TM_ZIEKENHUIZEN_LIJST} />
-        <PlaatsPicker label="Bestemming" gekozen={erB} onKies={setErB} lijst={TM_ZIEKENHUIZEN_LIJST} />
+        <PlaatsPicker label="Vertrek" gekozen={erA} onKies={setErA} lijst={ziekenVoorMeer} />
+        <PlaatsPicker label="Bestemming" gekozen={erB} onKies={setErB} lijst={ziekenVoorMeer} />
         <button type="button" className="btn btn-o btn-full" style={{ marginBottom: 10 }} disabled={erBusy} onClick={berekenEigenKm}>
           {erBusy ? "Bezig…" : "Kortste weg berekenen (km)"}
         </button>
@@ -2658,6 +3056,15 @@ export default function App() {
   const [pid, sP] = useState(() => initialProfileId());
   const [D, sD] = useState(() => ld(initialProfileId()));
   const pr = PR.find(p => p.id === pid) || PR[0];
+  const tripAct = (id, a) => {
+    sD(cur => {
+      const rr = applyTripAction(cur.r, id, a);
+      if (rr === cur.r) return cur;
+      const nd = { ...cur, r: rr };
+      sv(pid, nd);
+      return nd;
+    });
+  };
   const sw = id => {
     sP(id);
     try {
@@ -2682,7 +3089,7 @@ export default function App() {
     <div className="tm-app">
       <div className="tm-main">
         {tab === "home" && (
-          <Home D={D} pr={pr} onPlanRit={() => sT("ritten")} />
+          <Home D={D} pr={pr} onPlanRit={() => sT("ritten")} onTripAct={tripAct} />
         )}
         {tab === "ritten" && <Ritten D={D} sD={sD} pid={pid} />}
         {tab === "fin" && <Financieel D={D} pid={pid} />}
