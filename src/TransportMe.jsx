@@ -2710,6 +2710,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   const [erK, setErK] = useState("");
   const [erBusy, setErBusy] = useState(false);
   const [ritZoek, setRitZoek] = useState("");
+  const [meerToonVoltooide, setMeerToonVoltooide] = useState(false);
   const [bonEdit, setBonEdit] = useState({});
   const backupFileRef = useRef(null);
   const ziekenVoorMeer = useMemo(
@@ -2728,6 +2729,14 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
     }
     return rows.sort((a, b) => (b.d + (b.ti || "")).localeCompare(a.d + (a.ti || "")));
   }, [D.r, ritZoek]);
+
+  const rittenBeheerZichtbaar = useMemo(() => {
+    const q = ritZoek.trim();
+    if (q || meerToonVoltooide) return rittenBeheer;
+    return rittenBeheer.filter(r => r.s !== "voltooid");
+  }, [rittenBeheer, ritZoek, meerToonVoltooide]);
+
+  const aantalVoltooide = useMemo(() => D.r.filter(r => r.s === "voltooid").length, [D.r]);
 
   const saveRitBon = id => {
     const raw = bonEdit[id] !== undefined ? bonEdit[id] : D.r.find(x => x.id === id)?.bon || "";
@@ -3035,48 +3044,64 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
             onChange={e => setRitZoek(e.target.value)}
           />
         </div>
-        {rittenBeheer.length === 0 ? (
-          <p style={{ fontSize: 12, color: "var(--tx3)", margin: 0 }}>Geen ritten gevonden.</p>
+        {!ritZoek.trim() && aantalVoltooide > 0 ? (
+          <label className="tm-meer-voltooide-toggle">
+            <input
+              type="checkbox"
+              checked={meerToonVoltooide}
+              onChange={e => setMeerToonVoltooide(e.target.checked)}
+            />
+            <span>Voltooide tonen ({aantalVoltooide})</span>
+          </label>
+        ) : null}
+        {rittenBeheerZichtbaar.length === 0 ? (
+          <p style={{ fontSize: 12, color: "var(--tx3)", margin: "8px 0 0" }}>
+            {rittenBeheer.length === 0 ? "Geen ritten." : "Alleen voltooide ritten — vink hierboven aan of zoek."}
+          </p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
-            {rittenBeheer.slice(0, 80).map(r => (
-              <div
-                key={r.id}
-                className="tm-brow"
-                style={{ flexDirection: "column", alignItems: "stretch", gap: 8, padding: "10px 0" }}
-              >
-                <div style={{ fontSize: 12, color: "var(--tx3)" }}>
-                  {r.d}
-                  {r.ti ? " · " + r.ti : ""} · <Badge s={r.s} />
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>
-                  {r.f} → {r.t}
-                </div>
-                <div className="tm-g2" style={{ alignItems: "flex-end" }}>
-                  <div className="tm-fg" style={{ marginBottom: 0 }}>
-                    <label className="fl">Bon</label>
-                    <input
-                      type="text"
-                      autoCapitalize="characters"
-                      value={bonEdit[r.id] !== undefined ? bonEdit[r.id] : r.bon || ""}
-                      onChange={e => setBonEdit(m => ({ ...m, [r.id]: e.target.value }))}
-                      placeholder="—"
-                    />
+          <div className="tm-meer-ritten-scroll">
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+              {rittenBeheerZichtbaar.slice(0, 10).map(r => (
+                <div
+                  key={r.id}
+                  className="tm-brow"
+                  style={{ flexDirection: "column", alignItems: "stretch", gap: 8, padding: "10px 0" }}
+                >
+                  <div style={{ fontSize: 12, color: "var(--tx3)" }}>
+                    {r.d}
+                    {r.ti ? " · " + r.ti : ""} · <Badge s={r.s} />
                   </div>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <button type="button" className="btn btn-o" onClick={() => saveRitBon(r.id)}>
-                      Bon opslaan
-                    </button>
-                    <button type="button" className="btn btn-gh" style={{ color: "var(--rd)" }} onClick={() => verwijderRit(r.id)}>
-                      Verwijder rit
-                    </button>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                    {r.f} → {r.t}
+                  </div>
+                  <div className="tm-g2" style={{ alignItems: "flex-end" }}>
+                    <div className="tm-fg" style={{ marginBottom: 0 }}>
+                      <label className="fl">Bon</label>
+                      <input
+                        type="text"
+                        autoCapitalize="characters"
+                        value={bonEdit[r.id] !== undefined ? bonEdit[r.id] : r.bon || ""}
+                        onChange={e => setBonEdit(m => ({ ...m, [r.id]: e.target.value }))}
+                        placeholder="—"
+                      />
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button type="button" className="btn btn-o" onClick={() => saveRitBon(r.id)}>
+                        Bon opslaan
+                      </button>
+                      <button type="button" className="btn btn-gh" style={{ color: "var(--rd)" }} onClick={() => verwijderRit(r.id)}>
+                        Verwijder rit
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {rittenBeheer.length > 80 && (
-              <p style={{ fontSize: 11, color: "var(--tx3)", margin: 0 }}>Toont 80 van {rittenBeheer.length} — verfijn zoeken.</p>
-            )}
+              ))}
+              {rittenBeheerZichtbaar.length > 10 && (
+                <p style={{ fontSize: 11, color: "var(--tx3)", margin: 0 }}>
+                  Toont 10 van {rittenBeheerZichtbaar.length} — zoek verder.
+                </p>
+              )}
+            </div>
           </div>
         )}
         <div className="tm-meer-split" role="separator" />

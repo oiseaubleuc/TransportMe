@@ -1368,6 +1368,32 @@ body {
   border-top: 1px solid var(--bd);
 }
 
+.tm-meer-voltooide-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--tx2);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tm-meer-voltooide-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--acc);
+}
+
+.tm-meer-ritten-scroll {
+  max-height: min(42dvh, 340px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  margin-top: 4px;
+  padding-right: 2px;
+}
+
 .tm-bon-scan-row {
   margin-top: 8px;
 }
