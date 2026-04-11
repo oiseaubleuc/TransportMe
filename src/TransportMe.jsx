@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
@@ -100,6 +100,16 @@ const ROUTES = [
   { f: "RKV Mechelen", t: "UZ Leuven", k: 30, la1: 51.0257, lo1: 4.4776, la2: 50.8814, lo2: 4.671 },
   { f: "RKV Mechelen", t: "UZ Brussel", k: 33, la1: 51.0257, lo1: 4.4776, la2: 50.8824, lo2: 4.2745 },
   { f: "RKV Mechelen", t: "Jessa Hasselt", k: 52, la1: 51.0257, lo1: 4.4776, la2: 50.9307, lo2: 5.3378 },
+  { f: "RKV Mechelen", t: "Heusden-Zolder St. Franciscus (SFZ)", k: 52, la1: 51.0257, lo1: 4.4776, la2: 51.047, lo2: 5.3153 },
+  { f: "RKV Mechelen", t: "Lier Heilig Hart", k: 22, la1: 51.0257, lo1: 4.4776, la2: 51.1284, lo2: 4.5708 },
+  { f: "RKV Mechelen", t: "Malle AZ Voorkempen", k: 38, la1: 51.0257, lo1: 4.4776, la2: 51.2995, lo2: 4.7295 },
+  { f: "RKV Mechelen", t: "Turnhout St. Elisabeth", k: 46, la1: 51.0257, lo1: 4.4776, la2: 51.321, lo2: 4.936 },
+  { f: "RKV Mechelen", t: "Sint-Truiden AZ St. Trudo", k: 78, la1: 51.0257, lo1: 4.4776, la2: 50.8165, lo2: 5.1895 },
+  { f: "RKV Mechelen", t: "Gent UZ", k: 63, la1: 51.0257, lo1: 4.4776, la2: 51.0361, lo2: 3.7284 },
+  { f: "RKV Mechelen", t: "Geel St. Dimpna", k: 39, la1: 51.0257, lo1: 4.4776, la2: 51.1622, lo2: 4.9938 },
+  { f: "RKV Mechelen", t: "Deurne AZ Monica", k: 44, la1: 51.0257, lo1: 4.4776, la2: 51.2192, lo2: 4.4653 },
+  { f: "RKV Mechelen", t: "Bornem AZ Rivierenland", k: 28, la1: 51.0257, lo1: 4.4776, la2: 51.091, lo2: 4.24 },
+  { f: "RKV Mechelen", t: "Brasschaat AZ Klina", k: 35, la1: 51.0257, lo1: 4.4776, la2: 51.2912, lo2: 4.4918 },
   { f: "UZ Leuven", t: "UZ Brussel", k: 26, la1: 50.8814, lo1: 4.671, la2: 50.8824, lo2: 4.2745 },
   { f: "UZ Leuven", t: "UZA Edegem", k: 65, la1: 50.8814, lo1: 4.671, la2: 51.1552, lo2: 4.4452 },
   { f: "UZ Leuven", t: "AZ Diest", k: 28, la1: 50.8814, lo1: 4.671, la2: 50.9894, lo2: 5.0506 },
@@ -202,6 +212,11 @@ function eachDayInclusive(isoStart, isoEnd) {
   return out;
 }
 const td = () => toIsoLocal(new Date());
+const yd = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return toIsoLocal(d);
+};
 const wk = () => {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -222,7 +237,12 @@ const iR = (d, s, e) => d >= s && d <= e;
 /** Totalen op Home/Financieel: alleen data vanaf deze datum (YYYY-MM-DD). */
 const TM_STATS_FROM = "2026-03-31";
 const statsVenster = d => typeof d === "string" && d.slice(0, 10) >= TM_STATS_FROM;
-const gr = p => (p === "day" ? [td(), td()] : p === "week" ? wk() : mo());
+const gr = p => {
+  if (p === "day") return [td(), td()];
+  if (p === "yesterday") return [yd(), yd()];
+  if (p === "week") return wk();
+  return mo();
+};
 const grExt = p => (p === "all" ? ["1970-01-01", "2099-12-31"] : gr(p));
 
 /** Korte datum voor Home-overzicht (nl-BE). */
@@ -240,6 +260,21 @@ function fmtNlVandaagLong() {
   const d = new Date();
   d.setHours(12, 0, 0, 0);
   return d.toLocaleDateString("nl-BE", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function fmtNlLongFromIso(iso) {
+  if (!iso || iso.length < 10) return iso || "";
+  const y = +iso.slice(0, 4);
+  const m = +iso.slice(5, 7) - 1;
+  const d = +iso.slice(8, 10);
+  const dt = new Date(y, m, d);
+  dt.setHours(12, 0, 0, 0);
+  return dt.toLocaleDateString("nl-BE", {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -428,15 +463,134 @@ const sv = (p, d) => localStorage.setItem("t_" + p, JSON.stringify(d));
 
 /**
  * Start (go) / voltooien (ok). Annuleren (no) of ✕ (x): rit wordt verwijderd — geen status “geannuleerd”, telt nergens mee.
+ * Bij ok: optioneel `opts.bon` — als meegegeven (ook lege string), bon overschrijven/wissen.
  */
-function applyTripAction(rides, id, a) {
+function applyTripAction(rides, id, a, opts) {
   const i = rides.findIndex(x => x.id === id);
   if (i < 0) return rides;
   const rr = [...rides];
   if (a === "go") rr[i] = { ...rr[i], s: "lopend" };
-  else if (a === "ok") rr[i] = { ...rr[i], s: "voltooid" };
-  else rr.splice(i, 1);
+  else if (a === "ok") {
+    const cur = rr[i];
+    if (opts && Object.prototype.hasOwnProperty.call(opts, "bon")) {
+      const t = String(opts.bon ?? "").trim();
+      const next = { ...cur, s: "voltooid" };
+      if (t) next.bon = t;
+      else delete next.bon;
+      rr[i] = next;
+    } else rr[i] = { ...cur, s: "voltooid" };
+  } else rr.splice(i, 1);
   return rr;
+}
+
+/** Bon uit barcode (IHcT…) of ruwe tekst. */
+function normBonFromScan(text) {
+  const s = String(text || "").trim();
+  const m = s.match(/IHcT[A-Za-z0-9]+/i);
+  return (m ? m[0] : s).slice(0, 48);
+}
+
+/** Voltooien: bon typen of scannen (lopend/komend → voltooid). */
+function VoltooiBonSheet({ rit, onBevestig, onAnnuleer }) {
+  const [bon, setBon] = useState(() => (rit?.bon != null ? String(rit.bon) : ""));
+  const [scan, setScan] = useState(false);
+  const videoRef = useRef(null);
+  const controlsRef = useRef(null);
+  const readerRef = useRef(null);
+
+  useEffect(() => {
+    setBon(rit?.bon != null ? String(rit.bon) : "");
+  }, [rit?.id, rit?.bon]);
+
+  const stopScan = useCallback(() => {
+    try {
+      controlsRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+    controlsRef.current = null;
+    readerRef.current = null;
+    setScan(false);
+  }, []);
+
+  useEffect(() => () => stopScan(), [stopScan]);
+
+  const startScan = async () => {
+    if (scan) {
+      stopScan();
+      return;
+    }
+    setScan(true);
+    try {
+      const { BrowserMultiFormatReader } = await import("@zxing/browser");
+      const reader = new BrowserMultiFormatReader();
+      readerRef.current = reader;
+      const v = videoRef.current;
+      if (!v) {
+        setScan(false);
+        return;
+      }
+      const controls = await reader.decodeFromVideoDevice(undefined, v, (res, err) => {
+        if (res) {
+          const t = normBonFromScan(res.getText());
+          if (t) setBon(t);
+          stopScan();
+        }
+      });
+      controlsRef.current = controls;
+    } catch (e) {
+      console.error(e);
+      setScan(false);
+      alert("Camera niet beschikbaar of geen toestemming.");
+    }
+  };
+
+  if (!rit) return null;
+
+  return (
+    <div className="tm-ov tm-ov--bon" onClick={e => e.target === e.currentTarget && onAnnuleer()}>
+      <div className="tm-mo tm-mo--bon" onClick={e => e.stopPropagation()}>
+        <div className="tm-mh">
+          <h2>Bon</h2>
+          <button type="button" className="btn btn-gh" onClick={onAnnuleer} aria-label="Sluiten">
+            ✕
+          </button>
+        </div>
+        <div className="tm-mb">
+          <div className="tm-fg">
+            <label className="fl">IHcT / bonnummer</label>
+            <input
+              type="text"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="IHcT…"
+              value={bon}
+              onChange={e => setBon(e.target.value)}
+            />
+          </div>
+          <div className="tm-bon-scan-row">
+            <button type="button" className="btn btn-o btn-full" onClick={startScan}>
+              {scan ? "Scan stoppen" : "Barcode scannen"}
+            </button>
+          </div>
+          {scan ? (
+            <div className="tm-bon-video-wrap">
+              <video ref={videoRef} className="tm-bon-video" playsInline muted />
+            </div>
+          ) : null}
+          <div className="tm-mfa tm-mfa-single">
+            <button type="button" className="btn btn-p btn-full" onClick={() => onBevestig(bon.trim())}>
+              Voltooien
+            </button>
+            <button type="button" className="btn btn-gh btn-full" onClick={onAnnuleer}>
+              Annuleren
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function initialProfileId() {
@@ -645,7 +799,7 @@ function PP({ v, set }) {
 function HomeSumPeriodSelect({ v, set }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
-  const labels = { day: "Vandaag", week: "Deze week" };
+  const labels = { day: "Vandaag", yesterday: "Gisteren", week: "Deze week" };
 
   useEffect(() => {
     const close = ev => {
@@ -674,7 +828,7 @@ function HomeSumPeriodSelect({ v, set }) {
         aria-label="Periode kiezen"
         onClick={() => setOpen(o => !o)}
       >
-        <span>{labels[v] || "Vandaag"}</span>
+        <span>{labels[v] ?? "Vandaag"}</span>
         <span className="tm-home-sum-dd-chev" aria-hidden="true">
           ▾
         </span>
@@ -683,6 +837,7 @@ function HomeSumPeriodSelect({ v, set }) {
         <ul className="tm-home-sum-dd-menu" role="listbox">
           {[
             ["day", "Vandaag"],
+            ["yesterday", "Gisteren"],
             ["week", "Deze week"],
           ].map(([k, l]) => (
             <li key={k} role="none">
@@ -888,7 +1043,7 @@ function TripCard({ r, onAct }) {
         </div>
       )}
       {r.s === "lopend" && onAct && (
-        <p className="tm-trip-swipe-hint">Veeg naar rechts: voltooien · naar links: annuleren</p>
+        <p className="tm-trip-swipe-hint">Veeg → voltooien · ← annuleren</p>
       )}
     </>
   );
@@ -910,7 +1065,7 @@ function TripCard({ r, onAct }) {
 
 function Home({ D, pr, onPlanRit, onTripAct }) {
   const [sumP, setSumP] = useState("day");
-  const [s, e] = gr(sumP === "week" ? "week" : "day");
+  const [s, e] = gr(sumP);
   const vl = D.r.filter(r => r.s === "voltooid" && statsVenster(r.d) && iR(r.d, s, e));
   const homeOmzetLine = useMemo(() => {
     const border = TM_ACC;
@@ -1001,7 +1156,7 @@ function Home({ D, pr, onPlanRit, onTripAct }) {
         x: {
           ticks: {
             color: "#8a8a82",
-            maxRotation: sumP === "week" ? 0 : 40,
+            maxRotation: sumP === "week" ? 0 : 45,
             font: { size: 10 },
           },
           grid: { color: "rgba(60, 60, 60, 0.35)" },
@@ -1034,8 +1189,17 @@ function Home({ D, pr, onPlanRit, onTripAct }) {
     Math.round(km * (GESCHAT_VERBRUIK_L_PER_100KM / 100) * avgPl * 100) / 100;
   const geschatWinst = Math.round((om - geschatBrandstofRitten) * 100) / 100;
   const periodRangeLabel =
-    sumP === "day" ? fmtNlVandaagLong() : `${fmtNlShort(s)} t/m ${fmtNlShort(e)}`;
-  const nettoHint = sumP === "day" ? "Na alle kosten vandaag" : "Na alle kosten deze week";
+    sumP === "day"
+      ? fmtNlVandaagLong()
+      : sumP === "yesterday"
+        ? fmtNlLongFromIso(s)
+        : `${fmtNlShort(s)} t/m ${fmtNlShort(e)}`;
+  const nettoHint =
+    sumP === "day"
+      ? "Na alle kosten vandaag"
+      : sumP === "yesterday"
+        ? "Na alle kosten gisteren"
+        : "Na alle kosten deze week";
   const lopend = D.r
     .filter(r => r.s === "lopend")
     .sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
@@ -1096,7 +1260,11 @@ function Home({ D, pr, onPlanRit, onTripAct }) {
                 className="tm-home-sum-line-wrap"
                 role="img"
                 aria-label={
-                  sumP === "week" ? "Omzet per dag in de gekozen week" : "Cumulatieve omzet per rit vandaag"
+                  sumP === "week"
+                    ? "Omzet per dag in de gekozen week"
+                    : sumP === "yesterday"
+                      ? "Cumulatieve omzet per rit op gisteren"
+                      : "Cumulatieve omzet per rit vandaag"
                 }
               >
                 <Line data={homeOmzetLine} options={homeLineOpts} />
@@ -1347,10 +1515,11 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
   );
 }
 
-function Ritten({ D, sD, pid }) {
+function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
   const [fl, sF] = useState("alle");
   const [pane, sPane] = useState("overzicht");
   const [sh, sSh] = useState(false);
+  const lastNieuwReq = useRef(0);
   const mergedRoutes = useMemo(() => {
     const built = ROUTES.map(r => ({ ...r, __map: true }));
     const custom = (D.xr || []).map(r => {
@@ -1436,19 +1605,22 @@ function Ritten({ D, sD, pid }) {
     sM(mkIni());
     sSh(true);
   };
+
+  useEffect(() => {
+    if (openNieuwRequest > 0 && openNieuwRequest !== lastNieuwReq.current) {
+      lastNieuwReq.current = openNieuwRequest;
+      sM(mkIni());
+      sSh(true);
+    }
+  }, [openNieuwRequest]);
+
   const sel = fm.ri >= 0 ? mergedRoutes[fm.ri] : null;
   const mapCoords =
     sel && sel.__map
       ? { la1: sel.la1, lo1: sel.lo1, la2: sel.la2, lo2: sel.lo2, labelF: sel.f, labelT: sel.t }
       : null;
 
-  const act = (id, a) => {
-    const rr = applyTripAction(D.r, id, a);
-    if (rr === D.r) return;
-    const nd = { ...D, r: rr };
-    sD(nd);
-    sv(pid, nd);
-  };
+  const act = onTripAct;
   const cnt = useMemo(() => {
     const c = { alle: D.r.length, komend: 0, lopend: 0, voltooid: 0, geannuleerd: 0 };
     D.r.forEach(r => {
@@ -1540,7 +1712,7 @@ function Ritten({ D, sD, pid }) {
               </button>
             </div>
             <div className="tm-mb">
-              <div className="tm-rit-map-slot">
+              <div className="tm-rit-map-slot tm-rit-map-slot--compact">
                 {mapCoords ? (
                   <RitMap
                     la1={mapCoords.la1}
@@ -1551,18 +1723,13 @@ function Ritten({ D, sD, pid }) {
                     labelT={mapCoords.labelT}
                   />
                 ) : fm.ri >= 0 && sel && !sel.__map ? (
-                  <div className="tm-rit-map-ph">Eigen of archiefroute zonder kaartcoördinaten.</div>
+                  <div className="tm-rit-map-ph">Geen kaart voor deze route.</div>
                 ) : (
-                  <div className="tm-rit-map-ph">Kies een vaste route hieronder voor de kaart (indien coördinaten bekend).</div>
+                  <div className="tm-rit-map-ph">Kies route ↓</div>
                 )}
               </div>
-              <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 10px", lineHeight: 1.45 }}>
-                Kies een <strong>vaste route</strong> of vul handmatig vertrek, bestemming en km in.{" "}
-                <strong>Zoeken</strong> in heel België (OSM) en kortste weg berekenen doe je via{" "}
-                <strong>Meer → Eigen vaste routes</strong>.
-              </p>
               <div className="fl">Vaste routes</div>
-              <div className="tm-prs">
+              <div className="tm-prs tm-prs--modal">
                 {mergedRoutes.map((r, i) => (
                   <button
                     key={r.__id ? `xr-${r.__id}` : r.__arch ? `ar-${r.id}` : `rt-${i}`}
@@ -1583,8 +1750,8 @@ function Ritten({ D, sD, pid }) {
                   </button>
                 ))}
               </div>
-              <div className="fl" style={{ marginTop: 14 }}>
-                Handmatig (geen zoekfunctie hier)
+              <div className="fl" style={{ marginTop: 10 }}>
+                Handmatig
               </div>
               <div className="tm-g2">
                 <div className="tm-fg">
@@ -1618,10 +1785,11 @@ function Ritten({ D, sD, pid }) {
                 />
               </div>
               <div className="tm-fg" style={{ marginTop: 10 }}>
-                <label className="fl">Bonnummer</label>
+                <label className="fl">Bon (IHcT…)</label>
                 <input
                   type="text"
-                  inputMode="numeric"
+                  autoCapitalize="characters"
+                  spellCheck={false}
                   placeholder="Optioneel"
                   value={fm.bon}
                   onChange={e => sM(m => ({ ...m, bon: e.target.value }))}
@@ -2818,23 +2986,45 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
       </div>
     );
 
+  const orsAutoRoute = hasOpenRouteApiKey();
+
   return (
-    <div>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Instellingen</h1>
-      {[
-        { k: "p", t: "Profiel", s: pr.n + " · Wissel chauffeur" },
-        { k: "f", t: "Factuur & logo", s: "Van/Aan, btw, logo — zelfde als grote app" },
-        { k: "d", t: "Gegevens", s: "Backup, export & wissen" },
-      ].map(m => (
-        <button key={m.k} type="button" className="tm-mi" onClick={() => sV(m.k)}>
-          <strong>{m.t}</strong>
-          <small>{m.s}</small>
+    <div className="tm-meer-hub">
+      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Instellingen</h1>
+
+      <section className="tm-meer-sec" aria-labelledby="tm-meer-acc">
+        <h2 id="tm-meer-acc" className="tm-meer-sec-h">
+          Account
+        </h2>
+        {[
+          { k: "p", t: "Profiel", s: pr.n + " · Wissel chauffeur" },
+          { k: "f", t: "Factuur & logo", s: "Van/Aan, btw, logo — zelfde als grote app" },
+        ].map(m => (
+          <button key={m.k} type="button" className="tm-mi" onClick={() => sV(m.k)}>
+            <strong>{m.t}</strong>
+            <small>{m.s}</small>
+          </button>
+        ))}
+      </section>
+
+      <section className="tm-meer-sec" aria-labelledby="tm-meer-data">
+        <h2 id="tm-meer-data" className="tm-meer-sec-h">
+          Gegevens & backup
+        </h2>
+        <button type="button" className="tm-mi" onClick={() => sV("d")}>
+          <strong>Gegevens</strong>
+          <small>Backup, export, herstel klassieke app & wissen</small>
         </button>
-      ))}
-      <div className="card" style={{ marginTop: 12 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Ritten beheren</div>
-        <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
-          Bonnummers wijzigen of ritten verwijderen (alle statussen). Zoek op datum, route of bon.
+      </section>
+
+      <section className="tm-meer-sec" aria-labelledby="tm-meer-ritten">
+        <h2 id="tm-meer-ritten" className="tm-meer-sec-h">
+          Ritten & routes
+        </h2>
+      <div className="card tm-meer-ritten-card">
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Ritten beheren</div>
+        <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.4 }}>
+          Zoeken, bon aanpassen, rit wissen.
         </p>
         <div className="tm-fg">
           <label className="fl">Zoeken</label>
@@ -2867,7 +3057,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
                     <label className="fl">Bon</label>
                     <input
                       type="text"
-                      inputMode="numeric"
+                      autoCapitalize="characters"
                       value={bonEdit[r.id] !== undefined ? bonEdit[r.id] : r.bon || ""}
                       onChange={e => setBonEdit(m => ({ ...m, [r.id]: e.target.value }))}
                       placeholder="—"
@@ -2889,18 +3079,20 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
             )}
           </div>
         )}
-      </div>
-      <div className="card" style={{ marginTop: 12 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>Eigen vaste routes</div>
-        <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
-          Hier kun je <strong>zoeken in heel België</strong> (OSM) en de kortste weg berekenen. Locaties uit{" "}
-          <strong>verwijderde</strong> routes staan automatisch in de lijst. Bij <strong>Ritten → Nieuw</strong> is alleen
-          kiezen of handmatig invullen (geen zoeken).
+        <div className="tm-meer-split" role="separator" />
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Eigen vaste routes</div>
+        <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.4 }}>
+          OSM-zoeken.{" "}
+          {orsAutoRoute ? (
+            <>Auto-route via OpenRouteService (<code className="tm-meer-code">VITE_OPENROUTE_API_KEY</code>).</>
+          ) : (
+            <>Zonder sleutel: ruwe km-schatting — controleer handmatig.</>
+          )}
         </p>
         <PlaatsPicker label="Vertrek" gekozen={erA} onKies={setErA} lijst={ziekenVoorMeer} />
         <PlaatsPicker label="Bestemming" gekozen={erB} onKies={setErB} lijst={ziekenVoorMeer} />
         <button type="button" className="btn btn-o btn-full" style={{ marginBottom: 10 }} disabled={erBusy} onClick={berekenEigenKm}>
-          {erBusy ? "Bezig…" : "Kortste weg berekenen (km)"}
+          {erBusy ? "Bezig…" : orsAutoRoute ? "Rijroute (auto) berekenen — km" : "Ruwe km invullen (schatting)"}
         </button>
         <div className="tm-fg">
           <label className="fl">Afstand (km)</label>
@@ -2930,7 +3122,13 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
           </div>
         )}
       </div>
-      <div className="card" style={{ marginTop: 12 }}>
+      </section>
+
+      <section className="tm-meer-sec" aria-labelledby="tm-meer-tarief">
+        <h2 id="tm-meer-tarief" className="tm-meer-sec-h">
+          Tarief & regels
+        </h2>
+      <div className="card">
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Vergoedingsregels</div>
         {[
           { l: "Opstartpremie", v: "€ 15,00" },
@@ -2948,6 +3146,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
           Voorbeeld km-formule: 45 km → €15 + 3×€25 = €90 (excl. toeslagen/forfait)
         </div>
       </div>
+      </section>
     </div>
   );
 }
@@ -3055,16 +3254,46 @@ export default function App() {
   const [tab, sT] = useState("home");
   const [pid, sP] = useState(() => initialProfileId());
   const [D, sD] = useState(() => ld(initialProfileId()));
+  const [okPendingId, setOkPendingId] = useState(null);
+  const [nieuwRitReq, setNieuwRitReq] = useState(0);
   const pr = PR.find(p => p.id === pid) || PR[0];
-  const tripAct = (id, a) => {
-    sD(cur => {
-      const rr = applyTripAction(cur.r, id, a);
-      if (rr === cur.r) return cur;
-      const nd = { ...cur, r: rr };
-      sv(pid, nd);
-      return nd;
-    });
-  };
+  const okPendingRit = okPendingId ? D.r.find(r => r.id === okPendingId) : null;
+
+  const tripAct = useCallback(
+    (id, a) => {
+      if (a === "ok") {
+        const r = D.r.find(x => x.id === id);
+        if (r && (r.s === "lopend" || r.s === "komend")) {
+          setOkPendingId(id);
+          return;
+        }
+      }
+      sD(cur => {
+        const rr = applyTripAction(cur.r, id, a);
+        if (rr === cur.r) return cur;
+        const nd = { ...cur, r: rr };
+        sv(pid, nd);
+        return nd;
+      });
+    },
+    [D.r, pid]
+  );
+
+  const bevestigVoltooi = useCallback(
+    bon => {
+      if (!okPendingId) return;
+      const id = okPendingId;
+      setOkPendingId(null);
+      sD(cur => {
+        const rr = applyTripAction(cur.r, id, "ok", { bon });
+        if (rr === cur.r) return cur;
+        const nd = { ...cur, r: rr };
+        sv(pid, nd);
+        return nd;
+      });
+    },
+    [okPendingId, pid]
+  );
   const sw = id => {
     sP(id);
     try {
@@ -3087,15 +3316,39 @@ export default function App() {
 
   return (
     <div className="tm-app">
+      {okPendingRit ? (
+        <VoltooiBonSheet
+          key={okPendingId}
+          rit={okPendingRit}
+          onBevestig={bevestigVoltooi}
+          onAnnuleer={() => setOkPendingId(null)}
+        />
+      ) : null}
       <div className="tm-main">
-        {tab === "home" && (
-          <Home D={D} pr={pr} onPlanRit={() => sT("ritten")} onTripAct={tripAct} />
-        )}
-        {tab === "ritten" && <Ritten D={D} sD={sD} pid={pid} />}
-        {tab === "fin" && <Financieel D={D} pid={pid} />}
-        {tab === "hist" && <Historiek D={D} pid={pid} />}
-        {tab === "kosten" && <Kosten D={D} sD={sD} pid={pid} />}
-        {tab === "meer" && (
+        <div className="tm-tab-page" hidden={tab !== "home"}>
+          <Home
+            D={D}
+            pr={pr}
+            onPlanRit={() => {
+              sT("ritten");
+              setNieuwRitReq(n => n + 1);
+            }}
+            onTripAct={tripAct}
+          />
+        </div>
+        <div className="tm-tab-page" hidden={tab !== "ritten"}>
+          <Ritten D={D} sD={sD} pid={pid} onTripAct={tripAct} openNieuwRequest={nieuwRitReq} />
+        </div>
+        <div className="tm-tab-page" hidden={tab !== "fin"}>
+          <Financieel D={D} pid={pid} />
+        </div>
+        <div className="tm-tab-page" hidden={tab !== "hist"}>
+          <Historiek D={D} pid={pid} />
+        </div>
+        <div className="tm-tab-page" hidden={tab !== "kosten"}>
+          <Kosten D={D} sD={sD} pid={pid} />
+        </div>
+        <div className="tm-tab-page" hidden={tab !== "meer"}>
           <Meer
             D={D}
             sD={sD}
@@ -3108,7 +3361,7 @@ export default function App() {
               sD(ld(id));
             }}
           />
-        )}
+        </div>
       </div>
       <nav className="tm-nav" aria-label="Hoofdnavigatie">
         {NAV_ITEMS.map(({ id, label, Icon }) => (

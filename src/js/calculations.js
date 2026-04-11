@@ -195,7 +195,10 @@ export function vergoedingUitsplitsingVoorRit(km, tijd, route) {
   };
 }
 
-/** Geschatte rijafstand (km) uit hemelsbreed: Haversine × factor 1,3. Voor fallback als ORS/API faalt. */
+/**
+ * Fallback als er geen autoroute-API is: hemelsafstand (Haversine) × 1,3 — geen echte wegen-km.
+ * Gebruik OpenRouteService (VITE_OPENROUTE_API_KEY) voor de kortste rijroute met de auto.
+ */
 export function geschatteAfstandKm(from, to) {
   if (from?.lat == null || to?.lat == null) return null;
   const R = 6371; // straal aarde in km
