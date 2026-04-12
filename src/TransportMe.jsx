@@ -126,7 +126,7 @@ const isN = t => {
   return h >= 20 || h < 5;
 };
 
-/** Zelfde regels als klassieke app (forfait Sango/RKV Mechelen ↔ UZA, route-toeslag, nacht). */
+/** Zelfde regels als klassieke app (forfait Sango/RKV Mechelen ↔ UZA; nacht +30% op aantal schijven). */
 function tmVergoeding(f, t, k, ti) {
   const kk = Number(k) || 0;
   return vergoedingVoorRit(kk, ti || "", { fromName: f, toName: t });
@@ -3158,9 +3158,8 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
         {[
           { l: "Opstartpremie", v: "€ 15,00" },
           { l: "Per 20 km", v: "€ 25,00" },
-          { l: "Nachttoeslag (20:00–04:59)", v: "+30% op km-deel / forfait" },
-          { l: "Forfait RKV Sango of RKV Mechelen ↔ UZA Edegem", v: "€ 35,00 (+ nacht indien van toepassing)" },
-          { l: "Route-toeslag", v: "€ 15 (niet op Sango/Mechelen → UZA Edegem)" },
+          { l: "Nachttoeslag (20:00–04:59)", v: "+30% op het aantal schijven (×1,3, omhoog naar hele schijven × €25); niet op opstart, niet op forfait" },
+          { l: "Forfait RKV Sango of RKV Mechelen ↔ UZA Edegem", v: "€ 35,00 (geen nachtopslag op forfait)" },
         ].map(r => (
           <div key={r.l} className="sep">
             <span className="lbl">{r.l}</span>
@@ -3168,7 +3167,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
           </div>
         ))}
         <div style={{ fontSize: 13, color: "var(--acc)", fontWeight: 600, marginTop: 12 }}>
-          Voorbeeld km-formule: 45 km → €15 + 3×€25 = €90 (excl. toeslagen/forfait)
+          Voorbeeld: 45 km = 3 schijven → dag €15+€75=€90; ’s nachts ceil(3×1,3)=4 schijven → €15+€100
         </div>
       </div>
       </section>

@@ -5,9 +5,12 @@
 export const OPSTART_PREMIE = 15;
 export const VERGOEDING_PER_20KM = 25;
 export const KM_SCHIJF = 20;
-/** +30% op het km-deel van de vergoeding (niet op de opstartpremie). */
+/**
+ * Nacht: aantal km-schijven × deze factor, daarna omhoog naar hele schijven × €25.
+ * Niet op opstartpremie en niet op forfait.
+ */
 export const NACHT_TARIEF_FACTOR = 1.3;
-/** Zelfde toeslag als percentage t.o.v. het km-deel (alleen ter uitleg in UI). */
+/** Zelfde factor als percentage (uitleg in UI). */
 export const NACHT_TOESLAG_PERCENT = Math.round((NACHT_TARIEF_FACTOR - 1) * 100);
 /** Geschat verbruik voor rendabiliteit nieuwe rit: L benzine per 100 km. */
 export const GESCHAT_VERBRUIK_L_PER_100KM = 5;
@@ -18,8 +21,6 @@ export const NACHT_EIND_UUR = 5;
 
 /** Forfait RKV Sango ↔ UZA Edegem (excl. btw), per rit. */
 export const FORFAIT_SANGO_UZA_EXCL_BTW = 35;
-/** Vaste route-toeslag (excl. btw), behalve uitsluitend RKV Sango → UZA Edegem. */
-export const ROUTE_TOESLAG_EURO = 15;
 
 export const STORAGE_KEYS = {
   ritten: 'transporteur_ritten',

@@ -279,7 +279,7 @@ export function initFormRit(onSubmit) {
     if (previewNachttoeslag) {
       previewNachttoeslag.hidden = !toonNachtInCard;
       if (toonNachtInCard && u) {
-        previewNachttoeslag.textContent = `${formatEuro(u.nachtToeslagEuro)} (+${u.nachtToeslagPercent}% op km-deel)`;
+        previewNachttoeslag.textContent = `${formatEuro(u.nachtToeslagEuro)} (+${u.nachtToeslagPercent}% op schijven)`;
       }
     }
 

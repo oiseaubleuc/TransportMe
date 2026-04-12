@@ -12,7 +12,6 @@ import {
   GESCHAT_VERBRUIK_L_PER_100KM,
   NACHT_TOESLAG_PERCENT,
   FORFAIT_SANGO_UZA_EXCL_BTW,
-  ROUTE_TOESLAG_EURO,
 } from './config.js';
 import { getData } from './storage.js';
 
@@ -55,7 +54,7 @@ function heeftEdegemUzaInNaam(s) {
   );
 }
 
-/** RKV Sango → UZA Edegem: geen route-toeslag (forfaitroute). */
+/** RKV Sango → UZA Edegem (richting): helpt forfait-paar te herkennen. */
 export function isSangoNaarEdegemUzaRoute(fromName, toName) {
   return heeftSangoInNaam(fromName) && heeftEdegemUzaInNaam(toName);
 }
@@ -76,12 +75,12 @@ function heeftRkvMechelenInNaam(s) {
   return n.includes('rkv') || n.includes('reinier');
 }
 
-/** RKV Mechelen → UZA Edegem: zelfde uitzondering op route-toeslag als Sango → UZA. */
+/** RKV Mechelen → UZA Edegem (richting): helpt forfait-paar te herkennen. */
 export function isRkvMechelenNaarEdegemUzaRoute(fromName, toName) {
   return heeftRkvMechelenInNaam(fromName) && heeftEdegemUzaInNaam(toName);
 }
 
-/** Beide richtingen: zelfde forfait €35 als Sango ↔ UZA (excl. btw), ’s nachts × nachttarief. */
+/** Beide richtingen: zelfde forfait €35 als Sango ↔ UZA (excl. btw). */
 export function isRkvMechelenUzaForfaitRoute(fromName, toName) {
   return (
     isRkvMechelenNaarEdegemUzaRoute(fromName, toName) ||
@@ -89,18 +88,26 @@ export function isRkvMechelenUzaForfaitRoute(fromName, toName) {
   );
 }
 
+/** Aantal te factureren schijven: ’s nachts ceil(schijven × 1,3), anders gewoon schijven. */
+function schijvenMetNachttarief(schijven, nacht) {
+  const s = Math.max(0, Number(schijven) || 0);
+  if (!nacht) return s;
+  return Math.max(s, Math.ceil(s * NACHT_TARIEF_FACTOR));
+}
+
 function vergoedingVoorRitAlleenKm(km, tijd) {
   const k = Number(km) || 0;
   const schijven = Math.ceil(k / KM_SCHIJF);
-  const variabelDeel = schijven * VERGOEDING_PER_20KM;
-  const variabelMetTarief = isNachtTariefTijd(tijd) ? variabelDeel * NACHT_TARIEF_FACTOR : variabelDeel;
+  const nacht = isNachtTariefTijd(tijd);
+  const schijvenBillable = schijvenMetNachttarief(schijven, nacht);
+  const variabelMetTarief = schijvenBillable * VERGOEDING_PER_20KM;
   return Math.round((OPSTART_PREMIE + variabelMetTarief) * 100) / 100;
 }
 
 /**
  * @param {number} km
  * @param {string} [tijd]
- * @param {{ fromName?: string, toName?: string }} [route] — bij vertrek/bestemming: Sango↔UZA-forfait + route-toeslag (behalve Sango→Edegem UZA).
+ * @param {{ fromName?: string, toName?: string }} [route] — bij vertrek/bestemming: Sango↔UZA- of RKV Mechelen↔UZA-forfait.
  */
 export function vergoedingVoorRit(km, tijd, route) {
   const fromName = route?.fromName;
@@ -108,42 +115,32 @@ export function vergoedingVoorRit(km, tijd, route) {
   const heeftBeideNamen =
     String(fromName || '').trim().length > 0 && String(toName || '').trim().length > 0;
 
-  let kern;
   const isUzaForfaitPaar =
     heeftBeideNamen &&
     (isSangoUzaForfaitRoute(fromName, toName) || isRkvMechelenUzaForfaitRoute(fromName, toName));
   if (isUzaForfaitPaar) {
-    kern = FORFAIT_SANGO_UZA_EXCL_BTW;
-    if (isNachtTariefTijd(tijd)) {
-      kern = Math.round(kern * NACHT_TARIEF_FACTOR * 100) / 100;
-    }
-  } else {
-    kern = vergoedingVoorRitAlleenKm(km, tijd);
+    return FORFAIT_SANGO_UZA_EXCL_BTW;
   }
-
-  const geenRouteToeslag =
-    isSangoNaarEdegemUzaRoute(fromName, toName) || isRkvMechelenNaarEdegemUzaRoute(fromName, toName);
-  if (heeftBeideNamen && !geenRouteToeslag) {
-    kern = Math.round((kern + ROUTE_TOESLAG_EURO) * 100) / 100;
-  }
-  return kern;
+  return vergoedingVoorRitAlleenKm(km, tijd);
 }
 
 /**
- * Uitsplitsing km-formule: opstart, km-deel, optioneel nachttoeslag (+NACHT_TOESLAG_PERCENT% op km-deel alleen).
+ * Uitsplitsing km-formule: opstart, km-deel op basis schijven; ’s nachts +NACHT_TOESLAG_PERCENT% op het aantal schijven (ceil naar hele schijven).
  */
 export function vergoedingUitsplitsingKmFormule(km, tijd) {
   const k = Number(km) || 0;
   const schijven = Math.max(0, Math.ceil(k / KM_SCHIJF));
-  const variabelDeel = schijven * VERGOEDING_PER_20KM;
   const nacht = isNachtTariefTijd(tijd);
-  const nachtToeslagBruto = nacht ? variabelDeel * (NACHT_TARIEF_FACTOR - 1) : 0;
-  const nachtToeslagEuro = Math.round(nachtToeslagBruto * 100) / 100;
-  const variabelMetTarief = nacht ? variabelDeel * NACHT_TARIEF_FACTOR : variabelDeel;
+  const schijvenBillable = schijvenMetNachttarief(schijven, nacht);
+  const variabelDeel = schijven * VERGOEDING_PER_20KM;
+  const variabelMetTarief = schijvenBillable * VERGOEDING_PER_20KM;
+  const nachtToeslagEuro = Math.round((variabelMetTarief - variabelDeel) * 100) / 100;
   const vergoeding = Math.round((OPSTART_PREMIE + variabelMetTarief) * 100) / 100;
   return {
     opstartEuro: OPSTART_PREMIE,
     variabelDeel,
+    schijven,
+    schijvenBillable,
     isNacht: nacht,
     nachtToeslagEuro,
     nachtToeslagPercent: NACHT_TOESLAG_PERCENT,
@@ -152,7 +149,7 @@ export function vergoedingUitsplitsingKmFormule(km, tijd) {
 }
 
 /**
- * Zelfde logica als vergoedingVoorRit(km, tijd, route) voor uitleg in UI (forfait / route-toeslag / nacht).
+ * Zelfde logica als vergoedingVoorRit(km, tijd, route) voor uitleg in UI (forfait / nacht op schijven).
  */
 export function vergoedingUitsplitsingVoorRit(km, tijd, route) {
   const fromName = route?.fromName;
@@ -165,33 +162,23 @@ export function vergoedingUitsplitsingVoorRit(km, tijd, route) {
     (isSangoUzaForfaitRoute(fromName, toName) || isRkvMechelenUzaForfaitRoute(fromName, toName));
   if (isUzaForfaitPaar) {
     const basis = FORFAIT_SANGO_UZA_EXCL_BTW;
-    const nacht = isNachtTariefTijd(tijd);
-    const nachtToeslagEuro = Math.round(basis * (nacht ? NACHT_TARIEF_FACTOR - 1 : 0) * 100) / 100;
-    const naNacht = Math.round(basis * (nacht ? NACHT_TARIEF_FACTOR : 1) * 100) / 100;
-    const geenRt =
-      isSangoNaarEdegemUzaRoute(fromName, toName) || isRkvMechelenNaarEdegemUzaRoute(fromName, toName);
-    const routeToeslag = geenRt ? 0 : ROUTE_TOESLAG_EURO;
-    const vergoeding = Math.round((naNacht + routeToeslag) * 100) / 100;
     return {
       isSangoUzaForfait: true,
       forfaitBasis: basis,
-      isNacht: nacht,
-      nachtToeslagEuro,
+      isNacht: false,
+      nachtToeslagEuro: 0,
       nachtToeslagPercent: NACHT_TOESLAG_PERCENT,
-      routeToeslagEuro: routeToeslag,
-      vergoeding,
+      routeToeslagEuro: 0,
+      vergoeding: basis,
     };
   }
 
   const u = vergoedingUitsplitsingKmFormule(km, tijd);
-  const geenRt =
-    isSangoNaarEdegemUzaRoute(fromName, toName) || isRkvMechelenNaarEdegemUzaRoute(fromName, toName);
-  const routeToeslag = heeftBeideNamen && !geenRt ? ROUTE_TOESLAG_EURO : 0;
   return {
     ...u,
     isSangoUzaForfait: false,
-    routeToeslagEuro: routeToeslag,
-    vergoeding: Math.round((u.vergoeding + routeToeslag) * 100) / 100,
+    routeToeslagEuro: 0,
+    vergoeding: u.vergoeding,
   };
 }
 
@@ -453,7 +440,7 @@ export function vergoedingFromPresetOrKm(preset, km, tijd, route) {
 
 /**
  * Zelfde als rendabiliteitRit maar met optioneel forfait op preset (nieuwe-rit formulier).
- * Nachttoeslag in uitsplitsing alleen bij km-formule, niet bij forfait.
+ * Nachttoeslag in uitsplitsing alleen bij km-formule (op km-deel), niet bij forfait-preset.
  */
 export function rendabiliteitRitForForm(km, tijd, preset, route) {
   if (!km || km < 0) return null;
