@@ -537,6 +537,66 @@ function leesLegacyBundel(profileId) {
   return { r, b, o };
 }
 
+const TM_AUTO_FIX_CALC_VERSION = "tm_auto_fix_calc_v1";
+const tmCalcFixKey = profileId => `tm_calc_fix_done_${TM_AUTO_FIX_CALC_VERSION}_${profileId}`;
+
+function tmBuildRouteKmLookup(data) {
+  const m = new Map();
+  const add = (f, t, k) => {
+    const km = Number(k);
+    if (!Number.isFinite(km) || km < 1) return;
+    const nf = tmNormRouteName(f);
+    const nt = tmNormRouteName(t);
+    if (!nf || !nt) return;
+    m.set(`${nf}\t${nt}`, Math.max(1, Math.round(km)));
+  };
+  ROUTES.forEach(r => add(r.f, r.t, r.k));
+  (data.xr || []).forEach(r => add(r.f, r.t, r.k));
+  const active = new Set((data.xr || []).map(tmRouteKey));
+  (data.xrArch || []).filter(r => !active.has(tmRouteKey(r))).forEach(r => add(r.f, r.t, r.k));
+  return m;
+}
+
+/** Corrigeert automatisch oude foute ritberekeningen op basis van actuele tarieven en bekende route-km. */
+function autoFixRitBerekeningen(data) {
+  const routeKm = tmBuildRouteKmLookup(data);
+  let changed = false;
+  const rides = (data.r || []).map(r => {
+    if (!r || typeof r !== "object") return r;
+    if (r.handmatigKv) return r;
+    const nf = tmNormRouteName(r.f);
+    const nt = tmNormRouteName(r.t);
+    const routeKey = `${nf}\t${nt}`;
+    const revKey = `${nt}\t${nf}`;
+    const knownKm = routeKm.get(routeKey) ?? routeKm.get(revKey);
+    const baseKm = Number(r.k);
+    if (!Number.isFinite(baseKm) || baseKm < 1) return r;
+    const nextKm = knownKm != null ? knownKm : Math.max(1, Math.round(baseKm));
+    const nextV = Math.round(vergoedingVoorRit(nextKm, r.ti || "", { fromName: r.f, toName: r.t }) * 100) / 100;
+    const curV = Math.round(money(r.v) * 100) / 100;
+    if (nextKm === baseKm && nextV === curV) return r;
+    changed = true;
+    return { ...r, k: nextKm, v: nextV };
+  });
+  return changed ? normData({ ...data, r: rides }) : data;
+}
+
+function autoApplyCalcFix(profileId, data) {
+  try {
+    if (localStorage.getItem(tmCalcFixKey(profileId)) === "1") return data;
+  } catch {
+    /* ignore */
+  }
+  const fixed = autoFixRitBerekeningen(data);
+  try {
+    if (fixed !== data) localStorage.setItem("t_" + profileId, JSON.stringify(fixed));
+    localStorage.setItem(tmCalcFixKey(profileId), "1");
+  } catch {
+    /* ignore quota */
+  }
+  return fixed;
+}
+
 /** Laadt TransportMe-bundel `t_<profiel>`; als die leeg is, éénmalig importeren uit legacy localStorage. */
 const ld = p => {
   let data;
@@ -554,10 +614,10 @@ const ld = p => {
       } catch {
         /* quota */
       }
-      return merged;
+      return autoApplyCalcFix(p, merged);
     }
   }
-  return data;
+  return autoApplyCalcFix(p, data);
 };
 
 const sv = (p, d) => localStorage.setItem("t_" + p, JSON.stringify(d));
