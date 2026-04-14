@@ -47,10 +47,10 @@ import {
   setLiveAvailabilityStatus,
 } from './js/storage.js';
 import { PROFILES } from './js/config.js';
-import { vergoedingVoorRit, geschatteAfstandKm, isRitVoltooid } from './js/calculations.js';
+import { vergoedingVoorRit, isRitVoltooid } from './js/calculations.js';
 import { formatEuro, formatDatumTijd, formatDatumKort } from './js/format.js';
 import { initPlaceSearchFree } from './js/placeSearchFree.js';
-import { getRouteDistanceORS, hasOpenRouteApiKey } from './js/ors.js';
+import { getDrivingRouteKm, getDrivingRouteWithGeometry } from './js/ors.js';
 import { showMapLibreMap, addRouteToMapLibreMap } from './js/mapLibre.js';
 
 /** Ziekenhuizenlijst Meer: uitgeklapt = volledige lijst */
@@ -739,28 +739,25 @@ function renderVasteRitten() {
     const preset =
       presets.find((p) => p.fromId === fromId && p.toId === toId) ||
       presets.find((p) => p.fromId === toId && p.toId === fromId);
+    if (from?.lat != null && to?.lat != null) {
+      try {
+        const { km } = await getDrivingRouteKm(from, to);
+        if (km >= 1) {
+          kmInput.value = km;
+          kmInput.dispatchEvent(new Event('input'));
+          return;
+        }
+      } catch (e) {
+        console.warn('Rijroute-afstand mislukt, gebruik preset of schatting:', e);
+      }
+    }
     if (preset?.defaultKm != null) {
       kmInput.value = preset.defaultKm;
       kmInput.dispatchEvent(new Event('input'));
       return;
     }
-    if (from?.lat != null && to?.lat != null) {
-      if (hasOpenRouteApiKey()) {
-        try {
-          const { km } = await getRouteDistanceORS(from, to);
-          kmInput.value = km;
-          kmInput.dispatchEvent(new Event('input'));
-        } catch (e) {
-          const est = geschatteAfstandKm(from, to);
-          kmInput.value = est != null && est >= 1 ? est : preset.defaultKm ?? '';
-          kmInput.dispatchEvent(new Event('input'));
-        }
-      } else {
-        const est = geschatteAfstandKm(from, to);
-        kmInput.value = est != null && est >= 1 ? est : preset.defaultKm ?? '';
-        kmInput.dispatchEvent(new Event('input'));
-      }
-    }
+    kmInput.value = '';
+    kmInput.dispatchEvent(new Event('input'));
   });
 
   vulBestemming();
@@ -925,7 +922,6 @@ function initMapIfNeeded() {
   const fitBtn = document.getElementById('kaart-fit-route');
   const linkWaze = document.getElementById('link-waze');
   const linkGoogle = document.getElementById('link-google-nav');
-  const hasORS = hasOpenRouteApiKey();
   const hospitals = getZiekenhuizen();
   let currentFrom = null;
   let currentTo = null;
@@ -995,28 +991,32 @@ function initMapIfNeeded() {
     if (!hasBoth) {
       if (routeLabelEl) routeLabelEl.textContent = '—';
       if (routeKmEl) routeKmEl.textContent = '— km';
-      if (routeSourceEl) routeSourceEl.textContent = 'Schatting';
+      if (routeSourceEl) routeSourceEl.textContent = '—';
       return;
     }
 
     if (routeLabelEl) routeLabelEl.textContent = `${from.name || 'Vertrek'} → ${to.name || 'Aankomst'}`;
 
-    if (hasORS && map) {
-      getRouteDistanceORS(from, to)
-        .then(({ km, geometry }) => {
-          addRouteToMapLibreMap(map, geometry);
+    if (map) {
+      getDrivingRouteWithGeometry(from, to)
+        .then(({ km, geometry, source }) => {
+          if (geometry?.length) addRouteToMapLibreMap(map, geometry);
           if (routeKmEl) routeKmEl.textContent = `${km || 0} km`;
-          if (routeSourceEl) routeSourceEl.textContent = 'ORS (exact)';
+          if (routeSourceEl) {
+            routeSourceEl.textContent =
+              source === 'google'
+                ? 'Google Maps'
+                : source === 'ors'
+                  ? 'OpenRouteService'
+                  : source === 'osrm'
+                    ? 'OSRM (demo)'
+                    : 'Rijroute';
+          }
         })
         .catch(() => {
-          const km = geschatteAfstandKm(from, to);
-          if (routeKmEl) routeKmEl.textContent = `${km || 0} km`;
-          if (routeSourceEl) routeSourceEl.textContent = 'Schatting';
+          if (routeKmEl) routeKmEl.textContent = '—';
+          if (routeSourceEl) routeSourceEl.textContent = 'Geen autoroute (netwerk)';
         });
-    } else {
-      const km = geschatteAfstandKm(from, to);
-      if (routeKmEl) routeKmEl.textContent = `${km || 0} km`;
-      if (routeSourceEl) routeSourceEl.textContent = 'Schatting';
     }
   }
 
@@ -1417,16 +1417,17 @@ function initZiekenhuizen() {
     }
 
     let km = null;
-    if (hasOpenRouteApiKey()) {
-      try {
-        const res = await getRouteDistanceORS(from, to);
-        km = res.km;
-      } catch (e) {
-        console.error(e);
-      }
+    try {
+      const res = await getDrivingRouteKm(from, to);
+      km = res.km;
+    } catch (e) {
+      console.error(e);
     }
     if (km == null || km < 1) {
-      km = geschatteAfstandKm(from, to);
+      alert(
+        'Kon geen autoroute over het wegennet ophalen (controleer internet). Vul de km handmatig in bij de rit of probeer later opnieuw.'
+      );
+      return;
     }
 
     const presets = getPresetRoutes();

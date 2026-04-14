@@ -183,8 +183,7 @@ export function vergoedingUitsplitsingVoorRit(km, tijd, route) {
 }
 
 /**
- * Fallback als er geen autoroute-API is: hemelsafstand (Haversine) × 1,3 — geen echte wegen-km.
- * Gebruik OpenRouteService (VITE_OPENROUTE_API_KEY) voor de kortste rijroute met de auto.
+ * Alleen voor interne/legacy-schatting — geen vervanging van echte autoroute (getDrivingRouteKm).
  */
 export function geschatteAfstandKm(from, to) {
   if (from?.lat == null || to?.lat == null) return null;
@@ -196,7 +195,11 @@ export function geschatteAfstandKm(from, to) {
     Math.cos((from.lat * Math.PI) / 180) * Math.cos((to.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const hemelsbreed = R * c;
-  return Math.max(1, Math.round(hemelsbreed * 1.3));
+  if (!Number.isFinite(hemelsbreed) || hemelsbreed <= 0) return null;
+  /** Langere trajecten: lagere factor (meer snelweg); kort: hoger (lokaal omrijden). */
+  const factor = 1.15 + 10 / (hemelsbreed + 15);
+  const roadKm = hemelsbreed * Math.min(1.9, Math.max(1.18, factor));
+  return Math.max(1, Math.round(roadKm));
 }
 
 export function toDateStr(d) {

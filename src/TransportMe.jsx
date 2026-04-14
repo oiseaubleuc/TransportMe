@@ -18,10 +18,10 @@ import "./transportme-theme.css";
 import { exportTransporteurData, applyImportPayload } from "./js/dataBackup.js";
 import { getFactuurGegevens, nextFactuurVolgNummer, saveFactuurGegevens } from "./js/storage.js";
 import { generateFactuurPdfBlob, triggerPdfDownload } from "./js/invoicePdf.js";
-import { vergoedingVoorRit, geschatteAfstandKm } from "./js/calculations.js";
-import { getRouteDistanceORS, hasOpenRouteApiKey } from "./js/ors.js";
+import { vergoedingVoorRit } from "./js/calculations.js";
+import { getDrivingRouteKm, getDrivingRouteWithGeometry } from "./js/ors.js";
 import { searchPlacesBelgium } from "./js/placeSearchFree.js";
-import { PRESET_ANCHOR_ZIEKENHUIZEN, GESCHAT_VERBRUIK_L_PER_100KM } from "./js/config.js";
+import { PRESET_ANCHOR_ZIEKENHUIZEN, GESCHAT_VERBRUIK_L_PER_100KM, hasGoogleMapsApiKey } from "./js/config.js";
 import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 
 ChartJS.register(
@@ -85,34 +85,35 @@ const PR = [
 const DR = ["Houdaifa", "Amine", "Frederik", "Student 1"],
   CA = ["Audi A3 (2-HKN-136)", "BMW Serie 1 (2-GGW-635)"];
 /** Vaste routes (km + coördinaten, zelfde lijst als voorheen — geen handmatige route) */
+/** k = referentie-km (OSRM); live meting = Google Maps indien VITE_GOOGLE_MAPS_API_KEY, anders ORS/OSRM. */
 const ROUTES = [
-  { f: "UZ Brussel", t: "UZ Leuven", k: 26, la1: 50.8824, lo1: 4.2745, la2: 50.8814, lo2: 4.671 },
-  { f: "UZ Brussel", t: "UZA Edegem", k: 48, la1: 50.8824, lo1: 4.2745, la2: 51.1552, lo2: 4.4452 },
-  { f: "UZ Brussel", t: "AZ Deurne", k: 52, la1: 50.8824, lo1: 4.2745, la2: 51.2192, lo2: 4.4653 },
-  { f: "UZ Brussel", t: "AZ Herentals", k: 60, la1: 50.8824, lo1: 4.2745, la2: 51.1766, lo2: 4.8325 },
-  { f: "UZ Brussel", t: "RKV Mechelen", k: 33, la1: 50.8824, lo1: 4.2745, la2: 51.0257, lo2: 4.4776 },
-  { f: "UZ Brussel", t: "AZ Gent", k: 60, la1: 50.8824, lo1: 4.2745, la2: 51.0225, lo2: 3.7108 },
-  { f: "UZ Brussel", t: "ZOL Genk", k: 85, la1: 50.8824, lo1: 4.2745, la2: 50.9656, lo2: 5.5001 },
-  { f: "UZ Brussel", t: "AZ Turnhout", k: 72, la1: 50.8824, lo1: 4.2745, la2: 51.3245, lo2: 4.9486 },
-  { f: "UZ Brussel", t: "Virga Jesse", k: 72, la1: 50.8824, lo1: 4.2745, la2: 50.9307, lo2: 5.3378 },
-  { f: "RKV Mechelen", t: "AZ Gent", k: 65, la1: 51.0257, lo1: 4.4776, la2: 51.0225, lo2: 3.7108 },
-  { f: "RKV Mechelen", t: "ZOL Genk", k: 60, la1: 51.0257, lo1: 4.4776, la2: 50.9656, lo2: 5.5001 },
-  { f: "RKV Mechelen", t: "UZ Leuven", k: 30, la1: 51.0257, lo1: 4.4776, la2: 50.8814, lo2: 4.671 },
-  { f: "RKV Mechelen", t: "UZ Brussel", k: 33, la1: 51.0257, lo1: 4.4776, la2: 50.8824, lo2: 4.2745 },
-  { f: "RKV Mechelen", t: "Jessa Hasselt", k: 52, la1: 51.0257, lo1: 4.4776, la2: 50.9307, lo2: 5.3378 },
-  { f: "RKV Mechelen", t: "Heusden-Zolder St. Franciscus (SFZ)", k: 52, la1: 51.0257, lo1: 4.4776, la2: 51.047, lo2: 5.3153 },
-  { f: "RKV Mechelen", t: "Lier Heilig Hart", k: 22, la1: 51.0257, lo1: 4.4776, la2: 51.1284, lo2: 4.5708 },
-  { f: "RKV Mechelen", t: "Malle AZ Voorkempen", k: 38, la1: 51.0257, lo1: 4.4776, la2: 51.2995, lo2: 4.7295 },
-  { f: "RKV Mechelen", t: "Turnhout St. Elisabeth", k: 46, la1: 51.0257, lo1: 4.4776, la2: 51.321, lo2: 4.936 },
+  { f: "UZ Brussel", t: "UZ Leuven", k: 36, la1: 50.8824, lo1: 4.2745, la2: 50.8814, lo2: 4.671 },
+  { f: "UZ Brussel", t: "UZA Edegem", k: 41, la1: 50.8824, lo1: 4.2745, la2: 51.1552, lo2: 4.4452 },
+  { f: "UZ Brussel", t: "AZ Deurne", k: 47, la1: 50.8824, lo1: 4.2745, la2: 51.2192, lo2: 4.4653 },
+  { f: "UZ Brussel", t: "AZ Herentals", k: 74, la1: 50.8824, lo1: 4.2745, la2: 51.1766, lo2: 4.8325 },
+  { f: "UZ Brussel", t: "RKV Mechelen", k: 31, la1: 50.8824, lo1: 4.2745, la2: 51.0257, lo2: 4.4776 },
+  { f: "UZ Brussel", t: "AZ Gent", k: 49, la1: 50.8824, lo1: 4.2745, la2: 51.0225, lo2: 3.7108 },
+  { f: "UZ Brussel", t: "ZOL Genk", k: 104, la1: 50.8824, lo1: 4.2745, la2: 50.9656, lo2: 5.5001 },
+  { f: "UZ Brussel", t: "AZ Turnhout", k: 88, la1: 50.8824, lo1: 4.2745, la2: 51.3245, lo2: 4.9486 },
+  { f: "UZ Brussel", t: "Virga Jesse", k: 92, la1: 50.8824, lo1: 4.2745, la2: 50.9307, lo2: 5.3378 },
+  { f: "RKV Mechelen", t: "AZ Gent", k: 78, la1: 51.0257, lo1: 4.4776, la2: 51.0225, lo2: 3.7108 },
+  { f: "RKV Mechelen", t: "ZOL Genk", k: 90, la1: 51.0257, lo1: 4.4776, la2: 50.9656, lo2: 5.5001 },
+  { f: "RKV Mechelen", t: "UZ Leuven", k: 39, la1: 51.0257, lo1: 4.4776, la2: 50.8814, lo2: 4.671 },
+  { f: "RKV Mechelen", t: "UZ Brussel", k: 32, la1: 51.0257, lo1: 4.4776, la2: 50.8824, lo2: 4.2745 },
+  { f: "RKV Mechelen", t: "Jessa Hasselt", k: 77, la1: 51.0257, lo1: 4.4776, la2: 50.9307, lo2: 5.3378 },
+  { f: "RKV Mechelen", t: "Heusden-Zolder St. Franciscus (SFZ)", k: 78, la1: 51.0257, lo1: 4.4776, la2: 51.047, lo2: 5.3153 },
+  { f: "RKV Mechelen", t: "Lier Heilig Hart", k: 16, la1: 51.0257, lo1: 4.4776, la2: 51.1284, lo2: 4.5708 },
+  { f: "RKV Mechelen", t: "Malle AZ Voorkempen", k: 51, la1: 51.0257, lo1: 4.4776, la2: 51.2995, lo2: 4.7295 },
+  { f: "RKV Mechelen", t: "Turnhout St. Elisabeth", k: 64, la1: 51.0257, lo1: 4.4776, la2: 51.321, lo2: 4.936 },
   { f: "RKV Mechelen", t: "Sint-Truiden AZ St. Trudo", k: 78, la1: 51.0257, lo1: 4.4776, la2: 50.8165, lo2: 5.1895 },
-  { f: "RKV Mechelen", t: "Gent UZ", k: 63, la1: 51.0257, lo1: 4.4776, la2: 51.0361, lo2: 3.7284 },
-  { f: "RKV Mechelen", t: "Geel St. Dimpna", k: 39, la1: 51.0257, lo1: 4.4776, la2: 51.1622, lo2: 4.9938 },
-  { f: "RKV Mechelen", t: "Deurne AZ Monica", k: 44, la1: 51.0257, lo1: 4.4776, la2: 51.2192, lo2: 4.4653 },
-  { f: "RKV Mechelen", t: "Bornem AZ Rivierenland", k: 28, la1: 51.0257, lo1: 4.4776, la2: 51.091, lo2: 4.24 },
-  { f: "RKV Mechelen", t: "Brasschaat AZ Klina", k: 35, la1: 51.0257, lo1: 4.4776, la2: 51.2912, lo2: 4.4918 },
-  { f: "UZ Leuven", t: "UZ Brussel", k: 26, la1: 50.8814, lo1: 4.671, la2: 50.8824, lo2: 4.2745 },
-  { f: "UZ Leuven", t: "UZA Edegem", k: 65, la1: 50.8814, lo1: 4.671, la2: 51.1552, lo2: 4.4452 },
-  { f: "UZ Leuven", t: "AZ Diest", k: 28, la1: 50.8814, lo1: 4.671, la2: 50.9894, lo2: 5.0506 },
+  { f: "RKV Mechelen", t: "Gent UZ", k: 78, la1: 51.0257, lo1: 4.4776, la2: 51.0361, lo2: 3.7284 },
+  { f: "RKV Mechelen", t: "Geel St. Dimpna", k: 65, la1: 51.0257, lo1: 4.4776, la2: 51.1622, lo2: 4.9938 },
+  { f: "RKV Mechelen", t: "Deurne AZ Monica", k: 26, la1: 51.0257, lo1: 4.4776, la2: 51.2192, lo2: 4.4653 },
+  { f: "RKV Mechelen", t: "Bornem AZ Rivierenland", k: 22, la1: 51.0257, lo1: 4.4776, la2: 51.091, lo2: 4.24 },
+  { f: "RKV Mechelen", t: "Brasschaat AZ Klina", k: 37, la1: 51.0257, lo1: 4.4776, la2: 51.2912, lo2: 4.4918 },
+  { f: "UZ Leuven", t: "UZ Brussel", k: 35, la1: 50.8814, lo1: 4.671, la2: 50.8824, lo2: 4.2745 },
+  { f: "UZ Leuven", t: "UZA Edegem", k: 52, la1: 50.8814, lo1: 4.671, la2: 51.1552, lo2: 4.4452 },
+  { f: "UZ Leuven", t: "AZ Diest", k: 36, la1: 50.8814, lo1: 4.671, la2: 50.9894, lo2: 5.0506 },
 ];
 
 const nt = () => {
@@ -160,6 +161,92 @@ function tmRouteKey(r) {
     .trim()}\t${String(r.t || "")
     .toLowerCase()
     .trim()}\t${Number(r.k)}`;
+}
+
+function tmNormRouteName(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tmLookupHospitalByName(name) {
+  const n = tmNormRouteName(name);
+  if (!n) return null;
+  let best = null;
+  let bestLen = 0;
+  for (const h of TM_ZIEKENHUIZEN_LIJST) {
+    const hn = tmNormRouteName(h.name);
+    if (!hn || h.lat == null || h.lng == null) continue;
+    if (hn === n) return { lat: h.lat, lng: h.lng };
+    if (n.includes(hn) || hn.includes(n)) {
+      if (hn.length > bestLen) {
+        best = h;
+        bestLen = hn.length;
+      }
+    }
+  }
+  return best ? { lat: best.lat, lng: best.lng } : null;
+}
+
+function tmResolveRitRouteCoords(f, t, mergedRows) {
+  const nf = tmNormRouteName(f);
+  const nt = tmNormRouteName(t);
+  for (const row of mergedRows) {
+    if (!row.__map) continue;
+    const rf = tmNormRouteName(row.f);
+    const rt = tmNormRouteName(row.t);
+    if (rf === nf && rt === nt && row.la1 != null && row.la2 != null)
+      return { a: { lat: row.la1, lng: row.lo1 }, b: { lat: row.la2, lng: row.lo2 } };
+    if (rf === nt && rt === nf && row.la1 != null && row.la2 != null)
+      return { a: { lat: row.la2, lng: row.lo2 }, b: { lat: row.la1, lng: row.lo1 } };
+  }
+  const a = tmLookupHospitalByName(f);
+  const b = tmLookupHospitalByName(t);
+  if (a && b) return { a, b };
+  return null;
+}
+
+/** Zelfde samenvoeging als Ritten → vaste routes (voor km-herberekening). */
+function tmBuildMergedRoutes(D) {
+  const built = ROUTES.map(r => ({ ...r, __map: true }));
+  const custom = (D.xr || []).map(r => {
+    const hasMap =
+      r.la1 != null && r.lo1 != null && r.la2 != null && r.lo2 != null && Number.isFinite(Number(r.la1));
+    return {
+      f: r.f,
+      t: r.t,
+      k: r.k,
+      la1: r.la1,
+      lo1: r.lo1,
+      la2: r.la2,
+      lo2: r.lo2,
+      __map: hasMap,
+      __id: r.id,
+    };
+  });
+  const activeKeys = new Set((D.xr || []).map(tmRouteKey));
+  const arch = (D.xrArch || [])
+    .filter(r => !activeKeys.has(tmRouteKey(r)))
+    .map(r => {
+      const hasMap =
+        r.la1 != null && r.lo1 != null && r.la2 != null && r.lo2 != null && Number.isFinite(Number(r.la1));
+      return {
+        f: r.f,
+        t: r.t,
+        k: r.k,
+        la1: r.la1,
+        lo1: r.lo1,
+        la2: r.la2,
+        lo2: r.lo2,
+        __map: hasMap,
+        __arch: true,
+        id: r.id,
+      };
+    });
+  return [...built, ...custom, ...arch];
 }
 
 /** Ziekenhuizenlijst + eindpunten uit verwijderde eigen routes (Meer → archief). */
@@ -234,6 +321,19 @@ const mo = () => {
   return [toIsoLocal(start), toIsoLocal(end)];
 };
 const iR = (d, s, e) => d >= s && d <= e;
+
+/** Factuur-/export: geldige YYYY-MM-DD range; anders fallback (dashboard-periode). */
+function normFactuurDatumRange(van, tot, fallbackStart, fallbackEnd) {
+  const a = typeof van === "string" ? van.slice(0, 10) : "";
+  const b = typeof tot === "string" ? tot.slice(0, 10) : "";
+  const ok = /^\d{4}-\d{2}-\d{2}$/.test(a) && /^\d{4}-\d{2}-\d{2}$/.test(b);
+  if (!ok) {
+    const fs = String(fallbackStart || "").slice(0, 10);
+    const fe = String(fallbackEnd || "").slice(0, 10);
+    return fs <= fe ? [fs, fe] : [fe, fs];
+  }
+  return a <= b ? [a, b] : [b, a];
+}
 /** Totalen op Home/Financieel: alleen data vanaf deze datum (YYYY-MM-DD). */
 const TM_STATS_FROM = "2026-03-31";
 const statsVenster = d => typeof d === "string" && d.slice(0, 10) >= TM_STATS_FROM;
@@ -776,7 +876,7 @@ function RitMap({ la1, lo1, la2, lo2, labelF, labelT }) {
       maxZoom: 19,
       attribution: "&copy; OpenStreetMap",
     }).addTo(map);
-    L.polyline(
+    let routeLayer = L.polyline(
       [
         [la1, lo1],
         [la2, lo2],
@@ -802,7 +902,18 @@ function RitMap({ la1, lo1, la2, lo2, labelF, labelT }) {
       ],
       { padding: [36, 36], maxZoom: 11 }
     );
+    let cancelled = false;
+    getDrivingRouteWithGeometry({ lat: la1, lng: lo1 }, { lat: la2, lng: lo2 })
+      .then(({ geometry }) => {
+        if (cancelled || !geometry?.length) return;
+        map.removeLayer(routeLayer);
+        const latlngs = geometry.map(([lng, lat]) => [lat, lng]);
+        routeLayer = L.polyline(latlngs, { color: TM_ACC, weight: 4, opacity: 0.92 }).addTo(map);
+        map.fitBounds(routeLayer.getBounds(), { padding: [36, 36], maxZoom: 11 });
+      })
+      .catch(() => {});
     return () => {
+      cancelled = true;
       map.remove();
     };
   }, [la1, lo1, la2, lo2, labelF, labelT]);
@@ -1550,44 +1661,7 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
   const [pane, sPane] = useState("overzicht");
   const [sh, sSh] = useState(false);
   const lastNieuwReq = useRef(0);
-  const mergedRoutes = useMemo(() => {
-    const built = ROUTES.map(r => ({ ...r, __map: true }));
-    const custom = (D.xr || []).map(r => {
-      const hasMap =
-        r.la1 != null && r.lo1 != null && r.la2 != null && r.lo2 != null && Number.isFinite(Number(r.la1));
-      return {
-        f: r.f,
-        t: r.t,
-        k: r.k,
-        la1: r.la1,
-        lo1: r.lo1,
-        la2: r.la2,
-        lo2: r.lo2,
-        __map: hasMap,
-        __id: r.id,
-      };
-    });
-    const activeKeys = new Set((D.xr || []).map(tmRouteKey));
-    const arch = (D.xrArch || [])
-      .filter(r => !activeKeys.has(tmRouteKey(r)))
-      .map(r => {
-        const hasMap =
-          r.la1 != null && r.lo1 != null && r.la2 != null && r.lo2 != null && Number.isFinite(Number(r.la1));
-        return {
-          f: r.f,
-          t: r.t,
-          k: r.k,
-          la1: r.la1,
-          lo1: r.lo1,
-          la2: r.la2,
-          lo2: r.lo2,
-          __map: hasMap,
-          __arch: true,
-          id: r.id,
-        };
-      });
-    return [...built, ...custom, ...arch];
-  }, [D.xr, D.xrArch]);
+  const mergedRoutes = useMemo(() => tmBuildMergedRoutes(D), [D.xr, D.xrArch]);
   const mkIni = () => ({
     ri: -1,
     f: "",
@@ -1601,10 +1675,27 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
     s: "komend",
   });
   const [fm, sM] = useState(mkIni);
+  const [routeKmLaden, setRouteKmLaden] = useState(false);
+  const routeKmReq = useRef(0);
   const pk = i => {
     const r = mergedRoutes[i];
     if (!r) return;
+    const token = ++routeKmReq.current;
     sM(m => ({ ...m, ri: i, f: r.f, t: r.t, k: String(r.k) }));
+    if (r.la1 != null && r.la2 != null && r.lo1 != null && r.lo2 != null && Number.isFinite(Number(r.la1))) {
+      setRouteKmLaden(true);
+      getDrivingRouteKm({ lat: r.la1, lng: r.lo1 }, { lat: r.la2, lng: r.lo2 })
+        .then(({ km }) => {
+          if (token !== routeKmReq.current || km < 1) return;
+          sM(m => (m.ri === i ? { ...m, k: String(km) } : m));
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (token === routeKmReq.current) setRouteKmLaden(false);
+        });
+    } else {
+      setRouteKmLaden(false);
+    }
   };
   const svR = () => {
     if (!fm.f || !fm.t || !fm.k) return;
@@ -1813,6 +1904,11 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
                   value={fm.k}
                   onChange={e => sM(m => ({ ...m, k: e.target.value, ri: -1 }))}
                 />
+                {routeKmLaden && (
+                  <p style={{ fontSize: 11, color: "var(--acc)", margin: "6px 0 0", lineHeight: 1.35 }}>
+                    Rijroute wordt gemeten (kan even duren)…
+                  </p>
+                )}
               </div>
               <div className="tm-fg" style={{ marginTop: 10 }}>
                 <label className="fl">Bon (IHcT…)</label>
@@ -1897,7 +1993,20 @@ function Financieel({ D, pid }) {
   const [p, sP] = useState("month");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [s, e] = gr(p);
+  const [factuurVan, setFactuurVan] = useState(s);
+  const [factuurTot, setFactuurTot] = useState(e);
   const all = D.r;
+
+  useEffect(() => {
+    setFactuurVan(s);
+    setFactuurTot(e);
+  }, [p, s, e]);
+
+  const [fs, fe] = useMemo(
+    () => normFactuurDatumRange(factuurVan, factuurTot, s, e),
+    [factuurVan, factuurTot, s, e]
+  );
+
   const done = all.filter(r => r.s === "voltooid" && iR(r.d, s, e));
   const cancelled = all.filter(r => r.s === "geannuleerd" && iR(r.d, s, e));
   const omzet = done.reduce((a, r) => a + money(r.v), 0);
@@ -1911,9 +2020,17 @@ function Financieel({ D, pid }) {
     () => [...done].sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || ""))),
     [done]
   );
-  const periodFactuurStem = `${p}-${s}`.replace(/[^\w.-]+/g, "_");
+  const doneFactuurChron = useMemo(
+    () =>
+      [...all]
+        .filter(r => r.s === "voltooid" && iR(r.d, fs, fe))
+        .sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || ""))),
+    [all, fs, fe]
+  );
+  const periodFactuurStem = `${fs}_${fe}`.replace(/[^\w.-]+/g, "_");
   const periodLabel =
     p === "day" ? `Dag ${s}` : p === "week" ? `Week ${s} t/m ${e}` : `Maand ${s.slice(0, 7)} (${s} t/m ${e})`;
+  const factuurDatumLabel = fs === fe ? `Dag ${fs}` : `${fs} t/m ${fe}`;
 
   const finBarData = useMemo(
     () => ({
@@ -2009,19 +2126,32 @@ function Financieel({ D, pid }) {
       </div>
 
       <div className="card" style={{ marginTop: 16, padding: 14, background: "var(--s2)" }}>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Factuur (deze periode)</div>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Factuur (datum bereik)</div>
+        <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 10px", lineHeight: 1.45 }}>
+          Dashboard hierboven: <strong>{periodLabel}</strong>. Voor PDF/CSV kies je het <strong>inclusieve</strong>{" "}
+          datumbereik (voltooide ritten op ritdatum). Standaard gelijk aan de gekozen dag/week/maand.
+        </p>
+        <div className="tm-g2" style={{ marginBottom: 12 }}>
+          <div className="tm-fg">
+            <label className="fl">Van (datum)</label>
+            <input type="date" value={factuurVan} onChange={ev => setFactuurVan(ev.target.value)} />
+          </div>
+          <div className="tm-fg">
+            <label className="fl">Tot en met</label>
+            <input type="date" value={factuurTot} onChange={ev => setFactuurTot(ev.target.value)} />
+          </div>
+        </div>
         <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
-          <strong>{periodLabel}</strong> — voltooide ritten: {doneChron.length}. Meerdere bonnen per rit (komma enz.) →
-          meerdere regels op factuur/CSV. PDF gebruikt <strong>Meer → Factuur &amp; logo</strong> (profiel {pid}). Nummer
-          stijgt per PDF.
+          <strong>{factuurDatumLabel}</strong> — {doneFactuurChron.length} voltooide rit(ten) in dit bereik. Meerdere
+          bonnen per rit → meerdere regels. PDF: <strong>Meer → Factuur &amp; logo</strong> (profiel {pid}).
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <button
             type="button"
             className="btn btn-o btn-full"
-            onClick={() => downloadFactuurCsv(doneChron, periodFactuurStem)}
+            onClick={() => downloadFactuurCsv(doneFactuurChron, periodFactuurStem)}
           >
-            CSV (deze periode)
+            CSV (dit bereik)
           </button>
           <button
             type="button"
@@ -2032,7 +2162,7 @@ function Financieel({ D, pid }) {
               try {
                 const S = getFactuurGegevens(pid);
                 const meta = buildTmFactuurMeta(S, pid);
-                const regels = tmRittenNaarFactuurRegels(doneChron);
+                const regels = tmRittenNaarFactuurRegels(doneFactuurChron);
                 const { blob } = await generateFactuurPdfBlob({ factuurSettings: S, meta, regels });
                 triggerPdfDownload(blob, `factuur-${meta.factuurCode}.pdf`);
               } catch (err) {
@@ -2043,7 +2173,7 @@ function Financieel({ D, pid }) {
               }
             }}
           >
-            {pdfBusy ? "PDF…" : "PDF-factuur (deze periode)"}
+            {pdfBusy ? "PDF…" : "PDF-factuur (dit bereik)"}
           </button>
         </div>
       </div>
@@ -2172,6 +2302,19 @@ function Historiek({ D, pid }) {
   const [p, sP] = useState("all");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [s, e] = grExt(p);
+  const [factuurVan, setFactuurVan] = useState(s);
+  const [factuurTot, setFactuurTot] = useState(e);
+
+  useEffect(() => {
+    setFactuurVan(s);
+    setFactuurTot(e);
+  }, [p, s, e]);
+
+  const [fs, fe] = useMemo(
+    () => normFactuurDatumRange(factuurVan, factuurTot, s, e),
+    [factuurVan, factuurTot, s, e]
+  );
+
   const trips = useMemo(() => {
     return [...D.r]
       .filter(r => iR(r.d, s, e))
@@ -2183,6 +2326,13 @@ function Historiek({ D, pid }) {
         .filter(r => r.s === "voltooid")
         .sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || ""))),
     [trips]
+  );
+  const voltooidExportChron = useMemo(
+    () =>
+      [...D.r]
+        .filter(r => r.s === "voltooid" && iR(r.d, fs, fe))
+        .sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || ""))),
+    [D.r, fs, fe]
   );
   const omzet = voltooidChron.reduce((a, r) => a + money(r.v), 0);
   const brandstofL = useMemo(
@@ -2205,6 +2355,8 @@ function Historiek({ D, pid }) {
         : p === "week"
           ? `${s} t/m ${e}`
           : `${s.slice(0, 7)} (${s} t/m ${e})`;
+  const factuurDatumLabel = fs === fe ? `Dag ${fs}` : `${fs} t/m ${fe}`;
+  const exportStem = `${fs}_${fe}`.replace(/[^\w.-]+/g, "_");
 
   return (
     <div>
@@ -2243,20 +2395,30 @@ function Historiek({ D, pid }) {
       </div>
 
       <div className="card" style={{ marginBottom: 16, padding: 14, background: "var(--s2)" }}>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Export voor facturen</div>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Export voor facturen (datum bereik)</div>
+        <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 10px", lineHeight: 1.45 }}>
+          Kies het <strong>inclusieve</strong> datumbereik voor PDF/CSV (voltooide ritten). Standaard gelijk aan de
+          filter hierboven; je mag het vernauwen of verruimen.
+        </p>
+        <div className="tm-g2" style={{ marginBottom: 12 }}>
+          <div className="tm-fg">
+            <label className="fl">Van (datum)</label>
+            <input type="date" value={factuurVan} onChange={ev => setFactuurVan(ev.target.value)} />
+          </div>
+          <div className="tm-fg">
+            <label className="fl">Tot en met</label>
+            <input type="date" value={factuurTot} onChange={ev => setFactuurTot(ev.target.value)} />
+          </div>
+        </div>
         <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
-          Alleen <strong>voltooide</strong> ritten in de gekozen periode ({voltooidChron.length} stuks). CSV voor Excel of
-          je boekhouder; PDF gebruikt je gegevens uit <strong>Meer → Factuur &amp; logo</strong> (TransportMe of klassieke
-          app, zelfde opslag, profiel <code style={{ fontSize: 11 }}>{pid}</code>). Elke PDF verhoogt het factuurnummer.
+          <strong>{factuurDatumLabel}</strong> — {voltooidExportChron.length} voltooide rit(ten). CSV/PDF:{" "}
+          <strong>Meer → Factuur &amp; logo</strong> (profiel <code style={{ fontSize: 11 }}>{pid}</code>).
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <button
             type="button"
             className="btn btn-o btn-full"
-            onClick={() => {
-              const stem = `${p}-${s}`.replace(/[^\w.-]+/g, "_");
-              downloadFactuurCsv(voltooidChron, stem);
-            }}
+            onClick={() => downloadFactuurCsv(voltooidExportChron, exportStem)}
           >
             CSV downloaden (Excel / boekhouder)
           </button>
@@ -2269,7 +2431,7 @@ function Historiek({ D, pid }) {
               try {
                 const S = getFactuurGegevens(pid);
                 const meta = buildTmFactuurMeta(S, pid);
-                const regels = tmRittenNaarFactuurRegels(voltooidChron);
+                const regels = tmRittenNaarFactuurRegels(voltooidExportChron);
                 const { blob } = await generateFactuurPdfBlob({ factuurSettings: S, meta, regels });
                 triggerPdfDownload(blob, `factuur-${meta.factuurCode}.pdf`);
               } catch (err) {
@@ -2757,6 +2919,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   const [ritZoek, setRitZoek] = useState("");
   const [meerToonVoltooide, setMeerToonVoltooide] = useState(false);
   const [bonEdit, setBonEdit] = useState({});
+  const [recalcRittenBusy, setRecalcRittenBusy] = useState(false);
   const backupFileRef = useRef(null);
   const ziekenVoorMeer = useMemo(
     () => ziekenLijstMetArchief(TM_ZIEKENHUIZEN_LIJST, D.xrArch || []),
@@ -2822,31 +2985,59 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
     }
     setErBusy(true);
     try {
-      let km;
-      if (hasOpenRouteApiKey()) {
-        const r = await getRouteDistanceORS(
-          { lat: erA.lat, lng: erA.lng },
-          { lat: erB.lat, lng: erB.lng }
-        );
-        km = r.km;
-      } else {
-        km = geschatteAfstandKm(
-          { lat: erA.lat, lng: erA.lng },
-          { lat: erB.lat, lng: erB.lng }
-        );
-      }
+      const { km } = await getDrivingRouteKm(
+        { lat: erA.lat, lng: erA.lng },
+        { lat: erB.lat, lng: erB.lng }
+      );
       if (km != null && Number.isFinite(km) && km >= 1) setErK(String(km));
       else alert("Kon geen afstand berekenen.");
     } catch (e) {
       console.error(e);
-      const est = geschatteAfstandKm(
-        { lat: erA.lat, lng: erA.lng },
-        { lat: erB.lat, lng: erB.lng }
+      alert(
+        "Geen autoroute over het wegennet opgehaald (internet nodig, geen vogelvlucht). Vul km handmatig of probeer later."
       );
-      if (est != null) setErK(String(est));
-      else alert("Route mislukt. Probeer VITE_OPENROUTE_API_KEY of vul km zelf in.");
     } finally {
       setErBusy(false);
+    }
+  };
+
+  const herberekenAlleRittenKm = async () => {
+    if (
+      !confirm(
+        "Alle ritten opnieuw meten via de rijroute (internet nodig). Km en vergoeding worden bijgewerkt waar vertrek en bestemming herkend worden. Doorgaan?"
+      )
+    ) {
+      return;
+    }
+    setRecalcRittenBusy(true);
+    try {
+      const merged = tmBuildMergedRoutes(D);
+      const nextR = [];
+      for (const r of D.r) {
+        const pair = tmResolveRitRouteCoords(r.f, r.t, merged);
+        if (!pair) {
+          nextR.push(r);
+          continue;
+        }
+        try {
+          const { km } = await getDrivingRouteKm(pair.a, pair.b);
+          if (!km || km < 1) {
+            nextR.push(r);
+            continue;
+          }
+          const v = vergoedingVoorRit(km, r.ti || "", { fromName: r.f, toName: r.t });
+          nextR.push({ ...r, k: km, v: Math.round(v * 100) / 100 });
+        } catch {
+          nextR.push(r);
+        }
+        await new Promise(res => setTimeout(res, 280));
+      }
+      const nd = normData({ ...D, r: nextR });
+      sD(nd);
+      sv(pid, nd);
+      alert("Klaar. Ritten met herkenbare route zijn herberekend; andere bleven ongewijzigd.");
+    } finally {
+      setRecalcRittenBusy(false);
     }
   };
 
@@ -3040,7 +3231,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
       </div>
     );
 
-  const orsAutoRoute = hasOpenRouteApiKey();
+  const googleMapsKey = hasGoogleMapsApiKey();
 
   return (
     <div className="tm-meer-hub">
@@ -3079,6 +3270,19 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Ritten beheren</div>
         <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.4 }}>
           Zoeken, bon aanpassen, rit wissen.
+        </p>
+        <button
+          type="button"
+          className="btn btn-o btn-full"
+          style={{ marginBottom: 12 }}
+          disabled={recalcRittenBusy || D.r.length === 0}
+          onClick={herberekenAlleRittenKm}
+        >
+          {recalcRittenBusy ? "Bezig met herberekenen…" : "Alle ritten: km + vergoeding (rijroute)"}
+        </button>
+        <p style={{ fontSize: 11, color: "var(--tx3)", margin: "-4px 0 12px", lineHeight: 1.35 }}>
+          Zelfde volgorde als elders: Google Maps (indien sleutel), anders OpenRouteService, anders OSRM. Ritten met
+          onbekende namen blijven ongewijzigd.
         </p>
         <div className="tm-fg">
           <label className="fl">Zoeken</label>
@@ -3152,17 +3356,21 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
         <div className="tm-meer-split" role="separator" />
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Eigen vaste routes</div>
         <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.4 }}>
-          OSM-zoeken.{" "}
-          {orsAutoRoute ? (
-            <>Auto-route via OpenRouteService (<code className="tm-meer-code">VITE_OPENROUTE_API_KEY</code>).</>
+          OSM-zoeken. <strong>Afstand</strong> is altijd een <strong>rijroute over echte wegen</strong> (autosnelwegen
+          waar de kaart dat toelaat) — geen vogelvlucht. Standaard via gratis OSRM; met{" "}
+          <code className="tm-meer-code">VITE_GOOGLE_MAPS_API_KEY</code> eerst Google Maps.{" "}
+          {googleMapsKey ? (
+            <span style={{ color: "var(--gn)" }}>Google-sleutel actief.</span>
           ) : (
-            <>Zonder sleutel: ruwe km-schatting — controleer handmatig.</>
+            <>
+              Optioneel: <code className="tm-meer-code">VITE_OPENROUTE_API_KEY</code> als extra fallback.
+            </>
           )}
         </p>
         <PlaatsPicker label="Vertrek" gekozen={erA} onKies={setErA} lijst={ziekenVoorMeer} />
         <PlaatsPicker label="Bestemming" gekozen={erB} onKies={setErB} lijst={ziekenVoorMeer} />
         <button type="button" className="btn btn-o btn-full" style={{ marginBottom: 10 }} disabled={erBusy} onClick={berekenEigenKm}>
-          {erBusy ? "Bezig…" : orsAutoRoute ? "Rijroute (auto) berekenen — km" : "Ruwe km invullen (schatting)"}
+          {erBusy ? "Bezig…" : "Rijroute-km berekenen"}
         </button>
         <div className="tm-fg">
           <label className="fl">Afstand (km)</label>

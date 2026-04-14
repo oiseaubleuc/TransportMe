@@ -151,56 +151,56 @@ export const PRESET_ANCHOR_ZIEKENHUIZEN = [
 /** Beperkte, herkenbare standaardlijst (geen volledige OSM-massa) */
 export const DEFAULT_ZIEKENHUIZEN = [...PRESET_ANCHOR_ZIEKENHUIZEN];
 
-/** Vaste ritten uit ritten_vergoeding_v2.xlsx (29 ritten, km en namen zoals in Excel) */
+/** Vaste ritten — defaultKm = afgeronde OSRM rijroute (driving-car), in lijn met Google Maps. */
 export const DEFAULT_PRESET_ROUTES = [
-  { id: 'preset-excel-1', fromId: 'uz-brussel', toId: 'uz-leuven', fromName: 'UZ Brussel', toName: 'UZ Leuven', defaultKm: 26 },
-  { id: 'preset-excel-2', fromId: 'uz-brussel', toId: 'uza', fromName: 'UZ Brussel', toName: 'UZA (Edegem)', defaultKm: 48 },
-  { id: 'preset-excel-3', fromId: 'uz-brussel', toId: 'deurne', fromName: 'UZ Brussel', toName: 'AZ Deurne (AZ Monica)', defaultKm: 52 },
-  { id: 'preset-excel-4', fromId: 'uz-brussel', toId: 'herentals', fromName: 'UZ Brussel', toName: 'AZ Herentals', defaultKm: 60 },
-  { id: 'preset-excel-5', fromId: 'uz-brussel', toId: 'mechelen', fromName: 'UZ Brussel', toName: 'RKV Mechelen', defaultKm: 33 },
-  { id: 'preset-excel-6', fromId: 'uz-brussel', toId: 'gent', fromName: 'UZ Brussel', toName: 'AZ Gent', defaultKm: 60 },
-  { id: 'preset-excel-7', fromId: 'uz-brussel', toId: 'genk', fromName: 'UZ Brussel', toName: 'ZOL Genk', defaultKm: 85 },
-  { id: 'preset-excel-8', fromId: 'uz-brussel', toId: 'az-turnhout', fromName: 'UZ Brussel', toName: 'AZ Turnhout', defaultKm: 72 },
-  { id: 'preset-excel-9', fromId: 'uz-brussel', toId: 'mol', fromName: 'UZ Brussel', toName: 'AZ Mol (Hart)', defaultKm: 72 },
-  { id: 'preset-excel-10', fromId: 'uz-brussel', toId: 'brasschaat', fromName: 'UZ Brussel', toName: 'AZ Klina Brasschaat', defaultKm: 60 },
-  { id: 'preset-excel-11', fromId: 'uz-brussel', toId: 'virga-jesse', fromName: 'UZ Brussel', toName: 'Virga Jesse Hasselt', defaultKm: 72 },
-  { id: 'preset-excel-11a', fromId: 'virga-jesse', toId: 'genk', fromName: 'Virga Jesse Hasselt', toName: 'ZOL Genk', defaultKm: 30 },
-  { id: 'preset-excel-11b', fromId: 'uz-brussel', toId: 'bornem', fromName: 'UZ Brussel', toName: 'Bornem', defaultKm: 28 },
-  { id: 'preset-excel-11c', fromId: 'uz-brussel', toId: 'sint-truiden', fromName: 'UZ Brussel', toName: 'Sint-Truiden', defaultKm: 76 },
-  { id: 'preset-excel-12', fromId: 'mechelen', toId: 'gent', fromName: 'RKV Mechelen', toName: 'AZ Gent', defaultKm: 65 },
-  { id: 'preset-excel-13', fromId: 'mechelen', toId: 'genk', fromName: 'RKV Mechelen', toName: 'ZOL Genk', defaultKm: 60 },
-  { id: 'preset-excel-14', fromId: 'mechelen', toId: 'uz-leuven', fromName: 'RKV Mechelen', toName: 'UZ Leuven', defaultKm: 30 },
+  { id: 'preset-excel-1', fromId: 'uz-brussel', toId: 'uz-leuven', fromName: 'UZ Brussel', toName: 'UZ Leuven', defaultKm: 36 },
+  { id: 'preset-excel-2', fromId: 'uz-brussel', toId: 'uza', fromName: 'UZ Brussel', toName: 'UZA (Edegem)', defaultKm: 41 },
+  { id: 'preset-excel-3', fromId: 'uz-brussel', toId: 'deurne', fromName: 'UZ Brussel', toName: 'AZ Deurne (AZ Monica)', defaultKm: 47 },
+  { id: 'preset-excel-4', fromId: 'uz-brussel', toId: 'herentals', fromName: 'UZ Brussel', toName: 'AZ Herentals', defaultKm: 74 },
+  { id: 'preset-excel-5', fromId: 'uz-brussel', toId: 'mechelen', fromName: 'UZ Brussel', toName: 'RKV Mechelen', defaultKm: 31 },
+  { id: 'preset-excel-6', fromId: 'uz-brussel', toId: 'gent', fromName: 'UZ Brussel', toName: 'AZ Gent', defaultKm: 49 },
+  { id: 'preset-excel-7', fromId: 'uz-brussel', toId: 'genk', fromName: 'UZ Brussel', toName: 'ZOL Genk', defaultKm: 104 },
+  { id: 'preset-excel-8', fromId: 'uz-brussel', toId: 'az-turnhout', fromName: 'UZ Brussel', toName: 'AZ Turnhout', defaultKm: 88 },
+  { id: 'preset-excel-9', fromId: 'uz-brussel', toId: 'mol', fromName: 'UZ Brussel', toName: 'AZ Mol (Hart)', defaultKm: 99 },
+  { id: 'preset-excel-10', fromId: 'uz-brussel', toId: 'brasschaat', fromName: 'UZ Brussel', toName: 'AZ Klina Brasschaat', defaultKm: 58 },
+  { id: 'preset-excel-11', fromId: 'uz-brussel', toId: 'virga-jesse', fromName: 'UZ Brussel', toName: 'Virga Jesse Hasselt', defaultKm: 92 },
+  { id: 'preset-excel-11a', fromId: 'virga-jesse', toId: 'genk', fromName: 'Virga Jesse Hasselt', toName: 'ZOL Genk', defaultKm: 15 },
+  { id: 'preset-excel-11b', fromId: 'uz-brussel', toId: 'bornem', fromName: 'UZ Brussel', toName: 'Bornem', defaultKm: 34 },
+  { id: 'preset-excel-11c', fromId: 'uz-brussel', toId: 'sint-truiden', fromName: 'UZ Brussel', toName: 'Sint-Truiden', defaultKm: 75 },
+  { id: 'preset-excel-12', fromId: 'mechelen', toId: 'gent', fromName: 'RKV Mechelen', toName: 'AZ Gent', defaultKm: 78 },
+  { id: 'preset-excel-13', fromId: 'mechelen', toId: 'genk', fromName: 'RKV Mechelen', toName: 'ZOL Genk', defaultKm: 90 },
+  { id: 'preset-excel-14', fromId: 'mechelen', toId: 'uz-leuven', fromName: 'RKV Mechelen', toName: 'UZ Leuven', defaultKm: 39 },
   {
     id: 'preset-excel-15',
     fromId: 'mechelen',
     toId: 'uza',
     fromName: 'RKV Mechelen',
     toName: 'UZA (Edegem)',
-    defaultKm: 28,
+    defaultKm: 17,
     /** Forfait RIZIV/RKV (enkel deze richting); overschrijft km-tarief bij nieuwe rit */
     forfaitVergoeding: 35,
   },
-  { id: 'preset-excel-16', fromId: 'mechelen', toId: 'herentals', fromName: 'RKV Mechelen', toName: 'AZ Herentals', defaultKm: 30 },
-  { id: 'preset-excel-17', fromId: 'mechelen', toId: 'uz-brussel', fromName: 'RKV Mechelen', toName: 'UZ Brussel', defaultKm: 33 },
-  { id: 'preset-excel-18', fromId: 'mechelen', toId: 'heusden-zolder', fromName: 'RKV Mechelen', toName: 'ZOL Heusden-Zolder', defaultKm: 55 },
-  { id: 'preset-excel-19', fromId: 'mechelen', toId: 'az-maria-middelares-gent', fromName: 'RKV Mechelen', toName: 'AZ Maria Middelares (Gent)', defaultKm: 70 },
-  { id: 'preset-excel-20', fromId: 'mechelen', toId: 'jessa-hasselt', fromName: 'RKV Mechelen', toName: 'Jessa Hasselt', defaultKm: 52 },
-  { id: 'preset-excel-21', fromId: 'mechelen', toId: 'geel', fromName: 'RKV Mechelen', toName: 'AZ Geel', defaultKm: 38 },
-  { id: 'preset-excel-22', fromId: 'mechelen', toId: 'az-turnhout', fromName: 'RKV Mechelen', toName: 'AZ Turnhout', defaultKm: 45 },
-  { id: 'preset-excel-23', fromId: 'mechelen', toId: 'mol', fromName: 'RKV Mechelen', toName: 'AZ Mol', defaultKm: 50 },
-  { id: 'preset-excel-24', fromId: 'mechelen', toId: 'lier', fromName: 'RKV Mechelen', toName: 'AZ Lier', defaultKm: 18 },
-  { id: 'preset-excel-25', fromId: 'mechelen', toId: 'brasschaat', fromName: 'RKV Mechelen', toName: 'Brasschaat AZ Klina', defaultKm: 35 },
-  { id: 'preset-excel-26', fromId: 'az-maria-middelares-deinze', toId: 'az-maria-middelares-gent', fromName: 'AZ Maria Middelares Deinze', toName: 'AZ Maria Middelares Gent', defaultKm: 22 },
-  { id: 'preset-excel-27', fromId: 'uz-leuven', toId: 'uz-brussel', fromName: 'UZ Leuven', toName: 'UZ Brussel', defaultKm: 26 },
-  { id: 'preset-excel-28', fromId: 'uz-leuven', toId: 'uza', fromName: 'UZ Leuven', toName: 'UZA (Edegem)', defaultKm: 65 },
-  { id: 'preset-excel-29', fromId: 'uz-leuven', toId: 'diest', fromName: 'UZ Leuven', toName: 'AZ Diest', defaultKm: 28 },
+  { id: 'preset-excel-16', fromId: 'mechelen', toId: 'herentals', fromName: 'RKV Mechelen', toName: 'AZ Herentals', defaultKm: 52 },
+  { id: 'preset-excel-17', fromId: 'mechelen', toId: 'uz-brussel', fromName: 'RKV Mechelen', toName: 'UZ Brussel', defaultKm: 32 },
+  { id: 'preset-excel-18', fromId: 'mechelen', toId: 'heusden-zolder', fromName: 'RKV Mechelen', toName: 'ZOL Heusden-Zolder', defaultKm: 76 },
+  { id: 'preset-excel-19', fromId: 'mechelen', toId: 'az-maria-middelares-gent', fromName: 'RKV Mechelen', toName: 'AZ Maria Middelares (Gent)', defaultKm: 79 },
+  { id: 'preset-excel-20', fromId: 'mechelen', toId: 'jessa-hasselt', fromName: 'RKV Mechelen', toName: 'Jessa Hasselt', defaultKm: 77 },
+  { id: 'preset-excel-21', fromId: 'mechelen', toId: 'geel', fromName: 'RKV Mechelen', toName: 'AZ Geel', defaultKm: 66 },
+  { id: 'preset-excel-22', fromId: 'mechelen', toId: 'az-turnhout', fromName: 'RKV Mechelen', toName: 'AZ Turnhout', defaultKm: 66 },
+  { id: 'preset-excel-23', fromId: 'mechelen', toId: 'mol', fromName: 'RKV Mechelen', toName: 'AZ Mol', defaultKm: 76 },
+  { id: 'preset-excel-24', fromId: 'mechelen', toId: 'lier', fromName: 'RKV Mechelen', toName: 'AZ Lier', defaultKm: 17 },
+  { id: 'preset-excel-25', fromId: 'mechelen', toId: 'brasschaat', fromName: 'RKV Mechelen', toName: 'Brasschaat AZ Klina', defaultKm: 37 },
+  { id: 'preset-excel-26', fromId: 'az-maria-middelares-deinze', toId: 'az-maria-middelares-gent', fromName: 'AZ Maria Middelares Deinze', toName: 'AZ Maria Middelares Gent', defaultKm: 13 },
+  { id: 'preset-excel-27', fromId: 'uz-leuven', toId: 'uz-brussel', fromName: 'UZ Leuven', toName: 'UZ Brussel', defaultKm: 35 },
+  { id: 'preset-excel-28', fromId: 'uz-leuven', toId: 'uza', fromName: 'UZ Leuven', toName: 'UZA (Edegem)', defaultKm: 52 },
+  { id: 'preset-excel-29', fromId: 'uz-leuven', toId: 'diest', fromName: 'UZ Leuven', toName: 'AZ Diest', defaultKm: 36 },
   {
     id: 'preset-mechel-sfz',
     fromId: 'mechelen',
     toId: 'st-franciscus-heusden',
     fromName: 'RKV Mechelen',
     toName: 'Heusden-Zolder St. Franciscus (SFZ)',
-    defaultKm: 52,
+    defaultKm: 78,
   },
   {
     id: 'preset-mechel-hh-lier',
@@ -208,7 +208,7 @@ export const DEFAULT_PRESET_ROUTES = [
     toId: 'hh-lier',
     fromName: 'RKV Mechelen',
     toName: 'Lier Heilig Hart',
-    defaultKm: 22,
+    defaultKm: 16,
   },
   {
     id: 'preset-mechel-voorkempen',
@@ -216,7 +216,7 @@ export const DEFAULT_PRESET_ROUTES = [
     toId: 'az-voorkempen-malle',
     fromName: 'RKV Mechelen',
     toName: 'Malle AZ Voorkempen',
-    defaultKm: 38,
+    defaultKm: 51,
   },
   {
     id: 'preset-mechel-st-elisabeth',
@@ -224,7 +224,7 @@ export const DEFAULT_PRESET_ROUTES = [
     toId: 'st-elisabeth-turnhout',
     fromName: 'RKV Mechelen',
     toName: 'Turnhout St. Elisabeth',
-    defaultKm: 46,
+    defaultKm: 64,
   },
   {
     id: 'preset-mechel-st-trudo',
@@ -240,7 +240,7 @@ export const DEFAULT_PRESET_ROUTES = [
     toId: 'uz-gent',
     fromName: 'RKV Mechelen',
     toName: 'Gent UZ',
-    defaultKm: 63,
+    defaultKm: 78,
   },
   {
     id: 'preset-mechel-st-dimpna',
@@ -248,7 +248,7 @@ export const DEFAULT_PRESET_ROUTES = [
     toId: 'az-st-dimpna-geel',
     fromName: 'RKV Mechelen',
     toName: 'Geel St. Dimpna',
-    defaultKm: 39,
+    defaultKm: 65,
   },
   {
     id: 'preset-mechel-monica-deurne',
@@ -256,7 +256,7 @@ export const DEFAULT_PRESET_ROUTES = [
     toId: 'az-monica-deurne',
     fromName: 'RKV Mechelen',
     toName: 'Deurne AZ Monica',
-    defaultKm: 44,
+    defaultKm: 26,
   },
   {
     id: 'preset-mechel-rivierenland',
@@ -264,9 +264,15 @@ export const DEFAULT_PRESET_ROUTES = [
     toId: 'az-rivierenland-bornem',
     fromName: 'RKV Mechelen',
     toName: 'Bornem AZ Rivierenland',
-    defaultKm: 28,
+    defaultKm: 22,
   },
 ];
+
+/** Zelfde rijrouting als in Google Maps (Directions in Maps JavaScript API). Vereist billing in Google Cloud. */
+export const GOOGLE_MAPS_API_KEY =
+  typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_MAPS_API_KEY
+    ? String(import.meta.env.VITE_GOOGLE_MAPS_API_KEY).trim()
+    : '';
 
 /** Gratis: OpenRouteService API-sleutel (https://openrouteservice.org/dev/#/signup) voor route en afstand */
 export const ORS_API_KEY =
@@ -285,4 +291,8 @@ export const MAPLIBRE_STYLE_URL =
 
 export function getOpenRouteApiKey() {
   return ORS_API_KEY;
+}
+
+export function hasGoogleMapsApiKey() {
+  return !!GOOGLE_MAPS_API_KEY;
 }
