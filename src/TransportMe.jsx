@@ -490,6 +490,32 @@ function normBonFromScan(text) {
   return (m ? m[0] : s).slice(0, 48);
 }
 
+/** Meerdere transportbonnen: komma, puntkomma, slash, pijp of regeleinde. */
+function parseBonNummers(bon) {
+  const raw = bon != null ? String(bon).trim() : "";
+  if (!raw) return [];
+  return raw
+    .split(/[,;/|\n\r]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+/** Verdeel een ritbedrag over n factuurregels (centen correct op de laatste lijn). */
+function splitBedragInLijnen(totaalEuro, n) {
+  if (n <= 0) return [];
+  const cents = Math.round(money(totaalEuro) * 100);
+  if (!Number.isFinite(cents)) return Array(n).fill(0);
+  if (cents <= 0) return Array(n).fill(0);
+  const base = Math.floor(cents / n);
+  const rest = cents - base * n;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const c = base + (i === n - 1 ? rest : 0);
+    out.push(c / 100);
+  }
+  return out;
+}
+
 /** Voltooien: bon typen of scannen (lopend/komend → voltooid). */
 function VoltooiBonSheet({ rit, onBevestig, onAnnuleer }) {
   const [bon, setBon] = useState(() => (rit?.bon != null ? String(rit.bon) : ""));
@@ -564,10 +590,14 @@ function VoltooiBonSheet({ rit, onBevestig, onAnnuleer }) {
               autoCapitalize="characters"
               autoCorrect="off"
               spellCheck={false}
-              placeholder="IHcT…"
+              placeholder="IHcT… of meerdere, gescheiden door komma"
               value={bon}
               onChange={e => setBon(e.target.value)}
             />
+            <p style={{ fontSize: 11, color: "var(--tx3)", margin: "6px 0 0", lineHeight: 1.35 }}>
+              Meerdere bonnen voor dezelfde rit? Scheid met komma, puntkomma of nieuwe regel — factuur en CSV maken dan
+              één regel per bon (bedrag verdeeld).
+            </p>
           </div>
           <div className="tm-bon-scan-row">
             <button type="button" className="btn btn-o btn-full" onClick={startScan}>
@@ -1868,12 +1898,12 @@ function Financieel({ D, pid }) {
   const [pdfBusy, setPdfBusy] = useState(false);
   const [s, e] = gr(p);
   const all = D.r;
-  const done = all.filter(r => r.s === "voltooid" && statsVenster(r.d) && iR(r.d, s, e));
-  const cancelled = all.filter(r => r.s === "geannuleerd" && statsVenster(r.d) && iR(r.d, s, e));
+  const done = all.filter(r => r.s === "voltooid" && iR(r.d, s, e));
+  const cancelled = all.filter(r => r.s === "geannuleerd" && iR(r.d, s, e));
   const omzet = done.reduce((a, r) => a + money(r.v), 0);
   const totKm = done.reduce((a, r) => a + Number(r.k) || 0, 0);
-  const brandstof = D.b.filter(b => statsVenster(b.d) && iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0);
-  const overig = (D.o || []).filter(x => statsVenster(x.d) && iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
+  const brandstof = D.b.filter(b => iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0);
+  const overig = (D.o || []).filter(x => iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
   const kosten = brandstof + overig;
   const winst = omzet - kosten;
   const verlies = cancelled.reduce((a, r) => a + money(r.v), 0);
@@ -1939,8 +1969,8 @@ function Financieel({ D, pid }) {
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Financieel overzicht</h1>
       <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 14px", lineHeight: 1.4 }}>
-        Periode = lokale datum. Totalen alleen vanaf <strong>{TM_STATS_FROM.split("-").reverse().join("/")}</strong>. Bedragen =
-        opgeslagen ritten en kosten.
+        Periode = lokale datum. Alle voltooide ritten en kosten in de gekozen periode. PDF en CSV zijn altijd te
+        downloaden (ook zonder ritten: lege export of factuur €&nbsp;0).
       </p>
       <PP v={p} set={sP} />
 
@@ -1981,14 +2011,14 @@ function Financieel({ D, pid }) {
       <div className="card" style={{ marginTop: 16, padding: 14, background: "var(--s2)" }}>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Factuur (deze periode)</div>
         <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
-          <strong>{periodLabel}</strong> — alleen voltooide ritten ({doneChron.length}). PDF gebruikt{" "}
-          <strong>Meer → Factuur &amp; logo</strong> in deze app (profiel {pid}). Nummer stijgt per PDF.
+          <strong>{periodLabel}</strong> — voltooide ritten: {doneChron.length}. Meerdere bonnen per rit (komma enz.) →
+          meerdere regels op factuur/CSV. PDF gebruikt <strong>Meer → Factuur &amp; logo</strong> (profiel {pid}). Nummer
+          stijgt per PDF.
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <button
             type="button"
             className="btn btn-o btn-full"
-            disabled={doneChron.length === 0}
             onClick={() => downloadFactuurCsv(doneChron, periodFactuurStem)}
           >
             CSV (deze periode)
@@ -1996,7 +2026,7 @@ function Financieel({ D, pid }) {
           <button
             type="button"
             className="btn btn-p btn-full"
-            disabled={doneChron.length === 0 || pdfBusy}
+            disabled={pdfBusy}
             onClick={async () => {
               setPdfBusy(true);
               try {
@@ -2075,20 +2105,31 @@ function buildTmFactuurMeta(settings, profileId) {
 
 function tmRittenNaarFactuurRegels(ritten) {
   const sorted = [...ritten].sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
-  return sorted.map(r => {
+  const regels = [];
+  for (const r of sorted) {
     const bedrag = money(r.v);
-    const bon = r.bon != null ? String(r.bon).trim() : "";
-    return {
-      titel: "Dienstverlening: ziekenhuisvervoer",
-      prijsExcl: bedrag,
-      totaal: bedrag,
-      datumWeergave: `${r.d}${r.ti ? " · " + r.ti : ""}`,
-      orderBon: bon || "—",
-      ophaal: String(r.f || "").trim() || "—",
-      aflevering: String(r.t || "").trim() || "—",
-      km: r.k != null && Number.isFinite(Number(r.k)) ? String(r.k) : "—",
-    };
-  });
+    const tokens = parseBonNummers(r.bon);
+    const n = tokens.length > 0 ? tokens.length : 1;
+    const parts = splitBedragInLijnen(bedrag, n);
+    const datumWeergave = `${r.d}${r.ti ? " · " + r.ti : ""}`;
+    const ophaal = String(r.f || "").trim() || "—";
+    const aflevering = String(r.t || "").trim() || "—";
+    const km = r.k != null && Number.isFinite(Number(r.k)) ? String(r.k) : "—";
+    for (let i = 0; i < n; i++) {
+      const deel = parts[i] ?? 0;
+      regels.push({
+        titel: "Dienstverlening: ziekenhuisvervoer",
+        prijsExcl: deel,
+        totaal: deel,
+        datumWeergave,
+        orderBon: tokens.length ? tokens[i] : "—",
+        ophaal,
+        aflevering,
+        km,
+      });
+    }
+  }
+  return regels;
 }
 
 function downloadFactuurCsv(ritten, fileStem) {
@@ -2098,17 +2139,22 @@ function downloadFactuurCsv(ritten, fileStem) {
   t += row(["Datum", "Tijd", "Van", "Naar", "Km", "Bon", "Bedrag_EUR", "Chauffeur", "Voertuig"]);
   const sorted = [...ritten].sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
   for (const r of sorted) {
-    t += row([
-      r.d,
-      r.ti || "",
-      r.f,
-      r.t,
-      r.k,
-      r.bon || "",
-      money(r.v).toFixed(2).replace(".", ","),
-      r.dr || "",
-      r.ca || "",
-    ]);
+    const tokens = parseBonNummers(r.bon);
+    const n = tokens.length > 0 ? tokens.length : 1;
+    const parts = splitBedragInLijnen(money(r.v), n);
+    for (let i = 0; i < n; i++) {
+      t += row([
+        r.d,
+        r.ti || "",
+        r.f,
+        r.t,
+        r.k,
+        tokens.length ? tokens[i] : "",
+        (parts[i] ?? 0).toFixed(2).replace(".", ","),
+        r.dr || "",
+        r.ca || "",
+      ]);
+    }
   }
   const blob = new Blob([t], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a");
@@ -2207,7 +2253,6 @@ function Historiek({ D, pid }) {
           <button
             type="button"
             className="btn btn-o btn-full"
-            disabled={voltooidChron.length === 0}
             onClick={() => {
               const stem = `${p}-${s}`.replace(/[^\w.-]+/g, "_");
               downloadFactuurCsv(voltooidChron, stem);
@@ -2218,7 +2263,7 @@ function Historiek({ D, pid }) {
           <button
             type="button"
             className="btn btn-p btn-full"
-            disabled={voltooidChron.length === 0 || pdfBusy}
+            disabled={pdfBusy}
             onClick={async () => {
               setPdfBusy(true);
               try {
