@@ -16,6 +16,7 @@ import {
 import { Doughnut, Bar, Line } from "react-chartjs-2";
 import "./transportme-theme.css";
 import { exportTransporteurData, applyImportPayload } from "./js/dataBackup.js";
+import { recognizeBonImage, terminateBonOcrWorker } from "./js/bonFotoOcr.js";
 import { getFactuurGegevens, nextFactuurVolgNummer, saveFactuurGegevens } from "./js/storage.js";
 import { generateFactuurPdfBlob, triggerPdfDownload } from "./js/invoicePdf.js";
 import { vergoedingVoorRit } from "./js/calculations.js";
@@ -598,6 +599,21 @@ function parseBonNummers(bon) {
     .split(/[,;/|\n\r]+/)
     .map(s => s.trim())
     .filter(Boolean);
+}
+
+/** Voegt OCR-bonnen toe aan bestaande bon-tekst (geen duplicaten). */
+function mergeBonField(existing, newCodes) {
+  const tokens = parseBonNummers(existing);
+  const seen = new Set(tokens.map(t => t.toUpperCase()));
+  const add = [];
+  for (const c of newCodes) {
+    const n = normBonFromScan(c);
+    if (!n || seen.has(n.toUpperCase())) continue;
+    seen.add(n.toUpperCase());
+    add.push(n);
+  }
+  if (add.length === 0) return String(existing || "").trim();
+  return [...tokens, ...add].join(", ");
 }
 
 /** Verdeel een ritbedrag over n factuurregels (centen correct op de laatste lijn). */
@@ -2298,7 +2314,139 @@ function downloadFactuurCsv(ritten, fileStem) {
   URL.revokeObjectURL(a.href);
 }
 
-function Historiek({ D, pid }) {
+/** Voltooide rit in Historiek: km en vergoeding handmatig corrigeren. `handmatigKv` beschermt tegen bulk-herberekenen (Meer). */
+function HistoriekVoltooideRitKaart({ r, D, pid, sD }) {
+  const [open, setOpen] = useState(false);
+  const [kmStr, setKmStr] = useState("");
+  const [vStr, setVStr] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setKmStr(String(r.k ?? ""));
+    setVStr(money(r.v).toFixed(2).replace(".", ","));
+  }, [open, r.id, r.k, r.v]);
+
+  const mergeRit = useCallback(
+    updater => {
+      const rr = D.r.map(x => (x.id === r.id ? updater(x) : x));
+      const nd = normData({ ...D, r: rr });
+      sD(nd);
+      sv(pid, nd);
+    },
+    [D, r.id, pid, sD]
+  );
+
+  const onSaveHandmatig = () => {
+    const k = parseLooseNumber(kmStr);
+    const v = parseLooseNumber(vStr);
+    if (!Number.isFinite(k) || k < 1) {
+      alert("Vul een geldige afstand (min. 1 km).");
+      return;
+    }
+    if (!Number.isFinite(v) || v < 0) {
+      alert("Vul een geldig bedrag (€).");
+      return;
+    }
+    const kInt = Math.max(1, Math.round(k));
+    mergeRit(cur => ({
+      ...cur,
+      k: kInt,
+      v: Math.round(v * 100) / 100,
+      handmatigKv: true,
+    }));
+    setOpen(false);
+  };
+
+  const onApplyTarief = () => {
+    const k = parseLooseNumber(kmStr);
+    if (!Number.isFinite(k) || k < 1) {
+      alert("Vul eerst een geldige afstand (km).");
+      return;
+    }
+    const kInt = Math.max(1, Math.round(k));
+    const v = tmVergoeding(r.f, r.t, kInt, r.ti);
+    const rounded = Math.round(v * 100) / 100;
+    mergeRit(cur => {
+      const next = { ...cur, k: kInt, v: rounded };
+      delete next.handmatigKv;
+      return next;
+    });
+    setOpen(false);
+  };
+
+  return (
+    <div className="card card-l" style={{ marginBottom: 8, padding: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 12, color: "var(--tx3)" }}>
+            {r.d}
+            {r.ti ? " · " + r.ti : ""}
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
+            {r.f} → {r.t}
+          </div>
+          {r.bon && <div style={{ fontSize: 11, color: "var(--tx2)", marginTop: 2 }}>Bon {r.bon}</div>}
+          {r.handmatigKv && (
+            <div style={{ fontSize: 11, color: "var(--am)", marginTop: 6, lineHeight: 1.35 }}>
+              Handmatige km/€ — niet overschreven door &quot;Alle ritten herberekenen&quot; in Meer.
+            </div>
+          )}
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <Badge s={r.s} />
+          <div style={{ fontSize: 16, fontWeight: 700, marginTop: 6 }} className="acc">
+            {E(r.v)}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--tx3)" }}>{r.k} km</div>
+        </div>
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <button type="button" className="btn btn-o" style={{ fontSize: 12, padding: "6px 12px" }} onClick={() => setOpen(o => !o)}>
+          {open ? "Sluiten" : "Km & € aanpassen"}
+        </button>
+      </div>
+      {open && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--br)" }}>
+          <p style={{ fontSize: 11, color: "var(--tx2)", margin: "0 0 10px", lineHeight: 1.4 }}>
+            Aangepaste waarden tellen mee in Home, Financieel, factuur-PDF/CSV en export.
+          </p>
+          <div className="tm-g2" style={{ marginBottom: 10 }}>
+            <div className="tm-fg">
+              <label className="fl">Km</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={kmStr}
+                onChange={ev => setKmStr(ev.target.value)}
+                autoComplete="off"
+              />
+            </div>
+            <div className="tm-fg">
+              <label className="fl">Vergoeding (€)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={vStr}
+                onChange={ev => setVStr(ev.target.value)}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <button type="button" className="btn btn-p" onClick={onSaveHandmatig}>
+              Opslaan (handmatig)
+            </button>
+            <button type="button" className="btn btn-o" onClick={onApplyTarief}>
+              € volgens tarief (op basis van km)
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Historiek({ D, pid, sD }) {
   const [p, sP] = useState("all");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [s, e] = grExt(p);
@@ -2363,7 +2511,8 @@ function Historiek({ D, pid }) {
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Historiek</h1>
       <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 14px", lineHeight: 1.45 }}>
         Elk bedrag komt rechtstreeks uit je opgeslagen ritten en kosten. Totalen = <strong>som van de lijnen</strong>{" "}
-        (zelfde rekenregels als Financieel).
+        (zelfde rekenregels als Financieel). Bij <strong>voltooide</strong> ritten kun je onderaan de kaart{" "}
+        <strong>Km &amp; € aanpassen</strong> als de automatische meting of het tarief niet klopt.
       </p>
       <PPh v={p} set={sP} />
       <div className="card tm-rit-sum" style={{ marginBottom: 16 }}>
@@ -2449,29 +2598,33 @@ function Historiek({ D, pid }) {
 
       <div className="sh">Ritten ({trips.length})</div>
       {trips.length === 0 && <p className="tm-em">Geen ritten in deze periode.</p>}
-      {trips.map(r => (
-        <div key={r.id} className="card card-l" style={{ marginBottom: 8, padding: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: "var(--tx3)" }}>
-                {r.d}
-                {r.ti ? " · " + r.ti : ""}
+      {trips.map(r =>
+        r.s === "voltooid" ? (
+          <HistoriekVoltooideRitKaart key={r.id} r={r} D={D} pid={pid} sD={sD} />
+        ) : (
+          <div key={r.id} className="card card-l" style={{ marginBottom: 8, padding: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: "var(--tx3)" }}>
+                  {r.d}
+                  {r.ti ? " · " + r.ti : ""}
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
+                  {r.f} → {r.t}
+                </div>
+                {r.bon && <div style={{ fontSize: 11, color: "var(--tx2)", marginTop: 2 }}>Bon {r.bon}</div>}
               </div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
-                {r.f} → {r.t}
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <Badge s={r.s} />
+                <div style={{ fontSize: 16, fontWeight: 700, marginTop: 6 }} className="acc">
+                  {E(r.v)}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--tx3)" }}>{r.k} km</div>
               </div>
-              {r.bon && <div style={{ fontSize: 11, color: "var(--tx2)", marginTop: 2 }}>Bon {r.bon}</div>}
-            </div>
-            <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <Badge s={r.s} />
-              <div style={{ fontSize: 16, fontWeight: 700, marginTop: 6 }} className="acc">
-                {E(r.v)}
-              </div>
-              <div style={{ fontSize: 11, color: "var(--tx3)" }}>{r.k} km</div>
             </div>
           </div>
-        </div>
-      ))}
+        )
+      )}
 
       <div className="sh" style={{ marginTop: 16 }}>
         Tankbeurten ({brandstofL.length})
@@ -2910,6 +3063,370 @@ function FactuurGegevensScherm({ pid }) {
   );
 }
 
+const BON_FOTO_MAX_FILES = 35;
+const BON_FOTO_MAX_MB = 14;
+
+function suggestRitIdFromOcr(codes, dates, pool, bonAlreadyUsed) {
+  const fresh = codes.filter(c => {
+    const n = normBonFromScan(c);
+    return n && !bonAlreadyUsed.has(n.toUpperCase());
+  });
+  if (fresh.length === 0) return "";
+  const byDate =
+    dates.length > 0 ? pool.filter(r => dates.some(d => String(r.d).slice(0, 10) === d)) : pool;
+  const p = byDate.length > 0 ? byDate : pool;
+  const zonder = p.filter(r => !String(r.bon || "").trim());
+  if (fresh.length >= 1 && zonder.length === 1) return zonder[0].id;
+  if (fresh.length === 1 && dates.length === 1) {
+    const onDay = p.filter(r => r.d === dates[0]);
+    const z2 = onDay.filter(r => !String(r.bon || "").trim());
+    if (z2.length === 1) return z2[0].id;
+  }
+  return "";
+}
+
+/** Foto’s van transportbonnen: OCR (IHcT) en koppelen aan voltooide ritten voor factuur/CSV. */
+function BonFotoImportSection({ D, sD, pid }) {
+  const [van, setVan] = useState(() => mo()[0]);
+  const [tot, setTot] = useState(() => mo()[1]);
+  const [rows, setRows] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInpRef = useRef(null);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+
+  useEffect(
+    () => () => {
+      rowsRef.current.forEach(row => {
+        if (row.previewUrl) URL.revokeObjectURL(row.previewUrl);
+      });
+      terminateBonOcrWorker().catch(() => {});
+    },
+    []
+  );
+
+  const voltooidePool = useMemo(
+    () =>
+      [...D.r]
+        .filter(r => r.s === "voltooid" && iR(r.d, van, tot))
+        .sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || ""))),
+    [D.r, van, tot]
+  );
+
+  const bonAlreadyUsed = useMemo(() => {
+    const s = new Set();
+    for (const r of D.r) {
+      for (const b of parseBonNummers(r.bon)) s.add(b.toUpperCase());
+    }
+    return s;
+  }, [D.r]);
+
+  const addImageFiles = useCallback(fileList => {
+    const arr = Array.from(fileList || []).filter(f => f.type.startsWith("image/"));
+    if (arr.length === 0) return;
+    const tooBig = arr.filter(f => f.size > BON_FOTO_MAX_MB * 1024 * 1024);
+    if (tooBig.length) {
+      alert(`Eén of meer bestanden zijn groter dan ${BON_FOTO_MAX_MB} MB — niet toegevoegd.`);
+    }
+    const ok = arr.filter(f => f.size <= BON_FOTO_MAX_MB * 1024 * 1024);
+    setRows(cur => {
+      const room = BON_FOTO_MAX_FILES - cur.length;
+      if (room <= 0) {
+        alert(`Maximum ${BON_FOTO_MAX_FILES} foto’s. Verwijder eerst rijen.`);
+        return cur;
+      }
+      const take = ok.slice(0, room);
+      if (ok.length > room) alert(`Alleen de eerste ${room} foto’s toegevoegd (limiet ${BON_FOTO_MAX_FILES}).`);
+      const next = [...cur];
+      for (const file of take) {
+        next.push({
+          id: ui(),
+          file,
+          previewUrl: URL.createObjectURL(file),
+          status: "queued",
+          text: "",
+          codes: [],
+          dates: [],
+          selectedRitId: "",
+          errMsg: "",
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const removeRow = id => {
+    setRows(cur => {
+      const row = cur.find(r => r.id === id);
+      if (row?.previewUrl) URL.revokeObjectURL(row.previewUrl);
+      return cur.filter(r => r.id !== id);
+    });
+  };
+
+  const clearRows = () => {
+    setRows(cur => {
+      cur.forEach(r => {
+        if (r.previewUrl) URL.revokeObjectURL(r.previewUrl);
+      });
+      return [];
+    });
+  };
+
+  const setRitForRow = (rowId, ritId) => {
+    setRows(cur => cur.map(r => (r.id === rowId ? { ...r, selectedRitId: ritId } : r)));
+  };
+
+  const runOcr = async () => {
+    const pending = rows.filter(r => r.status === "queued" || r.status === "error");
+    if (pending.length === 0) {
+      alert("Geen nieuwe foto’s in de wachtrij (status ‘Wacht op OCR’ of ‘Fout’).");
+      return;
+    }
+    setBusy(true);
+    setProgress(0);
+    try {
+      let done = 0;
+      for (const row of pending) {
+        setRows(cur =>
+          cur.map(r => (r.id === row.id ? { ...r, status: "ocr", errMsg: "" } : r))
+        );
+        try {
+          const { text, codes, dates } = await recognizeBonImage(row.file, {
+            logger: m => {
+              if (m.status === "recognizing text" && typeof m.progress === "number") {
+                const slice = (done + m.progress) / pending.length;
+                setProgress(slice);
+              }
+            },
+          });
+          const sug = suggestRitIdFromOcr(codes, dates, voltooidePool, bonAlreadyUsed);
+          setRows(cur =>
+            cur.map(r =>
+              r.id === row.id
+                ? {
+                    ...r,
+                    status: "done",
+                    text,
+                    codes,
+                    dates,
+                    selectedRitId: r.selectedRitId || sug || "",
+                  }
+                : r
+            )
+          );
+        } catch (e) {
+          console.error(e);
+          setRows(cur =>
+            cur.map(r =>
+              r.id === row.id
+                ? { ...r, status: "error", errMsg: String(e?.message || e || "OCR mislukt") }
+                : r
+            )
+          );
+        }
+        done += 1;
+        setProgress(done / pending.length);
+      }
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  };
+
+  const applyToTrips = () => {
+    const todo = rows.filter(r => r.status === "done" && r.selectedRitId && r.codes.length > 0);
+    if (todo.length === 0) {
+      alert("Kies per foto een rit en zorg dat er minstens één IHcT-code herkend is.");
+      return;
+    }
+    let rr = [...D.r];
+    let n = 0;
+    for (const row of todo) {
+      const idx = rr.findIndex(x => x.id === row.selectedRitId);
+      if (idx < 0) continue;
+      const merged = mergeBonField(rr[idx].bon, row.codes);
+      if (!merged) continue;
+      rr[idx] = { ...rr[idx], bon: merged };
+      n += 1;
+    }
+    if (n === 0) {
+      alert("Geen wijzigingen — controleer de gekozen ritten.");
+      return;
+    }
+    const nd = normData({ ...D, r: rr });
+    sD(nd);
+    sv(pid, nd);
+    alert(`${n} foto${n === 1 ? "" : "’s"} toegepast — bonnen staan op de ritten. Factuur-PDF/CSV gebruiken deze bonnen.`);
+    clearRows();
+  };
+
+  const dropProps = {
+    onDragOver: e => {
+      e.preventDefault();
+      setDragOver(true);
+    },
+    onDragLeave: () => setDragOver(false),
+    onDrop: e => {
+      e.preventDefault();
+      setDragOver(false);
+      addImageFiles(e.dataTransfer.files);
+    },
+  };
+
+  return (
+    <div style={{ marginTop: 4, marginBottom: 8 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Bon-foto’s (OCR → ritten)</div>
+      <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 12px", lineHeight: 1.45 }}>
+        Sleep hier foto’s van <strong>voltooide</strong> transportbonnen. De app zoekt <strong>IHcT</strong>-codes in de
+        tekst (Nederlands/Engels OCR). Koppel elke foto aan de juiste rit — daarna verschijnen de bonnen op je{" "}
+        <strong>factuur</strong> en CSV (zelfde als handmatig invullen). Eerste keer laadt Tesseract taalbestanden
+        (internet nodig); daarna kan het uit cache.
+      </p>
+      <div className="tm-g2" style={{ marginBottom: 12 }}>
+        <div className="tm-fg">
+          <label className="fl">Ritten tonen / auto-koppel vanaf</label>
+          <input type="date" value={van} onChange={e => setVan(e.target.value)} />
+        </div>
+        <div className="tm-fg">
+          <label className="fl">Tot en met</label>
+          <input type="date" value={tot} onChange={e => setTot(e.target.value)} />
+        </div>
+      </div>
+      <p style={{ fontSize: 11, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.35 }}>
+        {voltooidePool.length} voltooide rit(ten) in dit bereik
+        {voltooidePool.filter(r => !String(r.bon || "").trim()).length
+          ? ` · ${voltooidePool.filter(r => !String(r.bon || "").trim()).length} zonder bon`
+          : ""}
+        . Auto-koppel alleen als er precies één passende rit zonder bon is (eventueel met datum uit de foto).
+      </p>
+      <div
+        {...dropProps}
+        className="card"
+        style={{
+          padding: 18,
+          marginBottom: 12,
+          borderStyle: "dashed",
+          borderWidth: 2,
+          borderColor: dragOver ? "var(--acc)" : "var(--bd)",
+          background: dragOver ? "rgba(109, 133, 40, 0.08)" : "var(--s2)",
+          textAlign: "center",
+          cursor: "pointer",
+        }}
+        onClick={() => !busy && fileInpRef.current?.click()}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            fileInpRef.current?.click();
+          }
+        }}
+      >
+        <input
+          ref={fileInpRef}
+          type="file"
+          accept="image/*"
+          multiple
+          style={{ display: "none" }}
+          onChange={e => {
+            addImageFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Sleep foto’s hierheen of tik om te kiezen</div>
+        <div style={{ fontSize: 12, color: "var(--tx3)" }}>JPG, PNG, … · max {BON_FOTO_MAX_FILES} foto’s · max {BON_FOTO_MAX_MB} MB per bestand</div>
+      </div>
+      {progress != null && (
+        <div style={{ fontSize: 12, color: "var(--tx2)", marginBottom: 8 }}>
+          OCR… {Math.round(progress * 100)}%
+        </div>
+      )}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        <button type="button" className="btn btn-p" disabled={busy || rows.length === 0} onClick={runOcr}>
+          {busy ? "OCR bezig…" : "Tekst herkennen (OCR)"}
+        </button>
+        <button type="button" className="btn btn-o" disabled={busy || rows.length === 0} onClick={clearRows}>
+          Lijst wissen
+        </button>
+        <button type="button" className="btn btn-o" disabled={busy} onClick={() => applyToTrips()}>
+          Bonnen op ritten zetten
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <p style={{ fontSize: 12, color: "var(--tx3)", margin: 0 }}>Nog geen foto’s.</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {rows.map(row => (
+            <div
+              key={row.id}
+              className="tm-brow"
+              style={{ flexWrap: "wrap", alignItems: "flex-start", gap: 10, padding: "10px 0" }}
+            >
+              {row.previewUrl && (
+                <img
+                  src={row.previewUrl}
+                  alt=""
+                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, flexShrink: 0 }}
+                />
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: "var(--tx3)", marginBottom: 4 }}>
+                  {row.file?.name || "—"} ·{" "}
+                  {row.status === "queued"
+                    ? "Wacht op OCR"
+                    : row.status === "ocr"
+                      ? "Bezig…"
+                      : row.status === "done"
+                        ? "Herkenning klaar"
+                        : row.status === "error"
+                          ? "Fout"
+                          : row.status}
+                </div>
+                {row.codes.length > 0 ? (
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--acc)", marginBottom: 4 }}>
+                    {row.codes.join(" · ")}
+                  </div>
+                ) : row.status === "done" ? (
+                  <div style={{ fontSize: 12, color: "var(--am)", marginBottom: 4 }}>
+                    Geen IHcT-code gevonden — typ de bon handmatig bij de rit of probeer een scherpere foto.
+                  </div>
+                ) : null}
+                {row.dates.length > 0 && (
+                  <div style={{ fontSize: 10, color: "var(--tx3)" }}>Datum in tekst: {row.dates.join(", ")}</div>
+                )}
+                {row.errMsg && <div style={{ fontSize: 11, color: "var(--rd)", marginTop: 4 }}>{row.errMsg}</div>}
+                {(row.status === "done" || row.status === "queued") && (
+                  <div className="tm-fg" style={{ marginTop: 8, marginBottom: 0 }}>
+                    <label className="fl">Koppel aan rit</label>
+                    <select
+                      value={row.selectedRitId}
+                      onChange={e => setRitForRow(row.id, e.target.value)}
+                      style={{ width: "100%", maxWidth: "100%" }}
+                    >
+                      <option value="">— Kies rit —</option>
+                      {voltooidePool.map(r => (
+                        <option key={r.id} value={r.id}>
+                          {r.d} {r.ti || ""} · {r.f} → {r.t}
+                          {r.bon ? ` · bon ${r.bon}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+              <button type="button" className="btn btn-gh" onClick={() => removeRow(row.id)} disabled={busy}>
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   const [v, sV] = useState("m");
   const [erA, setErA] = useState(null);
@@ -3004,7 +3521,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   const herberekenAlleRittenKm = async () => {
     if (
       !confirm(
-        "Alle ritten opnieuw meten via de rijroute (internet nodig). Km en vergoeding worden bijgewerkt waar vertrek en bestemming herkend worden. Doorgaan?"
+        "Alle ritten opnieuw meten via de rijroute (internet nodig). Km en vergoeding worden bijgewerkt waar vertrek en bestemming herkend worden. Ritten die je in Historiek handmatig hebt aangepast (km/€) worden overgeslagen. Doorgaan?"
       )
     ) {
       return;
@@ -3014,6 +3531,10 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
       const merged = tmBuildMergedRoutes(D);
       const nextR = [];
       for (const r of D.r) {
+        if (r.handmatigKv) {
+          nextR.push(r);
+          continue;
+        }
         const pair = tmResolveRitRouteCoords(r.f, r.t, merged);
         if (!pair) {
           nextR.push(r);
@@ -3354,6 +3875,8 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
           </div>
         )}
         <div className="tm-meer-split" role="separator" />
+        <BonFotoImportSection D={D} sD={sD} pid={pid} />
+        <div className="tm-meer-split" role="separator" />
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Eigen vaste routes</div>
         <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.4 }}>
           OSM-zoeken. <strong>Afstand</strong> is altijd een <strong>rijroute over echte wegen</strong> (autosnelwegen
@@ -3620,7 +4143,7 @@ export default function App() {
           <Financieel D={D} pid={pid} />
         </div>
         <div className="tm-tab-page" hidden={tab !== "hist"}>
-          <Historiek D={D} pid={pid} />
+          <Historiek D={D} pid={pid} sD={sD} />
         </div>
         <div className="tm-tab-page" hidden={tab !== "kosten"}>
           <Kosten D={D} sD={sD} pid={pid} />
