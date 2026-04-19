@@ -281,7 +281,8 @@ export const ORS_API_KEY =
     : '';
 
 /**
- * Kaartweergave (MapLibre): standaard OpenStreetMap-rastertegels.
+ * Kaartweergave zonder Google-sleutel: MapLibre + OpenStreetMap-rastertegels.
+ * Met VITE_GOOGLE_MAPS_API_KEY: embedded Google Maps + Directions (TransportMe + klassieke kaartpagina).
  * Optioneel: eigen MapLibre style-URL (bijv. MapTiler) via .env
  */
 export const MAPLIBRE_STYLE_URL =

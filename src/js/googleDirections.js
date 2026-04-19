@@ -21,7 +21,10 @@ const CALLBACK = '__tmTransporteurGmapsCb';
 
 let mapsScriptPromise = null;
 
-function loadGoogleMapsScript(apiKey) {
+/** Laadt Maps JavaScript API (Directions + Map). Herbruikbaar voor kaartweergave. */
+export function loadGoogleMapsJs(apiKey = GOOGLE_MAPS_API_KEY) {
+  const key = typeof apiKey === 'string' ? apiKey.trim() : '';
+  if (!key) return Promise.reject(new Error('Geen Google Maps API-sleutel'));
   if (typeof window === 'undefined') return Promise.reject(new Error('Geen browser'));
   if (window.google?.maps?.DirectionsService) return Promise.resolve();
   if (mapsScriptPromise) return mapsScriptPromise;
@@ -51,7 +54,7 @@ function loadGoogleMapsScript(apiKey) {
     s.dataset.tmGoogleMaps = '1';
     s.async = true;
     s.defer = true;
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&loading=async&callback=${CALLBACK}`;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&loading=async&callback=${CALLBACK}`;
     s.onerror = () => {
       mapsScriptPromise = null;
       reject(new Error('Google Maps kon niet laden'));
@@ -72,7 +75,7 @@ export async function getDrivingRouteGoogleMaps(origin, destination) {
   const { from, to } = normEndpoints(origin, destination);
   if (!from || !to) return Promise.reject(new Error('Ongeldige coördinaten'));
 
-  await loadGoogleMapsScript(key);
+  await loadGoogleMapsJs(key);
 
   const svc = new window.google.maps.DirectionsService();
   /** Zelfde motor als Google Maps (driving); geen departureTime = stabiele routelengte i.p.v. live file. */

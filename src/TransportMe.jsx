@@ -21,6 +21,7 @@ import { getFactuurGegevens, nextFactuurVolgNummer, saveFactuurGegevens } from "
 import { generateFactuurPdfBlob, triggerPdfDownload } from "./js/invoicePdf.js";
 import { vergoedingVoorRit } from "./js/calculations.js";
 import { getDrivingRouteKm, getDrivingRouteWithGeometry } from "./js/ors.js";
+import { createGoogleRouteMap } from "./js/googleMapsView.js";
 import { searchPlacesBelgium } from "./js/placeSearchFree.js";
 import { PRESET_ANCHOR_ZIEKENHUIZEN, GESCHAT_VERBRUIK_L_PER_100KM, hasGoogleMapsApiKey } from "./js/config.js";
 import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
@@ -957,51 +958,95 @@ function PlaatsPicker({ label, gekozen, onKies, lijst }) {
 function RitMap({ la1, lo1, la2, lo2, labelF, labelT }) {
   const el = useRef(null);
   useEffect(() => {
-    if (!el.current) return;
-    const map = L.map(el.current, { zoomControl: true });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap",
-    }).addTo(map);
-    let routeLayer = L.polyline(
-      [
-        [la1, lo1],
-        [la2, lo2],
-      ],
-      { color: TM_ACC, weight: 4, opacity: 0.92 }
-    ).addTo(map);
-    const pin = (lat, lng, letter, tip) =>
-      L.circleMarker([lat, lng], {
-        radius: 9,
-        fillColor: TM_ACC,
-        color: "#141414",
-        weight: 2,
-        fillOpacity: 1,
-      })
-        .bindTooltip(`${letter}: ${tip}`, { permanent: true, direction: "top", className: "tm-leaf-tooltip" })
-        .addTo(map);
-    pin(la1, lo1, "A", labelF || "Start");
-    pin(la2, lo2, "B", labelT || "Einde");
-    map.fitBounds(
-      [
-        [la1, lo1],
-        [la2, lo2],
-      ],
-      { padding: [36, 36], maxZoom: 11 }
-    );
+    const node = el.current;
+    if (!node) return;
     let cancelled = false;
-    getDrivingRouteWithGeometry({ lat: la1, lng: lo1 }, { lat: la2, lng: lo2 })
-      .then(({ geometry }) => {
-        if (cancelled || !geometry?.length) return;
-        map.removeLayer(routeLayer);
-        const latlngs = geometry.map(([lng, lat]) => [lat, lng]);
-        routeLayer = L.polyline(latlngs, { color: TM_ACC, weight: 4, opacity: 0.92 }).addTo(map);
-        map.fitBounds(routeLayer.getBounds(), { padding: [36, 36], maxZoom: 11 });
-      })
-      .catch(() => {});
+    let cleanup = () => {};
+
+    (async () => {
+      if (hasGoogleMapsApiKey()) {
+        try {
+          const ctx = await createGoogleRouteMap(
+            node,
+            { lat: la1, lng: lo1, name: labelF || "Start" },
+            { lat: la2, lng: lo2, name: labelT || "Einde" }
+          );
+          if (cancelled) {
+            ctx?.dispose?.();
+            return;
+          }
+          if (ctx) {
+            const ro = new ResizeObserver(() => ctx.triggerResize());
+            ro.observe(node);
+            cleanup = () => {
+              try {
+                ro.disconnect();
+              } catch {
+                /* ignore */
+              }
+              ctx.dispose();
+            };
+            ctx.triggerResize();
+            return;
+          }
+        } catch (e) {
+          console.warn("Google Maps-kaart (rit) mislukt, fallback OSM:", e);
+        }
+      }
+
+      if (cancelled) return;
+      const map = L.map(node, { zoomControl: true });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap",
+      }).addTo(map);
+      let routeLayer = L.polyline(
+        [
+          [la1, lo1],
+          [la2, lo2],
+        ],
+        { color: TM_ACC, weight: 4, opacity: 0.92 }
+      ).addTo(map);
+      const pin = (lat, lng, letter, tip) =>
+        L.circleMarker([lat, lng], {
+          radius: 9,
+          fillColor: TM_ACC,
+          color: "#141414",
+          weight: 2,
+          fillOpacity: 1,
+        })
+          .bindTooltip(`${letter}: ${tip}`, { permanent: true, direction: "top", className: "tm-leaf-tooltip" })
+          .addTo(map);
+      pin(la1, lo1, "A", labelF || "Start");
+      pin(la2, lo2, "B", labelT || "Einde");
+      map.fitBounds(
+        [
+          [la1, lo1],
+          [la2, lo2],
+        ],
+        { padding: [36, 36], maxZoom: 11 }
+      );
+      getDrivingRouteWithGeometry({ lat: la1, lng: lo1 }, { lat: la2, lng: lo2 })
+        .then(({ geometry }) => {
+          if (cancelled || !geometry?.length) return;
+          map.removeLayer(routeLayer);
+          const latlngs = geometry.map(([lng, lat]) => [lat, lng]);
+          routeLayer = L.polyline(latlngs, { color: TM_ACC, weight: 4, opacity: 0.92 }).addTo(map);
+          map.fitBounds(routeLayer.getBounds(), { padding: [36, 36], maxZoom: 11 });
+        })
+        .catch(() => {});
+      cleanup = () => {
+        try {
+          map.remove();
+        } catch {
+          /* ignore */
+        }
+      };
+    })();
+
     return () => {
       cancelled = true;
-      map.remove();
+      cleanup();
     };
   }, [la1, lo1, la2, lo2, labelF, labelT]);
   return <div className="tm-rit-map" ref={el} role="presentation" />;

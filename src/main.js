@@ -29,7 +29,7 @@ import { initDagrapport } from './js/dagrapport.js';
 import { initDataBackup } from './js/dataBackup.js';
 import { initBonCheckup } from './js/bonCheckup.js';
 import { renderAllTables, renderBrandstof } from './js/tables.js';
-import { DEFAULT_CHAUFFEURS, UI_COMPACT } from './js/config.js';
+import { DEFAULT_CHAUFFEURS, UI_COMPACT, hasGoogleMapsApiKey } from './js/config.js';
 import {
   getData,
   saveRitten,
@@ -52,6 +52,7 @@ import { formatEuro, formatDatumTijd, formatDatumKort } from './js/format.js';
 import { initPlaceSearchFree } from './js/placeSearchFree.js';
 import { getDrivingRouteKm, getDrivingRouteWithGeometry } from './js/ors.js';
 import { showMapLibreMap, addRouteToMapLibreMap } from './js/mapLibre.js';
+import { createGoogleRouteMap } from './js/googleMapsView.js';
 
 /** Ziekenhuizenlijst Meer: uitgeklapt = volledige lijst */
 let ziekenhuizenLijstUitgeklapt = false;
@@ -973,6 +974,23 @@ function initMapIfNeeded() {
 
     if (!container) return;
 
+    if (container._tmResizeObs) {
+      try {
+        container._tmResizeObs.disconnect();
+      } catch {
+        /* ignore */
+      }
+      container._tmResizeObs = null;
+    }
+    if (container._tmGoogleDispose) {
+      try {
+        container._tmGoogleDispose();
+      } catch {
+        /* ignore */
+      }
+      container._tmGoogleDispose = null;
+    }
+
     container.innerHTML = '';
     const mapDiv = document.createElement('div');
     mapDiv.id = 'map-canvas';
@@ -980,27 +998,87 @@ function initMapIfNeeded() {
     container.appendChild(mapDiv);
 
     const hasBoth = from?.lat != null && to?.lat != null;
-    const map = showMapLibreMap('map-canvas', hasBoth ? from : null, hasBoth ? to : null);
 
-    if (map) {
-      const ro = new ResizeObserver(() => map.resize());
-      ro.observe(container);
-      map.on('remove', () => ro.disconnect());
-      setTimeout(() => map.resize(), 150);
-    }
     if (!hasBoth) {
       if (routeLabelEl) routeLabelEl.textContent = '—';
       if (routeKmEl) routeKmEl.textContent = '— km';
       if (routeSourceEl) routeSourceEl.textContent = '—';
-      return;
+    } else if (routeLabelEl) {
+      routeLabelEl.textContent = `${from.name || 'Vertrek'} → ${to.name || 'Aankomst'}`;
     }
 
-    if (routeLabelEl) routeLabelEl.textContent = `${from.name || 'Vertrek'} → ${to.name || 'Aankomst'}`;
+    void (async () => {
+      let mapHandle = null;
+      if (hasGoogleMapsApiKey()) {
+        try {
+          mapHandle = await createGoogleRouteMap(
+            mapDiv,
+            from?.lat != null ? { lat: from.lat, lng: from.lng, name: from.name } : null,
+            to?.lat != null ? { lat: to.lat, lng: to.lng, name: to.name } : null
+          );
+        } catch (e) {
+          console.warn('Google Maps-kaart mislukt, fallback MapLibre:', e);
+        }
+      }
 
-    if (map) {
+      if (!mapHandle?.map) {
+        const mlMap = showMapLibreMap('map-canvas', hasBoth ? from : null, hasBoth ? to : null);
+        mapHandle = mlMap
+          ? {
+              type: 'maplibre',
+              map: mlMap,
+              km: null,
+              triggerResize: () => mlMap.resize(),
+              dispose: () => {},
+            }
+          : null;
+      }
+
+      if (mapHandle?.map) {
+        const ro = new ResizeObserver(() => mapHandle.triggerResize());
+        ro.observe(container);
+        container._tmResizeObs = ro;
+        if (mapHandle.type === 'maplibre') {
+          mapHandle.map.on('remove', () => {
+            try {
+              ro.disconnect();
+            } catch {
+              /* ignore */
+            }
+            if (container._tmResizeObs === ro) container._tmResizeObs = null;
+          });
+        } else {
+          container._tmGoogleDispose = () => {
+            try {
+              mapHandle.dispose();
+            } catch {
+              /* ignore */
+            }
+            try {
+              ro.disconnect();
+            } catch {
+              /* ignore */
+            }
+            if (container._tmResizeObs === ro) container._tmResizeObs = null;
+            container._tmGoogleDispose = null;
+          };
+        }
+        setTimeout(() => mapHandle.triggerResize(), 150);
+      }
+
+      if (!hasBoth) return;
+
+      if (mapHandle?.type === 'google' && mapHandle.km != null) {
+        if (routeKmEl) routeKmEl.textContent = `${mapHandle.km} km`;
+        if (routeSourceEl) routeSourceEl.textContent = 'Google Maps';
+        return;
+      }
+
+      if (!mapHandle?.map) return;
+
       getDrivingRouteWithGeometry(from, to)
         .then(({ km, geometry, source }) => {
-          if (geometry?.length) addRouteToMapLibreMap(map, geometry);
+          if (geometry?.length && mapHandle.type === 'maplibre') addRouteToMapLibreMap(mapHandle.map, geometry);
           if (routeKmEl) routeKmEl.textContent = `${km || 0} km`;
           if (routeSourceEl) {
             routeSourceEl.textContent =
@@ -1017,7 +1095,7 @@ function initMapIfNeeded() {
           if (routeKmEl) routeKmEl.textContent = '—';
           if (routeSourceEl) routeSourceEl.textContent = 'Geen autoroute (netwerk)';
         });
-    }
+    })();
   }
 
   if (fromSelect && toSelect && !mapPageInited) {
