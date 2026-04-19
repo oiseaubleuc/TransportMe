@@ -19,7 +19,27 @@ function metersToKmRounded(distanceM) {
 
 const CALLBACK = '__tmTransporteurGmapsCb';
 
+const MAPS_READY_TIMEOUT_MS = 18_000;
+
 let mapsScriptPromise = null;
+
+function waitForDirectionsService(timeoutMs = MAPS_READY_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now();
+    const tick = () => {
+      if (window.google?.maps?.DirectionsService) {
+        resolve();
+        return;
+      }
+      if (Date.now() - t0 >= timeoutMs) {
+        reject(new Error('Google Maps API reageert niet (blokkade, sleutel of netwerk).'));
+        return;
+      }
+      setTimeout(tick, 80);
+    };
+    tick();
+  });
+}
 
 /** Laadt Maps JavaScript API (Directions + Map). Herbruikbaar voor kaartweergave. */
 export function loadGoogleMapsJs(apiKey = GOOGLE_MAPS_API_KEY) {
@@ -30,24 +50,39 @@ export function loadGoogleMapsJs(apiKey = GOOGLE_MAPS_API_KEY) {
   if (mapsScriptPromise) return mapsScriptPromise;
 
   mapsScriptPromise = new Promise((resolve, reject) => {
+    const fail = err => {
+      mapsScriptPromise = null;
+      reject(err);
+    };
+
     const existing = document.querySelector('script[data-tm-google-maps="1"]');
     if (existing) {
       if (window.google?.maps?.DirectionsService) {
         resolve();
         return;
       }
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error('Google Maps script')), { once: true });
+      /** `load` is al geweest → addEventListener lost voor altijd; daarom pollen. */
+      waitForDirectionsService(MAPS_READY_TIMEOUT_MS)
+        .then(() => resolve())
+        .catch(e => fail(e));
+      existing.addEventListener('error', () => fail(new Error('Google Maps script')), { once: true });
       return;
     }
 
+    const tmax = setTimeout(() => {
+      fail(new Error('Google Maps laden duurt te lang (timeout).'));
+    }, MAPS_READY_TIMEOUT_MS + 2000);
+
     window[CALLBACK] = () => {
+      clearTimeout(tmax);
       try {
         delete window[CALLBACK];
       } catch {
         window[CALLBACK] = undefined;
       }
-      resolve();
+      waitForDirectionsService(MAPS_READY_TIMEOUT_MS)
+        .then(() => resolve())
+        .catch(e => fail(e));
     };
 
     const s = document.createElement('script');
@@ -56,8 +91,8 @@ export function loadGoogleMapsJs(apiKey = GOOGLE_MAPS_API_KEY) {
     s.defer = true;
     s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&loading=async&callback=${CALLBACK}`;
     s.onerror = () => {
-      mapsScriptPromise = null;
-      reject(new Error('Google Maps kon niet laden'));
+      clearTimeout(tmax);
+      fail(new Error('Google Maps kon niet laden'));
     };
     document.head.appendChild(s);
   });
@@ -86,7 +121,11 @@ export async function getDrivingRouteGoogleMaps(origin, destination) {
   };
 
   return new Promise((resolve, reject) => {
+    const to = setTimeout(() => {
+      reject(new Error('Google Directions: timeout'));
+    }, 22_000);
     svc.route(request, (result, status) => {
+      clearTimeout(to);
       if (status !== window.google.maps.DirectionsStatus.OK || !result?.routes?.[0]) {
         reject(new Error(`Google Directions: ${status}`));
         return;

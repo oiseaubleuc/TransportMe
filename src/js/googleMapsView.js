@@ -8,6 +8,54 @@ import { loadGoogleMapsJs } from './googleDirections.js';
 
 const FLANDERS_BOUNDS = { north: 51.51, south: 50.68, east: 5.92, west: 2.54 };
 
+/** Google toont een grijze fout-overlay i.p.v. te throwen; we detecteren dat + `gm_authFailure`. */
+function assertGoogleMapUsable(map, containerEl, g, timeoutMs = 14_000) {
+  return new Promise((resolve, reject) => {
+    const prev = typeof window.gm_authFailure === 'function' ? window.gm_authFailure : null;
+    let settled = false;
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      window.gm_authFailure = prev;
+      clearTimeout(tmax);
+    };
+    const fail = msg => {
+      cleanup();
+      reject(new Error(msg));
+    };
+    window.gm_authFailure = () => {
+      try {
+        if (prev) prev();
+      } catch {
+        /* ignore */
+      }
+      fail('Google Maps: authenticatie geweigerd (sleutel, API’s ingeschakeld, billing of website-beperking).');
+    };
+    const tmax = setTimeout(() => {
+      fail('Google Maps: geen geldige kaart (timeout).');
+    }, timeoutMs);
+    const checkDom = () => {
+      const t = (containerEl?.innerText || '') + (containerEl?.textContent || '');
+      if (
+        /Something went wrong|didn\x27t load Google Maps correctly|Sorry!|JavaScript console/i.test(t) ||
+        /Google Maps niet correct geladen|technische details|n\x27a pas pu se charger/i.test(t)
+      ) {
+        fail('Google Maps: kaart niet geladen (controleer API-sleutel en Google Cloud Console).');
+        return true;
+      }
+      return false;
+    };
+    g.event.addListenerOnce(map, 'idle', () => {
+      setTimeout(() => {
+        if (settled) return;
+        if (checkDom()) return;
+        cleanup();
+        resolve();
+      }, 450);
+    });
+  });
+}
+
 function metersToKmRounded(distanceM) {
   const m = Number(distanceM);
   if (!Number.isFinite(m) || m <= 0) return null;
@@ -34,13 +82,24 @@ export async function createGoogleRouteMap(containerEl, from, to) {
       ? { lat: to.lat, lng: to.lng }
       : { lat: 51.0, lng: 4.35 };
 
-  const map = new g.Map(containerEl, {
-    zoom: 8,
-    center,
-    mapTypeControl: true,
-    streetViewControl: false,
-    fullscreenControl: true,
-  });
+  let map;
+  try {
+    map = new g.Map(containerEl, {
+      zoom: 8,
+      center,
+      mapTypeControl: true,
+      streetViewControl: false,
+      fullscreenControl: true,
+    });
+    await assertGoogleMapUsable(map, containerEl, g);
+  } catch (e) {
+    try {
+      containerEl.innerHTML = '';
+    } catch {
+      /* ignore */
+    }
+    throw e;
+  }
 
   const markers = [];
   let renderer = null;
