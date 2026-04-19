@@ -3610,6 +3610,8 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   const [meerToonVoltooide, setMeerToonVoltooide] = useState(false);
   const [bonEdit, setBonEdit] = useState({});
   const [recalcRittenBusy, setRecalcRittenBusy] = useState(false);
+  const [googleTestBusy, setGoogleTestBusy] = useState(false);
+  const [googleTestMsg, setGoogleTestMsg] = useState("");
   const backupFileRef = useRef(null);
   const ziekenVoorMeer = useMemo(
     () => ziekenLijstMetArchief(TM_ZIEKENHUIZEN_LIJST, D.xrArch || []),
@@ -3635,6 +3637,32 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   }, [rittenBeheer, ritZoek, meerToonVoltooide]);
 
   const aantalVoltooide = useMemo(() => D.r.filter(r => r.s === "voltooid").length, [D.r]);
+
+  const testGoogleDirections = async () => {
+    if (!hasGoogleMapsApiKey()) {
+      setGoogleTestMsg(
+        "Geen sleutel in deze build: zet VITE_GOOGLE_MAPS_API_KEY in .env, herstart npm run dev, of rebuild productie met env-vars op je host."
+      );
+      return;
+    }
+    setGoogleTestBusy(true);
+    setGoogleTestMsg("");
+    try {
+      const brussel = { lat: 50.8824, lng: 4.2745 };
+      const leuven = { lat: 50.8814, lng: 4.671 };
+      const { km, source } = await getDrivingRouteKm(brussel, leuven);
+      setGoogleTestMsg(
+        `OK — test UZ Brussel → UZ Leuven: ${km} km (bron: ${source || "?"}). Google Directions werkt in deze app.`
+      );
+    } catch (e) {
+      const m = String(e?.message || e);
+      setGoogleTestMsg(
+        `Fout: ${m}. Meestal: in Google Cloud → APIs inschakelen (Maps JavaScript API + Directions API), billing aan, en bij sleutelbeperkingen je domein + http://localhost:* toevoegen.`
+      );
+    } finally {
+      setGoogleTestBusy(false);
+    }
+  };
 
   const saveRitBon = id => {
     const raw = bonEdit[id] !== undefined ? bonEdit[id] : D.r.find(x => x.id === id)?.bon || "";
@@ -3978,6 +4006,36 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
           Zelfde volgorde als elders: Google Maps (indien sleutel), anders OpenRouteService, anders OSRM. Ritten met
           onbekende namen blijven ongewijzigd.
         </p>
+        <div
+          style={{
+            marginBottom: 12,
+            padding: 12,
+            background: "var(--s2)",
+            borderRadius: 8,
+            border: "1px solid var(--bd)",
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Werkt Google wel?</div>
+          <p style={{ fontSize: 11, color: "var(--tx3)", margin: "0 0 8px", lineHeight: 1.4 }}>
+            Als de app géén Google-route vindt terwijl je wel een sleutel hebt: gebruik deze test — hieronder verschijnt
+            de <strong>echte</strong> fout van Google (API uit, billing, verkeerde referrer, …).
+          </p>
+          <button type="button" className="btn btn-o" disabled={googleTestBusy} onClick={testGoogleDirections}>
+            {googleTestBusy ? "Bezig…" : "Test Google-route (UZ Brussel → UZ Leuven)"}
+          </button>
+          {googleTestMsg ? (
+            <p
+              style={{
+                fontSize: 11,
+                margin: "10px 0 0",
+                lineHeight: 1.45,
+                color: googleTestMsg.startsWith("OK") ? "var(--gn)" : "var(--rd)",
+              }}
+            >
+              {googleTestMsg}
+            </p>
+          ) : null}
+        </div>
         <div className="tm-fg">
           <label className="fl">Zoeken</label>
           <input
