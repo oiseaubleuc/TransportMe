@@ -169,6 +169,8 @@ function tmNormRouteName(s) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
+    .replace(/[()[\]{}]/g, " ")
+    .replace(/\s*\/\s*/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -537,7 +539,7 @@ function leesLegacyBundel(profileId) {
   return { r, b, o };
 }
 
-const TM_AUTO_FIX_CALC_VERSION = "tm_auto_fix_calc_v1";
+const TM_AUTO_FIX_CALC_VERSION = "tm_auto_fix_calc_v2";
 const tmCalcFixKey = profileId => `tm_calc_fix_done_${TM_AUTO_FIX_CALC_VERSION}_${profileId}`;
 
 function tmBuildRouteKmLookup(data) {
@@ -557,7 +559,11 @@ function tmBuildRouteKmLookup(data) {
   return m;
 }
 
-/** Corrigeert automatisch oude foute ritberekeningen op basis van actuele tarieven en bekende route-km. */
+/**
+ * Corrigeert automatisch foutieve ritbedragen: zelfde km behouden (meting/gebruiker),
+ * vergoeding opnieuw met actuele regels + betere route-naamherkenning.
+ * Alleen als km ontbreekt/ongeldig: vul met bekende preset-km indien beschikbaar.
+ */
 function autoFixRitBerekeningen(data) {
   const routeKm = tmBuildRouteKmLookup(data);
   let changed = false;
@@ -569,12 +575,17 @@ function autoFixRitBerekeningen(data) {
     const routeKey = `${nf}\t${nt}`;
     const revKey = `${nt}\t${nf}`;
     const knownKm = routeKm.get(routeKey) ?? routeKm.get(revKey);
-    const baseKm = Number(r.k);
-    if (!Number.isFinite(baseKm) || baseKm < 1) return r;
-    const nextKm = knownKm != null ? knownKm : Math.max(1, Math.round(baseKm));
+    let baseKm = Number(r.k);
+    if (!Number.isFinite(baseKm) || baseKm < 1) {
+      if (knownKm == null) return r;
+      baseKm = knownKm;
+      changed = true;
+    }
+    const nextKm = Math.max(1, Math.round(baseKm));
     const nextV = Math.round(vergoedingVoorRit(nextKm, r.ti || "", { fromName: r.f, toName: r.t }) * 100) / 100;
+    const curK = Math.max(1, Math.round(Number(r.k) || 0));
     const curV = Math.round(money(r.v) * 100) / 100;
-    if (nextKm === baseKm && nextV === curV) return r;
+    if (nextKm === curK && nextV === curV) return r;
     changed = true;
     return { ...r, k: nextKm, v: nextV };
   });

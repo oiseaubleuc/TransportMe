@@ -36,6 +36,9 @@ function normLocNaam(s) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
+    .replace(/[()[\]{}]/g, ' ')
+    .replace(/\s*\/\s*/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
