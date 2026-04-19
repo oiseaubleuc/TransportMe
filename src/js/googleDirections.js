@@ -105,7 +105,7 @@ export async function getDrivingRouteGoogleMaps(origin, destination) {
         geometry = path.map((p) => [p.lng(), p.lat()]);
       }
 
-      resolve({ km, geometry });
+      resolve({ km, geometry, source: "google" });
     });
   });
 }

@@ -87,7 +87,7 @@ const PR = [
 const DR = ["Houdaifa", "Amine", "Frederik", "Student 1"],
   CA = ["Audi A3 (2-HKN-136)", "BMW Serie 1 (2-GGW-635)"];
 /** Vaste routes (km + coördinaten, zelfde lijst als voorheen — geen handmatige route) */
-/** k = referentie-km (OSRM); live meting = Google Maps indien VITE_GOOGLE_MAPS_API_KEY, anders ORS/OSRM. */
+/** Lijst: referentie-km; bij keuze route met coördinaten wordt km eerst via Google (indien sleutel), anders OSRM/ORS. */
 const ROUTES = [
   { f: "UZ Brussel", t: "UZ Leuven", k: 36, la1: 50.8824, lo1: 4.2745, la2: 50.8814, lo2: 4.671 },
   { f: "UZ Brussel", t: "UZA Edegem", k: 41, la1: 50.8824, lo1: 4.2745, la2: 51.1552, lo2: 4.4452 },
@@ -1805,6 +1805,8 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
     dr: DR[0],
     ca: CA[0],
     s: "komend",
+    /** 'google' | 'osrm' | 'ors' | '' — laatste succesvolle rijroutemeting voor dit formulier */
+    routeKmBron: "",
   });
   const [fm, sM] = useState(mkIni);
   const [routeKmLaden, setRouteKmLaden] = useState(false);
@@ -1813,15 +1815,40 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
     const r = mergedRoutes[i];
     if (!r) return;
     const token = ++routeKmReq.current;
-    sM(m => ({ ...m, ri: i, f: r.f, t: r.t, k: String(r.k) }));
-    if (r.la1 != null && r.la2 != null && r.lo1 != null && r.lo2 != null && Number.isFinite(Number(r.la1))) {
+    const hasCoords =
+      r.la1 != null &&
+      r.la2 != null &&
+      r.lo1 != null &&
+      r.lo2 != null &&
+      Number.isFinite(Number(r.la1)) &&
+      Number.isFinite(Number(r.la2));
+    sM(m => ({
+      ...m,
+      ri: i,
+      f: r.f,
+      t: r.t,
+      k: hasCoords ? "" : String(r.k),
+      routeKmBron: "",
+    }));
+    if (hasCoords) {
       setRouteKmLaden(true);
       getDrivingRouteKm({ lat: r.la1, lng: r.lo1 }, { lat: r.la2, lng: r.lo2 })
-        .then(({ km }) => {
+        .then(({ km, source }) => {
           if (token !== routeKmReq.current || km < 1) return;
-          sM(m => (m.ri === i ? { ...m, k: String(km) } : m));
+          sM(m =>
+            m.ri === i
+              ? { ...m, k: String(km), routeKmBron: source === "google" ? "google" : source === "ors" ? "ors" : "osrm" }
+              : m
+          );
         })
-        .catch(() => {})
+        .catch(() => {
+          if (token !== routeKmReq.current) return;
+          sM(m =>
+            m.ri === i
+              ? { ...m, k: String(r.k), routeKmBron: "preset" }
+              : m
+          );
+        })
         .finally(() => {
           if (token === routeKmReq.current) setRouteKmLaden(false);
         });
@@ -2013,7 +2040,7 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
                     type="text"
                     placeholder="Bv. UZ Brussel"
                     value={fm.f}
-                    onChange={e => sM(m => ({ ...m, f: e.target.value, ri: -1 }))}
+                    onChange={e => sM(m => ({ ...m, f: e.target.value, ri: -1, routeKmBron: "" }))}
                   />
                 </div>
                 <div className="tm-fg">
@@ -2022,7 +2049,7 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
                     type="text"
                     placeholder="Bv. UZ Leuven"
                     value={fm.t}
-                    onChange={e => sM(m => ({ ...m, t: e.target.value, ri: -1 }))}
+                    onChange={e => sM(m => ({ ...m, t: e.target.value, ri: -1, routeKmBron: "" }))}
                   />
                 </div>
               </div>
@@ -2034,11 +2061,39 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
                   step="1"
                   placeholder="Km"
                   value={fm.k}
-                  onChange={e => sM(m => ({ ...m, k: e.target.value, ri: -1 }))}
+                  onChange={e => sM(m => ({ ...m, k: e.target.value, ri: -1, routeKmBron: "" }))}
                 />
                 {routeKmLaden && (
                   <p style={{ fontSize: 11, color: "var(--acc)", margin: "6px 0 0", lineHeight: 1.35 }}>
                     Rijroute wordt gemeten (kan even duren)…
+                  </p>
+                )}
+                {!routeKmLaden && hasGoogleMapsApiKey() && fm.routeKmBron === "google" && fm.k && (
+                  <p style={{ fontSize: 11, color: "var(--gn)", margin: "6px 0 0", lineHeight: 1.35 }}>
+                    Afstand via <strong>Google Maps</strong> (zelfde motor als google.com) — past bij je vergoeding.
+                  </p>
+                )}
+                {!routeKmLaden && fm.routeKmBron === "osrm" && fm.k && (
+                  <p style={{ fontSize: 11, color: "var(--am)", margin: "6px 0 0", lineHeight: 1.35 }}>
+                    Google gaf geen route; afstand via <strong>OSRM</strong> — kan enkele km afwijken van Google.
+                  </p>
+                )}
+                {!routeKmLaden && fm.routeKmBron === "ors" && fm.k && (
+                  <p style={{ fontSize: 11, color: "var(--am)", margin: "6px 0 0", lineHeight: 1.35 }}>
+                    Afstand via <strong>OpenRouteService</strong> — kan afwijken van Google.
+                  </p>
+                )}
+                {!routeKmLaden && fm.routeKmBron === "preset" && fm.k && (
+                  <p style={{ fontSize: 11, color: "var(--am)", margin: "6px 0 0", lineHeight: 1.35 }}>
+                    Rijroute kon niet worden opgehaald — <strong>referentie-km</strong> uit de lijst. Controleer handmatig
+                    of probeer later (netwerk / API-limiet).
+                  </p>
+                )}
+                {!hasGoogleMapsApiKey() && (
+                  <p style={{ fontSize: 11, color: "var(--tx3)", margin: "6px 0 0", lineHeight: 1.35 }}>
+                    Tip: zet <code className="tm-meer-code">VITE_GOOGLE_MAPS_API_KEY</code> in{" "}
+                    <code className="tm-meer-code">.env</code> en herstart <code className="tm-meer-code">npm run dev</code>{" "}
+                    (of rebuild productie met env-vars) zodat km gelijk loopt met Google.
                   </p>
                 )}
               </div>
@@ -2219,7 +2274,9 @@ function Financieel({ D, pid }) {
       <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Financieel overzicht</h1>
       <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 14px", lineHeight: 1.4 }}>
         Periode = lokale datum. Alle voltooide ritten en kosten in de gekozen periode. PDF en CSV zijn altijd te
-        downloaden (ook zonder ritten: lege export of factuur €&nbsp;0).
+        downloaden (ook zonder ritten: lege export of factuur €&nbsp;0). Omzet = opgeslagen vergoeding per rit (gebaseerd
+        op de km van toen); voor metingen gelijk aan Google heb je <code className="tm-meer-code">VITE_GOOGLE_MAPS_API_KEY</code>{" "}
+        in de build (zie Meer) en correcte km bij het aanmaken van ritten.
       </p>
       <PP v={p} set={sP} />
 
@@ -3995,16 +4052,19 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
         <div className="tm-meer-split" role="separator" />
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Eigen vaste routes</div>
         <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.4 }}>
-          OSM-zoeken. <strong>Afstand</strong> is altijd een <strong>rijroute over echte wegen</strong> (autosnelwegen
-          waar de kaart dat toelaat) — geen vogelvlucht. Standaard via gratis OSRM; met{" "}
-          <code className="tm-meer-code">VITE_GOOGLE_MAPS_API_KEY</code> eerst Google Maps.{" "}
+          OSM-zoeken. <strong>Afstand</strong> is een <strong>rijroute over echte wegen</strong> (autosnelwegen waar de
+          kaart dat toelaat) — geen vogelvlucht. Met{" "}
+          <code className="tm-meer-code">VITE_GOOGLE_MAPS_API_KEY</code> gebruikt de app <strong>Google Directions</strong>{" "}
+          (zelfde motor als google.com); zonder sleutel: gratis OSRM (kan enkele km afwijken).{" "}
           {googleMapsKey ? (
-            <span style={{ color: "var(--gn)" }}>Google-sleutel actief.</span>
+            <span style={{ color: "var(--gn)" }}>Google-sleutel zit in deze build.</span>
           ) : (
             <>
               Optioneel: <code className="tm-meer-code">VITE_OPENROUTE_API_KEY</code> als extra fallback.
             </>
-          )}
+          )}{" "}
+          Na een wijziging in <code className="tm-meer-code">.env</code>: ontwikkeling = dev-server herstarten; live site
+          = opnieuw <strong>builden</strong> met env-vars op je host (Vite stopt de sleutel in de bundle).
         </p>
         <PlaatsPicker label="Vertrek" gekozen={erA} onKies={setErA} lijst={ziekenVoorMeer} />
         <PlaatsPicker label="Bestemming" gekozen={erB} onKies={setErB} lijst={ziekenVoorMeer} />

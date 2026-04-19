@@ -61,7 +61,7 @@ export async function getRouteDistanceORS(origin, destination) {
   const km = metersToKmRounded(distanceM);
   const geometry = route.geometry?.coordinates; // [lng, lat][]
 
-  return { km, geometry };
+  return { km, geometry, source: "ors" };
 }
 
 /**
@@ -83,11 +83,12 @@ export async function getRouteDistanceOSRM(origin, destination) {
   }
   const distanceM = data.routes[0].distance ?? 0;
   const km = metersToKmRounded(distanceM);
-  return { km };
+  return { km, source: "osrm" };
 }
 
 /**
- * Rijroute-km over wegennet: Google → OSRM (standaard gratis) → OpenRouteService.
+ * Rijroute-km over wegennet: Google Maps → OSRM (gratis) → OpenRouteService.
+ * @returns {Promise<{ km: number, source?: string, geometry?: [number, number][] }>}
  */
 export async function getDrivingRouteKm(origin, destination) {
   const { from, to } = normEndpoints(origin, destination);
@@ -95,7 +96,8 @@ export async function getDrivingRouteKm(origin, destination) {
 
   if (GOOGLE_MAPS_API_KEY) {
     try {
-      return await getDrivingRouteGoogleMaps(origin, destination);
+      const g = await getDrivingRouteGoogleMaps(origin, destination);
+      return { ...g, source: g.source || "google" };
     } catch (e) {
       console.warn('Google Maps Directions mislukt, volgende bron:', e);
     }
