@@ -466,6 +466,12 @@ function money(x) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Som van rit-km: per rit altijd `(Number(k)||0)` i.v.m. `acc + Number(k)||0` (NaN reset de som). */
+function ritKmValue(r) {
+  const k = Number(r?.k);
+  return Number.isFinite(k) && k > 0 ? k : 0;
+}
+
 function E(n) {
   const x = money(n);
   return "€" + x.toFixed(2).replace(".", ",");
@@ -540,7 +546,8 @@ function leesLegacyBundel(profileId) {
   return { r, b, o };
 }
 
-const TM_AUTO_FIX_CALC_VERSION = "tm_auto_fix_calc_v2";
+/** Ophogen = éénmalig alle ritten opnieuw aligneren (km + € volgens tarief), behalve handmatigKv. */
+const TM_AUTO_FIX_CALC_VERSION = "tm_auto_fix_calc_v3";
 const tmCalcFixKey = profileId => `tm_calc_fix_done_${TM_AUTO_FIX_CALC_VERSION}_${profileId}`;
 
 function tmBuildRouteKmLookup(data) {
@@ -645,13 +652,19 @@ function applyTripAction(rides, id, a, opts) {
   if (a === "go") rr[i] = { ...rr[i], s: "lopend" };
   else if (a === "ok") {
     const cur = rr[i];
+    let next = { ...cur, s: "voltooid" };
     if (opts && Object.prototype.hasOwnProperty.call(opts, "bon")) {
       const t = String(opts.bon ?? "").trim();
-      const next = { ...cur, s: "voltooid" };
       if (t) next.bon = t;
       else delete next.bon;
-      rr[i] = next;
-    } else rr[i] = { ...cur, s: "voltooid" };
+    }
+    /** Zorg dat opgeslagen € gelijk blijft aan tarief × km (tenzij handmatige km/€). */
+    if (!next.handmatigKv) {
+      const kInt = Math.max(1, Math.round(Number(next.k) || 0));
+      next.k = kInt;
+      next.v = Math.round(tmVergoeding(next.f, next.t, kInt, next.ti || "") * 100) / 100;
+    }
+    rr[i] = next;
   } else rr.splice(i, 1);
   return rr;
 }
@@ -1448,7 +1461,7 @@ function Home({ D, pr, onPlanRit, onTripAct }) {
     [sumP]
   );
   const om = vl.reduce((a, r) => a + money(r.v), 0);
-  const km = vl.reduce((a, r) => a + Number(r.k) || 0, 0);
+  const km = vl.reduce((a, r) => a + ritKmValue(r), 0);
   const kosten =
     D.b.filter(b => statsVenster(b.d) && iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0) +
     (D.o || []).filter(x => statsVenster(x.d) && iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
@@ -1599,7 +1612,7 @@ function ritWeekBuckets(rides) {
     voltooid.forEach(r => {
       if (r.d >= s && r.d <= e) {
         c++;
-        k += Number(r.k) || 0;
+        k += ritKmValue(r);
       }
     });
     labels.push(wkLbl[5 - w]);
@@ -1858,8 +1871,9 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
   };
   const svR = () => {
     if (!fm.f || !fm.t || !fm.k) return;
-    const k = +fm.k;
-    if (k <= 0) return;
+    const k = Math.max(1, Math.round(Number(fm.k) || 0));
+    if (k < 1) return;
+    const v = Math.round(tmVergoeding(fm.f, fm.t, k, fm.ti) * 100) / 100;
     const trip = {
       id: ui(),
       d: fm.d,
@@ -1870,7 +1884,7 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
       dr: fm.dr,
       ca: fm.ca,
       s: fm.s,
-      v: tmVergoeding(fm.f, fm.t, k, fm.ti),
+      v,
     };
     const b = String(fm.bon || "").trim();
     if (b) trip.bon = b;
@@ -1984,164 +1998,167 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
 
       {sh && (
         <div className="tm-ov" onClick={e => e.target === e.currentTarget && sSh(false)}>
-          <div className="tm-mo" onClick={e => e.stopPropagation()}>
+          <div className="tm-mo tm-mo-nieuw-rit" onClick={e => e.stopPropagation()}>
             <div className="tm-mh">
               <h2>Nieuwe rit</h2>
               <button type="button" className="btn btn-gh" onClick={() => sSh(false)}>
                 ✕
               </button>
             </div>
-            <div className="tm-mb">
-              <div className="tm-rit-map-slot tm-rit-map-slot--compact">
-                {mapCoords ? (
-                  <RitMap
-                    la1={mapCoords.la1}
-                    lo1={mapCoords.lo1}
-                    la2={mapCoords.la2}
-                    lo2={mapCoords.lo2}
-                    labelF={mapCoords.labelF}
-                    labelT={mapCoords.labelT}
+            <div className="tm-mb tm-mo-nieuw-rit-scroll">
+              <section className="tm-form-sec" aria-label="Kaart">
+                <div className="tm-form-sec-hd">Voorbeeld op kaart</div>
+                <div className="tm-rit-map-slot tm-rit-map-slot--compact">
+                  {mapCoords ? (
+                    <RitMap
+                      la1={mapCoords.la1}
+                      lo1={mapCoords.lo1}
+                      la2={mapCoords.la2}
+                      lo2={mapCoords.lo2}
+                      labelF={mapCoords.labelF}
+                      labelT={mapCoords.labelT}
+                    />
+                  ) : fm.ri >= 0 && sel && !sel.__map ? (
+                    <div className="tm-rit-map-ph">Geen kaart voor deze route.</div>
+                  ) : (
+                    <div className="tm-rit-map-ph">Kies hieronder een vaste route om de kaart te tonen.</div>
+                  )}
+                </div>
+              </section>
+              <section className="tm-form-sec" aria-label="Vaste routes">
+                <div className="tm-form-sec-hd">Vaste routes</div>
+                <div className="tm-prs tm-prs--modal">
+                  {mergedRoutes.map((r, i) => (
+                    <button
+                      key={r.__id ? `xr-${r.__id}` : r.__arch ? `ar-${r.id}` : `rt-${i}`}
+                      type="button"
+                      className={"tm-pr" + (fm.ri === i ? " on" : "")}
+                      onClick={() => pk(i)}
+                    >
+                      <span>
+                        {r.f} → {r.t}
+                        {r.__id && !r.__arch && (
+                          <span className="tm-pr-tag tm-pr-tag--acc">eigen</span>
+                        )}
+                        {r.__arch && <span className="tm-pr-tag tm-pr-tag--am">archief</span>}
+                      </span>
+                      <b className="tm-pk">{r.k} km</b>
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <section className="tm-form-sec" aria-label="Handmatig">
+                <div className="tm-form-sec-hd">Of handmatig</div>
+                <div className="tm-g2">
+                  <div className="tm-fg">
+                    <label className="fl">Vertrek (naam)</label>
+                    <input
+                      type="text"
+                      placeholder="Bv. UZ Brussel"
+                      value={fm.f}
+                      onChange={e => sM(m => ({ ...m, f: e.target.value, ri: -1, routeKmBron: "" }))}
+                    />
+                  </div>
+                  <div className="tm-fg">
+                    <label className="fl">Bestemming (naam)</label>
+                    <input
+                      type="text"
+                      placeholder="Bv. UZ Leuven"
+                      value={fm.t}
+                      onChange={e => sM(m => ({ ...m, t: e.target.value, ri: -1, routeKmBron: "" }))}
+                    />
+                  </div>
+                </div>
+                <div className="tm-fg" style={{ marginBottom: 0 }}>
+                  <label className="fl">Afstand (km)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="Km"
+                    value={fm.k}
+                    onChange={e => sM(m => ({ ...m, k: e.target.value, ri: -1, routeKmBron: "" }))}
                   />
-                ) : fm.ri >= 0 && sel && !sel.__map ? (
-                  <div className="tm-rit-map-ph">Geen kaart voor deze route.</div>
-                ) : (
-                  <div className="tm-rit-map-ph">Kies route ↓</div>
-                )}
-              </div>
-              <div className="fl">Vaste routes</div>
-              <div className="tm-prs tm-prs--modal">
-                {mergedRoutes.map((r, i) => (
-                  <button
-                    key={r.__id ? `xr-${r.__id}` : r.__arch ? `ar-${r.id}` : `rt-${i}`}
-                    type="button"
-                    className={"tm-pr" + (fm.ri === i ? " on" : "")}
-                    onClick={() => pk(i)}
-                  >
-                    <span>
-                      {r.f} → {r.t}
-                      {r.__id && !r.__arch && (
-                        <span style={{ fontSize: 9, color: "var(--acc)", marginLeft: 6 }}>(eigen)</span>
-                      )}
-                      {r.__arch && (
-                        <span style={{ fontSize: 9, color: "var(--am)", marginLeft: 6 }}>(archief)</span>
-                      )}
-                    </span>
-                    <b className="tm-pk">{r.k} km</b>
-                  </button>
-                ))}
-              </div>
-              <div className="fl" style={{ marginTop: 10 }}>
-                Handmatig
-              </div>
-              <div className="tm-g2">
+                  {routeKmLaden && (
+                    <p className="tm-form-hint tm-form-hint--acc">Rijroute wordt gemeten (even geduld)…</p>
+                  )}
+                  {!routeKmLaden && hasGoogleMapsApiKey() && fm.routeKmBron === "google" && fm.k && (
+                    <p className="tm-form-hint tm-form-hint--gn">
+                      Afstand via <strong>Google Maps</strong> — zelfde motor als google.com.
+                    </p>
+                  )}
+                  {!routeKmLaden && fm.routeKmBron === "osrm" && fm.k && (
+                    <p className="tm-form-hint tm-form-hint--am">
+                      Google niet beschikbaar; afstand via <strong>OSRM</strong> (kan enkele km afwijken).
+                    </p>
+                  )}
+                  {!routeKmLaden && fm.routeKmBron === "ors" && fm.k && (
+                    <p className="tm-form-hint tm-form-hint--am">
+                      Afstand via <strong>OpenRouteService</strong> (kan afwijken van Google).
+                    </p>
+                  )}
+                  {!routeKmLaden && fm.routeKmBron === "preset" && fm.k && (
+                    <p className="tm-form-hint tm-form-hint--am">
+                      Route niet opgehaald — <strong>referentie-km</strong> uit de lijst. Controleer desnoods handmatig.
+                    </p>
+                  )}
+                  {!hasGoogleMapsApiKey() && (
+                    <p className="tm-form-hint">
+                      Tip: <code className="tm-meer-code">VITE_GOOGLE_MAPS_API_KEY</code> in{" "}
+                      <code className="tm-meer-code">.env</code> + herstart <code className="tm-meer-code">npm run dev</code>{" "}
+                      voor km gelijk aan Google.
+                    </p>
+                  )}
+                </div>
+              </section>
+              <section className="tm-form-sec" aria-label="Ritgegevens">
+                <div className="tm-form-sec-hd">Ritgegevens</div>
                 <div className="tm-fg">
-                  <label className="fl">Vertrek (naam)</label>
+                  <label className="fl">Bon (IHcT…)</label>
                   <input
                     type="text"
-                    placeholder="Bv. UZ Brussel"
-                    value={fm.f}
-                    onChange={e => sM(m => ({ ...m, f: e.target.value, ri: -1, routeKmBron: "" }))}
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                    placeholder="Optioneel"
+                    value={fm.bon}
+                    onChange={e => sM(m => ({ ...m, bon: e.target.value }))}
                   />
                 </div>
-                <div className="tm-fg">
-                  <label className="fl">Bestemming (naam)</label>
-                  <input
-                    type="text"
-                    placeholder="Bv. UZ Leuven"
-                    value={fm.t}
-                    onChange={e => sM(m => ({ ...m, t: e.target.value, ri: -1, routeKmBron: "" }))}
-                  />
+                <div className="tm-g2">
+                  <div className="tm-fg">
+                    <label className="fl">Datum</label>
+                    <input type="date" value={fm.d} onChange={e => sM(m => ({ ...m, d: e.target.value }))} />
+                  </div>
+                  <div className="tm-fg">
+                    <label className="fl">Tijd</label>
+                    <input type="time" value={fm.ti} onChange={e => sM(m => ({ ...m, ti: e.target.value }))} />
+                  </div>
                 </div>
-              </div>
-              <div className="tm-fg">
-                <label className="fl">Afstand (km)</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  placeholder="Km"
-                  value={fm.k}
-                  onChange={e => sM(m => ({ ...m, k: e.target.value, ri: -1, routeKmBron: "" }))}
-                />
-                {routeKmLaden && (
-                  <p style={{ fontSize: 11, color: "var(--acc)", margin: "6px 0 0", lineHeight: 1.35 }}>
-                    Rijroute wordt gemeten (kan even duren)…
-                  </p>
-                )}
-                {!routeKmLaden && hasGoogleMapsApiKey() && fm.routeKmBron === "google" && fm.k && (
-                  <p style={{ fontSize: 11, color: "var(--gn)", margin: "6px 0 0", lineHeight: 1.35 }}>
-                    Afstand via <strong>Google Maps</strong> (zelfde motor als google.com) — past bij je vergoeding.
-                  </p>
-                )}
-                {!routeKmLaden && fm.routeKmBron === "osrm" && fm.k && (
-                  <p style={{ fontSize: 11, color: "var(--am)", margin: "6px 0 0", lineHeight: 1.35 }}>
-                    Google gaf geen route; afstand via <strong>OSRM</strong> — kan enkele km afwijken van Google.
-                  </p>
-                )}
-                {!routeKmLaden && fm.routeKmBron === "ors" && fm.k && (
-                  <p style={{ fontSize: 11, color: "var(--am)", margin: "6px 0 0", lineHeight: 1.35 }}>
-                    Afstand via <strong>OpenRouteService</strong> — kan afwijken van Google.
-                  </p>
-                )}
-                {!routeKmLaden && fm.routeKmBron === "preset" && fm.k && (
-                  <p style={{ fontSize: 11, color: "var(--am)", margin: "6px 0 0", lineHeight: 1.35 }}>
-                    Rijroute kon niet worden opgehaald — <strong>referentie-km</strong> uit de lijst. Controleer handmatig
-                    of probeer later (netwerk / API-limiet).
-                  </p>
-                )}
-                {!hasGoogleMapsApiKey() && (
-                  <p style={{ fontSize: 11, color: "var(--tx3)", margin: "6px 0 0", lineHeight: 1.35 }}>
-                    Tip: zet <code className="tm-meer-code">VITE_GOOGLE_MAPS_API_KEY</code> in{" "}
-                    <code className="tm-meer-code">.env</code> en herstart <code className="tm-meer-code">npm run dev</code>{" "}
-                    (of rebuild productie met env-vars) zodat km gelijk loopt met Google.
-                  </p>
-                )}
-              </div>
-              <div className="tm-fg" style={{ marginTop: 10 }}>
-                <label className="fl">Bon (IHcT…)</label>
-                <input
-                  type="text"
-                  autoCapitalize="characters"
-                  spellCheck={false}
-                  placeholder="Optioneel"
-                  value={fm.bon}
-                  onChange={e => sM(m => ({ ...m, bon: e.target.value }))}
-                />
-              </div>
-              <div className="tm-g2">
-                <div className="tm-fg">
-                  <label className="fl">Datum</label>
-                  <input type="date" value={fm.d} onChange={e => sM(m => ({ ...m, d: e.target.value }))} />
+                <div className="tm-g2">
+                  <div className="tm-fg">
+                    <label className="fl">Chauffeur</label>
+                    <select value={fm.dr} onChange={e => sM(m => ({ ...m, dr: e.target.value }))}>
+                      {DR.map(d => (
+                        <option key={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="tm-fg">
+                    <label className="fl">Voertuig</label>
+                    <select value={fm.ca} onChange={e => sM(m => ({ ...m, ca: e.target.value }))}>
+                      {CA.map(c => (
+                        <option key={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="tm-fg">
-                  <label className="fl">Tijd</label>
-                  <input type="time" value={fm.ti} onChange={e => sM(m => ({ ...m, ti: e.target.value }))} />
-                </div>
-              </div>
-              <div className="tm-g2">
-                <div className="tm-fg">
-                  <label className="fl">Chauffeur</label>
-                  <select value={fm.dr} onChange={e => sM(m => ({ ...m, dr: e.target.value }))}>
-                    {DR.map(d => (
-                      <option key={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="tm-fg">
-                  <label className="fl">Voertuig</label>
-                  <select value={fm.ca} onChange={e => sM(m => ({ ...m, ca: e.target.value }))}>
-                    {CA.map(c => (
-                      <option key={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              </section>
               {canBevestig && (
-                <div className="card tm-rit-sum">
+                <div className="card tm-rit-sum" aria-live="polite">
                   <div className="tm-rvi">
                     <span>Route</span>
                     <b>
@@ -2153,21 +2170,24 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
                     <b>{fm.k} km</b>
                   </div>
                   <div className="tm-rvi">
-                    <span>Vergoeding</span>
+                    <span>Vergoeding (tarief)</span>
                     <b>
-                      {E(tmVergoeding(fm.f, fm.t, +fm.k, fm.ti))}
+                      {E(tmVergoeding(fm.f, fm.t, Math.max(1, Math.round(Number(fm.k) || 0)), fm.ti))}
                       {isN(fm.ti) && (
-                        <span style={{ fontSize: 12, color: "var(--am)", fontWeight: 500 }}> nachttarief</span>
+                        <span className="tm-rit-sum-nacht" title="Nachttoeslag op km-schijven">
+                          {" "}
+                          nachttarief
+                        </span>
                       )}
                     </b>
                   </div>
                 </div>
               )}
-              <div className="tm-mfa tm-mfa-single">
-                <button type="button" className="btn btn-p btn-full" onClick={svR} disabled={!canBevestig}>
-                  Rit bevestigen
-                </button>
-              </div>
+            </div>
+            <div className="tm-mo-nieuw-rit-footer">
+              <button type="button" className="btn btn-p btn-full" onClick={svR} disabled={!canBevestig}>
+                Rit bevestigen
+              </button>
             </div>
           </div>
         </div>
@@ -2197,7 +2217,7 @@ function Financieel({ D, pid }) {
   const done = all.filter(r => r.s === "voltooid" && iR(r.d, s, e));
   const cancelled = all.filter(r => r.s === "geannuleerd" && iR(r.d, s, e));
   const omzet = done.reduce((a, r) => a + money(r.v), 0);
-  const totKm = done.reduce((a, r) => a + Number(r.k) || 0, 0);
+  const totKm = done.reduce((a, r) => a + ritKmValue(r), 0);
   const brandstof = D.b.filter(b => iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0);
   const overig = (D.o || []).filter(x => iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
   const kosten = brandstof + overig;

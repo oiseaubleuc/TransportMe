@@ -904,9 +904,14 @@ body {
 }
 
 .tm-trip-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
   font-size: 12px;
   color: var(--tx2);
   margin-bottom: 2px;
+  line-height: 1.45;
 }
 
 .tm-trip-meta strong.acc,
@@ -1122,6 +1127,64 @@ body {
   padding: 16px 18px;
 }
 
+/* Nieuwe-rit modal: scrollbaar midden, vaste footer (vriendelijker op mobiel) */
+.tm-mo-nieuw-rit {
+  display: flex;
+  flex-direction: column;
+  max-height: min(92dvh, 720px);
+}
+
+.tm-mo-nieuw-rit-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+}
+
+.tm-mo-nieuw-rit-footer {
+  flex-shrink: 0;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--bd);
+  background: var(--s1);
+}
+
+.tm-form-sec {
+  margin-bottom: 16px;
+}
+
+.tm-form-sec:last-child {
+  margin-bottom: 0;
+}
+
+.tm-form-sec-hd {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tx3);
+  margin: 0 0 8px;
+}
+
+.tm-form-hint {
+  font-size: 11px;
+  margin: 6px 0 0;
+  line-height: 1.4;
+  color: var(--tx3);
+}
+
+.tm-form-hint--acc {
+  color: var(--acc);
+}
+
+.tm-form-hint--gn {
+  color: var(--gn);
+}
+
+.tm-form-hint--am {
+  color: var(--am);
+}
+
 .tm-sg {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1174,7 +1237,7 @@ body {
 }
 
 .tm-prs--modal {
-  max-height: min(24vh, 200px);
+  max-height: min(32vh, 240px);
 }
 
 .tm-pr {
@@ -1194,6 +1257,30 @@ body {
 .tm-pr.on {
   border-color: var(--acc);
   background: var(--accBg);
+}
+
+.tm-pr-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
+.tm-pr-tag--acc {
+  color: var(--acc);
+  background: var(--accBg);
+  border: 1px solid var(--acc2);
+}
+
+.tm-pr-tag--am {
+  color: var(--am);
+  background: var(--amBg);
+  border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
 .tm-pk {
@@ -1285,6 +1372,16 @@ body {
 .tm-rvi span {
   color: var(--tx3);
   font-size: 10px;
+}
+
+.tm-rvi b {
+  text-align: right;
+  max-width: 62%;
+  word-break: break-word;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--tx2);
 }
 
 .tm-sg2 {
@@ -1556,6 +1653,12 @@ body {
   margin-top: 10px;
   padding: 12px;
   background: var(--s2) !important;
+}
+
+.tm-rit-sum-nacht {
+  font-size: 11px;
+  color: var(--am);
+  font-weight: 600;
 }
 
 .tm-mfa-single {
