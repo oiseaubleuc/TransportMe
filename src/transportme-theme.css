@@ -806,6 +806,11 @@ body {
   gap: 12px;
 }
 
+.tm-home-sum-split--one {
+  grid-template-columns: 1fr;
+  max-width: 520px;
+}
+
 .tm-home-sum-cell {
   display: flex;
   flex-direction: column;

@@ -19,11 +19,11 @@ import { exportTransporteurData, applyImportPayload } from "./js/dataBackup.js";
 import { recognizeBonImage, terminateBonOcrWorker } from "./js/bonFotoOcr.js";
 import { getFactuurGegevens, nextFactuurVolgNummer, saveFactuurGegevens } from "./js/storage.js";
 import { generateFactuurPdfBlob, triggerPdfDownload } from "./js/invoicePdf.js";
-import { vergoedingVoorRit } from "./js/calculations.js";
+import { vergoedingVoorRit, vergoedingUitsplitsingVoorRit } from "./js/calculations.js";
 import { getDrivingRouteKm, getDrivingRouteWithGeometry } from "./js/ors.js";
 import { createGoogleRouteMap } from "./js/googleMapsView.js";
 import { searchPlacesBelgium } from "./js/placeSearchFree.js";
-import { PRESET_ANCHOR_ZIEKENHUIZEN, GESCHAT_VERBRUIK_L_PER_100KM, hasGoogleMapsApiKey } from "./js/config.js";
+import { PRESET_ANCHOR_ZIEKENHUIZEN, hasGoogleMapsApiKey } from "./js/config.js";
 import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 
 ChartJS.register(
@@ -338,9 +338,8 @@ function normFactuurDatumRange(van, tot, fallbackStart, fallbackEnd) {
   }
   return a <= b ? [a, b] : [b, a];
 }
-/** Totalen op Home/Financieel: alleen data vanaf deze datum (YYYY-MM-DD). */
-const TM_STATS_FROM = "2026-03-31";
-const statsVenster = d => typeof d === "string" && d.slice(0, 10) >= TM_STATS_FROM;
+/** Totalen op Home/Financieel: geen stilzwijgend afsnijden per datum. */
+const statsVenster = () => true;
 const gr = p => {
   if (p === "day") return [td(), td()];
   if (p === "yesterday") return [yd(), yd()];
@@ -441,18 +440,26 @@ function padTijd(t) {
   return `${String(h).padStart(2, "0")}:${m[2]}`;
 }
 
-/** getallen uit oude data (1.234,56 of 90,50 of 90.5) */
+/**
+ * Oude/geplakte getallen: 1.234,56 (BE), 1,234.56 (US), 1.234 (duizend) vs 90.5 (decimalen).
+ * Bij alleen punten: decimalen enkel als er precies één punt is en ≤2 cijfers erna; anders duizendtallen.
+ */
 function parseLooseNumber(val) {
   if (val == null || val === "") return NaN;
   if (typeof val === "number" && Number.isFinite(val)) return val;
   const s0 = String(val).trim().replace(/\s/g, "");
-  const hasComma = s0.includes(",");
-  const hasDot = s0.includes(".");
+  const lastComma = s0.lastIndexOf(",");
+  const lastDot = s0.lastIndexOf(".");
   let s = s0;
-  if (hasComma && (!hasDot || s0.lastIndexOf(",") > s0.lastIndexOf("."))) {
-    s = s0.replace(/\./g, "").replace(",", ".");
-  } else if (hasComma && hasDot) {
-    s = s0.replace(/,/g, "");
+  if (lastComma > -1 && lastDot > -1) {
+    if (lastComma > lastDot) s = s0.replace(/\./g, "").replace(",", ".");
+    else s = s0.replace(/,/g, "");
+  } else if (lastComma > -1) {
+    s = s0.replace(",", ".");
+  } else if (lastDot > -1) {
+    const parts = s0.split(".");
+    if (parts.length === 2 && parts[1].length <= 2) s = s0;
+    else s = s0.replace(/\./g, "");
   }
   const n = Number(s);
   return Number.isFinite(n) ? n : NaN;
@@ -1239,6 +1246,35 @@ function LopendTripSwipe({ ritId, onAct, className, style, children }) {
   );
 }
 
+function RitVergoedingUitleg({ r }) {
+  const k = Math.max(0, Number(r.k) || 0);
+  const u = vergoedingUitsplitsingVoorRit(k, r.ti || "", { fromName: r.f, toName: r.t });
+  if (u.isSangoUzaForfait) {
+    return (
+      <div
+        className="tm-rit-tarief-uitleg"
+        style={{ fontSize: 10, color: "var(--tx3)", marginTop: 6, lineHeight: 1.4 }}
+      >
+        Vast forfait (Sango of RKV Mechelen ↔ UZA Edegem): {E(u.forfaitBasis != null ? u.forfaitBasis : u.vergoeding)}
+      </div>
+    );
+  }
+  const nacht = u.nachtToeslagEuro > 0.001;
+  return (
+    <div
+      className="tm-rit-tarief-uitleg"
+      style={{ fontSize: 10, color: "var(--tx3)", marginTop: 6, lineHeight: 1.4 }}
+    >
+      {E(u.opstartEuro)} opstart · {u.schijven}×(20 km) = {E(u.variabelDeel)}
+      {nacht
+        ? ` · nachttoeslag (schijven × ${u.nachtToeslagPercent}%) +${E(u.nachtToeslagEuro)}`
+        : ""}
+      {" · "}
+      <span style={{ color: "var(--tx2)" }}>Berekend: {E(u.vergoeding)}</span>
+    </div>
+  );
+}
+
 function TripCard({ r, onAct }) {
   const bc = r.s === "komend" ? "cl-a" : r.s === "lopend" ? "cl-g" : r.s === "geannuleerd" ? "cl-r" : "cl-v";
   const cardStyle = { opacity: r.s === "geannuleerd" ? 0.45 : 1 };
@@ -1255,8 +1291,9 @@ function TripCard({ r, onAct }) {
         {r.ti && " · " + r.ti}
         {r.bon && " · Bon " + r.bon} · {r.k} km · <strong className="acc">{E(r.v)}</strong>
       </div>
+      {r.s !== "geannuleerd" && <RitVergoedingUitleg r={r} />}
       {isN(r.ti) && r.s !== "geannuleerd" && (
-        <div style={{ fontSize: 11, color: "var(--am)", marginBottom: 2 }}>Nachttarief +30%</div>
+        <div style={{ fontSize: 11, color: "var(--am)", marginBottom: 2 }}>Nachttarief +30% op aantal 20 km-schijven</div>
       )}
       {r.dr && (
         <div style={{ fontSize: 11, color: "var(--tx3)", marginBottom: 6 }}>
@@ -1461,19 +1498,10 @@ function Home({ D, pr, onPlanRit, onTripAct }) {
     [sumP]
   );
   const om = vl.reduce((a, r) => a + money(r.v), 0);
-  const km = vl.reduce((a, r) => a + ritKmValue(r), 0);
   const kosten =
     D.b.filter(b => statsVenster(b.d) && iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0) +
     (D.o || []).filter(x => statsVenster(x.d) && iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
   const nettoBoek = om - kosten;
-  const tanksInPeriode = D.b.filter(b => statsVenster(b.d) && iR(b.d, s, e));
-  const tanksMetL = tanksInPeriode.filter(b => money(b.l) > 0 && money(b.p) >= 0);
-  const avgPl = tanksMetL.length
-    ? tanksMetL.reduce((a, b) => a + money(b.p), 0) / tanksMetL.length
-    : 2.3;
-  const geschatBrandstofRitten =
-    Math.round(km * (GESCHAT_VERBRUIK_L_PER_100KM / 100) * avgPl * 100) / 100;
-  const geschatWinst = Math.round((om - geschatBrandstofRitten) * 100) / 100;
   const periodRangeLabel =
     sumP === "day"
       ? fmtNlVandaagLong()
@@ -1558,21 +1586,12 @@ function Home({ D, pr, onPlanRit, onTripAct }) {
               <span className="tm-home-sum-hero-sub">Alleen voltooide ritten in deze periode</span>
             </div>
           </div>
-          <div className="tm-home-sum-split">
-            <div className="tm-home-sum-cell">
-              <span className="tm-home-sum-cell-lab">Winst</span>
-              <span className="tm-home-sum-cell-hint">Na geschatte brandstof</span>
-              <span
-                className={
-                  "tm-home-sum-cell-val " + (geschatWinst >= 0 ? "tm-home-stat-pos" : "tm-home-stat-neg")
-                }
-              >
-                {E(geschatWinst)}
-              </span>
-            </div>
+          <div className="tm-home-sum-split tm-home-sum-split--one">
             <div className="tm-home-sum-cell">
               <span className="tm-home-sum-cell-lab">Netto</span>
-              <span className="tm-home-sum-cell-hint">{nettoHint}</span>
+              <span className="tm-home-sum-cell-hint">
+                {nettoHint} (brandstof- en overige kosten in deze periode)
+              </span>
               <span
                 className={
                   "tm-home-sum-cell-val " + (nettoBoek >= 0 ? "tm-home-stat-pos" : "tm-home-stat-neg")
@@ -3630,6 +3649,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   const [meerToonVoltooide, setMeerToonVoltooide] = useState(false);
   const [bonEdit, setBonEdit] = useState({});
   const [recalcRittenBusy, setRecalcRittenBusy] = useState(false);
+  const [herberekenTariefBusy, setHerberekenTariefBusy] = useState(false);
   const [googleTestBusy, setGoogleTestBusy] = useState(false);
   const [googleTestMsg, setGoogleTestMsg] = useState("");
   const backupFileRef = useRef(null);
@@ -3780,6 +3800,29 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
       alert("Klaar. Ritten met herkenbare route zijn herberekend; andere bleven ongewijzigd.");
     } finally {
       setRecalcRittenBusy(false);
+    }
+  };
+
+  const herberekenVergoedingenLokaal = () => {
+    if (
+      !confirm(
+        "Alle ritten opnieuw uitlijnen op actuele tarieven (km, €), op basis van opgeslagen routen? Ritten met handmatige km/€ blijven ongewijzigd. Geen netwerk."
+      )
+    ) {
+      return;
+    }
+    setHerberekenTariefBusy(true);
+    try {
+      const next = autoFixRitBerekeningen(D);
+      if (next === D) {
+        alert("Geen wijzigingen nodig — alles is al in lijn met de tarieven (of alles is handmatig afgeschermd).");
+        return;
+      }
+      sD(next);
+      sv(pid, next);
+      alert("Klaar. € en km (waar van toepassing) zijn opnieuw berekend met de huidige regels.");
+    } finally {
+      setHerberekenTariefBusy(false);
     }
   };
 
@@ -4015,9 +4058,24 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
         </p>
         <button
           type="button"
+          className="btn btn-s btn-full"
+          style={{ marginBottom: 8 }}
+          disabled={herberekenTariefBusy || D.r.length === 0}
+          onClick={herberekenVergoedingenLokaal}
+        >
+          {herberekenTariefBusy
+            ? "Vergoedingen herberekenen…"
+            : "Vergoeding: tarief + km (lokaal, zonder netwerk)"}
+        </button>
+        <p style={{ fontSize: 11, color: "var(--tx3)", margin: "0 0 12px", lineHeight: 1.35 }}>
+          Hoeft u een geïmporteerde of verouderde <strong>€</strong> te corrigeren, gebruik dan deze knop. Ritten met
+          handmatige km/€ (Historiek) worden overgeslagen.
+        </p>
+        <button
+          type="button"
           className="btn btn-o btn-full"
           style={{ marginBottom: 12 }}
-          disabled={recalcRittenBusy || D.r.length === 0}
+          disabled={recalcRittenBusy || herberekenTariefBusy || D.r.length === 0}
           onClick={herberekenAlleRittenKm}
         >
           {recalcRittenBusy ? "Bezig met herberekenen…" : "Alle ritten: km + vergoeding (rijroute)"}
