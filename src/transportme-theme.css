@@ -1242,7 +1242,7 @@ body {
 }
 
 .tm-prs--modal {
-  max-height: min(32vh, 240px);
+  max-height: min(22vh, 180px);
 }
 
 .tm-pr {
@@ -1286,6 +1286,18 @@ body {
   color: var(--am);
   background: var(--amBg);
   border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.tm-pr-tag--pot {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.tm-form-sec-hd--sub {
+  margin-top: 10px;
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .tm-pk {

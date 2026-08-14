@@ -23,7 +23,11 @@ import { vergoedingVoorRit, vergoedingUitsplitsingVoorRit } from "./js/calculati
 import { getDrivingRouteKm, getDrivingRouteWithGeometry } from "./js/ors.js";
 import { createGoogleRouteMap } from "./js/googleMapsView.js";
 import { searchPlacesBelgium } from "./js/placeSearchFree.js";
-import { PRESET_ANCHOR_ZIEKENHUIZEN, hasGoogleMapsApiKey } from "./js/config.js";
+import {
+  PRESET_ANCHOR_ZIEKENHUIZEN,
+  ALL_PRESET_ROUTES,
+  hasGoogleMapsApiKey,
+} from "./js/config.js";
 import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 
 ChartJS.register(
@@ -86,37 +90,28 @@ const PR = [
 ];
 const DR = ["Houdaifa", "Amine", "Frederik", "Student 1"],
   CA = ["Audi A3 (2-HKN-136)", "BMW Serie 1 (2-GGW-635)"];
-/** Vaste routes (km + coördinaten, zelfde lijst als voorheen — geen handmatige route) */
-/** Lijst: referentie-km; bij keuze route met coördinaten wordt km eerst via Google (indien sleutel), anders OSRM/ORS. */
-const ROUTES = [
-  { f: "UZ Brussel", t: "UZ Leuven", k: 36, la1: 50.8824, lo1: 4.2745, la2: 50.8814, lo2: 4.671 },
-  { f: "UZ Brussel", t: "UZA Edegem", k: 41, la1: 50.8824, lo1: 4.2745, la2: 51.1552, lo2: 4.4452 },
-  { f: "UZ Brussel", t: "AZ Deurne", k: 47, la1: 50.8824, lo1: 4.2745, la2: 51.2192, lo2: 4.4653 },
-  { f: "UZ Brussel", t: "AZ Herentals", k: 74, la1: 50.8824, lo1: 4.2745, la2: 51.1766, lo2: 4.8325 },
-  { f: "UZ Brussel", t: "RKV Mechelen", k: 31, la1: 50.8824, lo1: 4.2745, la2: 51.0257, lo2: 4.4776 },
-  { f: "UZ Brussel", t: "AZ Gent", k: 49, la1: 50.8824, lo1: 4.2745, la2: 51.0225, lo2: 3.7108 },
-  { f: "UZ Brussel", t: "ZOL Genk", k: 104, la1: 50.8824, lo1: 4.2745, la2: 50.9656, lo2: 5.5001 },
-  { f: "UZ Brussel", t: "AZ Turnhout", k: 88, la1: 50.8824, lo1: 4.2745, la2: 51.3245, lo2: 4.9486 },
-  { f: "UZ Brussel", t: "Virga Jesse", k: 92, la1: 50.8824, lo1: 4.2745, la2: 50.9307, lo2: 5.3378 },
-  { f: "RKV Mechelen", t: "AZ Gent", k: 78, la1: 51.0257, lo1: 4.4776, la2: 51.0225, lo2: 3.7108 },
-  { f: "RKV Mechelen", t: "ZOL Genk", k: 90, la1: 51.0257, lo1: 4.4776, la2: 50.9656, lo2: 5.5001 },
-  { f: "RKV Mechelen", t: "UZ Leuven", k: 39, la1: 51.0257, lo1: 4.4776, la2: 50.8814, lo2: 4.671 },
-  { f: "RKV Mechelen", t: "UZ Brussel", k: 32, la1: 51.0257, lo1: 4.4776, la2: 50.8824, lo2: 4.2745 },
-  { f: "RKV Mechelen", t: "Jessa Hasselt", k: 77, la1: 51.0257, lo1: 4.4776, la2: 50.9307, lo2: 5.3378 },
-  { f: "RKV Mechelen", t: "Heusden-Zolder St. Franciscus (SFZ)", k: 78, la1: 51.0257, lo1: 4.4776, la2: 51.047, lo2: 5.3153 },
-  { f: "RKV Mechelen", t: "Lier Heilig Hart", k: 16, la1: 51.0257, lo1: 4.4776, la2: 51.1284, lo2: 4.5708 },
-  { f: "RKV Mechelen", t: "Malle AZ Voorkempen", k: 51, la1: 51.0257, lo1: 4.4776, la2: 51.2995, lo2: 4.7295 },
-  { f: "RKV Mechelen", t: "Turnhout St. Elisabeth", k: 64, la1: 51.0257, lo1: 4.4776, la2: 51.321, lo2: 4.936 },
-  { f: "RKV Mechelen", t: "Sint-Truiden AZ St. Trudo", k: 78, la1: 51.0257, lo1: 4.4776, la2: 50.8165, lo2: 5.1895 },
-  { f: "RKV Mechelen", t: "Gent UZ", k: 78, la1: 51.0257, lo1: 4.4776, la2: 51.0361, lo2: 3.7284 },
-  { f: "RKV Mechelen", t: "Geel St. Dimpna", k: 65, la1: 51.0257, lo1: 4.4776, la2: 51.1622, lo2: 4.9938 },
-  { f: "RKV Mechelen", t: "Deurne AZ Monica", k: 26, la1: 51.0257, lo1: 4.4776, la2: 51.2192, lo2: 4.4653 },
-  { f: "RKV Mechelen", t: "Bornem AZ Rivierenland", k: 22, la1: 51.0257, lo1: 4.4776, la2: 51.091, lo2: 4.24 },
-  { f: "RKV Mechelen", t: "Brasschaat AZ Klina", k: 37, la1: 51.0257, lo1: 4.4776, la2: 51.2912, lo2: 4.4918 },
-  { f: "UZ Leuven", t: "UZ Brussel", k: 35, la1: 50.8814, lo1: 4.671, la2: 50.8824, lo2: 4.2745 },
-  { f: "UZ Leuven", t: "UZA Edegem", k: 52, la1: 50.8814, lo1: 4.671, la2: 51.1552, lo2: 4.4452 },
-  { f: "UZ Leuven", t: "AZ Diest", k: 36, la1: 50.8814, lo1: 4.671, la2: 50.9894, lo2: 5.0506 },
-];
+/** Vaste + potentiële routes uit config (km + coördinaten). */
+function tmRoutesFromPresets(presets) {
+  const byId = Object.fromEntries(PRESET_ANCHOR_ZIEKENHUIZEN.map(h => [h.id, h]));
+  return presets
+    .map(p => {
+      const a = byId[p.fromId];
+      const b = byId[p.toId];
+      if (!a || !b) return null;
+      return {
+        f: p.fromName,
+        t: p.toName,
+        k: p.defaultKm,
+        la1: a.lat,
+        lo1: a.lng,
+        la2: b.lat,
+        lo2: b.lng,
+        __potentieel: p.potentieel === true,
+      };
+    })
+    .filter(Boolean);
+}
+const ROUTES = tmRoutesFromPresets(ALL_PRESET_ROUTES);
 
 const nt = () => {
   const d = new Date();
@@ -1842,6 +1837,15 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
   });
   const [fm, sM] = useState(mkIni);
   const [routeKmLaden, setRouteKmLaden] = useState(false);
+  const [routeFilter, setRouteFilter] = useState("");
+  const routeRows = useMemo(() => {
+    const q = routeFilter.trim().toLowerCase();
+    const rows = mergedRoutes.map((r, i) => ({ r, i }));
+    if (!q) return rows;
+    return rows.filter(({ r }) => `${r.f} ${r.t}`.toLowerCase().includes(q));
+  }, [mergedRoutes, routeFilter]);
+  const vasteRouteRows = routeRows.filter(({ r }) => !r.__potentieel);
+  const potentieleRouteRows = routeRows.filter(({ r }) => r.__potentieel);
   const routeKmReq = useRef(0);
   const pk = i => {
     const r = mergedRoutes[i];
@@ -2044,26 +2048,66 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
                   )}
                 </div>
               </section>
-              <section className="tm-form-sec" aria-label="Vaste routes">
-                <div className="tm-form-sec-hd">Vaste routes</div>
+              <section className="tm-form-sec" aria-label="Vaste en potentiële routes">
+                <div className="tm-form-sec-hd">Vaste en potentiële routes</div>
+                <div className="tm-fg" style={{ marginBottom: 8 }}>
+                  <label className="fl">Filter</label>
+                  <input
+                    type="search"
+                    placeholder="Zoek vertrek of bestemming…"
+                    value={routeFilter}
+                    onChange={e => setRouteFilter(e.target.value)}
+                  />
+                </div>
+                <div className="tm-form-sec-hd tm-form-sec-hd--sub">Vaste ritten ({vasteRouteRows.length})</div>
                 <div className="tm-prs tm-prs--modal">
-                  {mergedRoutes.map((r, i) => (
-                    <button
-                      key={r.__id ? `xr-${r.__id}` : r.__arch ? `ar-${r.id}` : `rt-${i}`}
-                      type="button"
-                      className={"tm-pr" + (fm.ri === i ? " on" : "")}
-                      onClick={() => pk(i)}
-                    >
-                      <span>
-                        {r.f} → {r.t}
-                        {r.__id && !r.__arch && (
-                          <span className="tm-pr-tag tm-pr-tag--acc">eigen</span>
-                        )}
-                        {r.__arch && <span className="tm-pr-tag tm-pr-tag--am">archief</span>}
-                      </span>
-                      <b className="tm-pk">{r.k} km</b>
-                    </button>
-                  ))}
+                  {vasteRouteRows.length === 0 ? (
+                    <p className="tm-form-hint">Geen vaste ritten voor deze filter.</p>
+                  ) : (
+                    vasteRouteRows.map(({ r, i }) => (
+                      <button
+                        key={r.__id ? `xr-${r.__id}` : r.__arch ? `ar-${r.id}` : `rt-${i}`}
+                        type="button"
+                        className={"tm-pr" + (fm.ri === i ? " on" : "")}
+                        onClick={() => pk(i)}
+                      >
+                        <span>
+                          {r.f} → {r.t}
+                          {r.__id && !r.__arch && (
+                            <span className="tm-pr-tag tm-pr-tag--acc">eigen</span>
+                          )}
+                          {r.__arch && <span className="tm-pr-tag tm-pr-tag--am">archief</span>}
+                        </span>
+                        <b className="tm-pk">{r.k} km</b>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <div className="tm-form-sec-hd tm-form-sec-hd--sub">
+                  Potentiële ritten ({potentieleRouteRows.length})
+                </div>
+                <p className="tm-form-hint" style={{ marginTop: 0 }}>
+                  Terugritten en extra bestemmingen vanuit Mechelen, Brussel en Leuven.
+                </p>
+                <div className="tm-prs tm-prs--modal">
+                  {potentieleRouteRows.length === 0 ? (
+                    <p className="tm-form-hint">Geen potentiële ritten voor deze filter.</p>
+                  ) : (
+                    potentieleRouteRows.map(({ r, i }) => (
+                      <button
+                        key={`pot-${i}`}
+                        type="button"
+                        className={"tm-pr" + (fm.ri === i ? " on" : "")}
+                        onClick={() => pk(i)}
+                      >
+                        <span>
+                          {r.f} → {r.t}
+                          <span className="tm-pr-tag tm-pr-tag--pot">potentieel</span>
+                        </span>
+                        <b className="tm-pk">{r.k} km</b>
+                      </button>
+                    ))
+                  )}
                 </div>
               </section>
               <section className="tm-form-sec" aria-label="Handmatig">
