@@ -52,6 +52,22 @@ const nameToId = {
   'AZ Lier': 'lier',
   'AZ Maria Middelares Deinze': 'az-maria-middelares-deinze',
   'AZ Diest': 'diest',
+  'RKV Exploro': 'rkv-exploro',
+  'Zottegem St. Elisabeth AZ': 'zottegem',
+  'AZ Sint-Elisabeth Zottegem': 'zottegem',
+  'Bonheiden Imelda': 'imelda',
+  'Imelda Ziekenhuis': 'imelda',
+  'Mechelen AZ Sint-Maarten': 'az-sint-maarten',
+  'AZ Sint-Maarten': 'az-sint-maarten',
+  'Duffel UPC': 'upc-duffel',
+  'Rumst AZ Rivierenland': 'rumst',
+  'Willebroek AZ Rivierenland': 'willebroek',
+  'Halle AZ Sint-Maria': 'halle',
+  'Tienen RZ Mariëndal': 'tienen',
+  'Vilvoorde AZ Jan Portaels': 'vilvoorde',
+  'Dendermonde AZ Sint-Blasius': 'dendermonde',
+  'Aalst AZORG': 'aalst',
+  'Turnhout St. Elisabeth': 'st-elisabeth-turnhout',
 };
 
 // id -> coördinaten (België)
@@ -75,6 +91,19 @@ const coords = {
   'lier': { lat: 51.1313, lng: 4.5704 },
   'az-maria-middelares-deinze': { lat: 50.9871, lng: 3.5311 },
   'diest': { lat: 50.9894, lng: 5.0506 },
+  'rkv-exploro': { lat: 51.0225, lng: 3.7108 },
+  'zottegem': { lat: 50.8637, lng: 3.8173 },
+  'imelda': { lat: 51.0175, lng: 4.5586 },
+  'az-sint-maarten': { lat: 51.0515, lng: 4.4765 },
+  'upc-duffel': { lat: 51.0936, lng: 4.4953 },
+  'rumst': { lat: 51.1063, lng: 4.3718 },
+  'willebroek': { lat: 51.0544, lng: 4.3587 },
+  'halle': { lat: 50.7363, lng: 4.2258 },
+  'tienen': { lat: 50.8109, lng: 4.9334 },
+  'vilvoorde': { lat: 50.9276, lng: 4.4182 },
+  'dendermonde': { lat: 51.0264, lng: 4.114 },
+  'aalst': { lat: 50.9439, lng: 4.0551 },
+  'st-elisabeth-turnhout': { lat: 51.321, lng: 4.936 },
 };
 
 const locNames = new Map(); // id -> weergavenaam (eerste geziene Excel-naam)

@@ -70,7 +70,7 @@ export const UI_COMPACT = {
   rittenPerWeekInTabel: 15,
   dataTabelScrollMaxRem: 14,
   ziekenhuizenPreview: 12,
-  kaartRitKeuzeMax: 45,
+  kaartRitKeuzeMax: 80,
   grafiekWeken: 6,
   /** Één overzichts-feed op tab Ritten */
   rittenFeedMax: 500,
@@ -146,12 +146,27 @@ export const PRESET_ANCHOR_ZIEKENHUIZEN = [
   { id: 'az-st-dimpna-geel', name: 'Geel St. Dimpna', address: 'AZ Sint-Dimpna Geel', lat: 51.1622, lng: 4.9938 },
   { id: 'az-monica-deurne', name: 'Deurne AZ Monica', address: 'AZ Monica Deurne', lat: 51.2192, lng: 4.4653 },
   { id: 'az-rivierenland-bornem', name: 'Bornem AZ Rivierenland', address: 'AZ Rivierenland Bornem', lat: 51.091, lng: 4.24 },
+  { id: 'rkv-exploro', name: 'RKV Exploro', address: 'RKV Exploro (Gent)', lat: 51.0225, lng: 3.7108 },
+  { id: 'zottegem', name: 'Zottegem St. Elisabeth AZ', address: 'AZ Sint-Elisabeth Zottegem', lat: 50.8637, lng: 3.8173 },
+  { id: 'imelda', name: 'Bonheiden Imelda', address: 'Imelda Ziekenhuis Bonheiden', lat: 51.0175, lng: 4.5586 },
+  { id: 'az-sint-maarten', name: 'Mechelen AZ Sint-Maarten', address: 'AZ Sint-Maarten Mechelen', lat: 51.0515, lng: 4.4765 },
+  { id: 'upc-duffel', name: 'Duffel UPC', address: 'UPC Duffel', lat: 51.0936, lng: 4.4953 },
+  { id: 'rumst', name: 'Rumst AZ Rivierenland', address: 'AZ Rivierenland Rumst', lat: 51.1063, lng: 4.3718 },
+  { id: 'willebroek', name: 'Willebroek AZ Rivierenland', address: 'AZ Rivierenland Willebroek', lat: 51.0544, lng: 4.3587 },
+  { id: 'halle', name: 'Halle AZ Sint-Maria', address: 'AZ Sint-Maria Halle', lat: 50.7363, lng: 4.2258 },
+  { id: 'tienen', name: 'Tienen RZ Mariëndal', address: 'RZ Tienen Campus Mariëndal', lat: 50.8109, lng: 4.9334 },
+  { id: 'vilvoorde', name: 'Vilvoorde AZ Jan Portaels', address: 'AZ Jan Portaels Vilvoorde', lat: 50.9276, lng: 4.4182 },
+  { id: 'dendermonde', name: 'Dendermonde AZ Sint-Blasius', address: 'AZ Sint-Blasius Dendermonde', lat: 51.0264, lng: 4.114 },
+  { id: 'aalst', name: 'Aalst AZORG', address: 'AZORG Aalst Moorselbaan', lat: 50.9439, lng: 4.0551 },
 ];
 
 /** Beperkte, herkenbare standaardlijst (geen volledige OSM-massa) */
 export const DEFAULT_ZIEKENHUIZEN = [...PRESET_ANCHOR_ZIEKENHUIZEN];
 
-/** Vaste ritten — defaultKm = afgeronde OSRM rijroute (driving-car), in lijn met Google Maps. */
+/**
+ * Vaste ritten — defaultKm = afgeronde OSRM rijroute (driving-car), in lijn met Google Maps.
+ * Uitgebreid met factuurritten (o.a. UZA↔Brussel, Leuven↔Mechelen, Exploro→Zottegem, Genk→UZ Gent).
+ */
 export const DEFAULT_PRESET_ROUTES = [
   { id: 'preset-excel-1', fromId: 'uz-brussel', toId: 'uz-leuven', fromName: 'UZ Brussel', toName: 'UZ Leuven', defaultKm: 36 },
   { id: 'preset-excel-2', fromId: 'uz-brussel', toId: 'uza', fromName: 'UZ Brussel', toName: 'UZA (Edegem)', defaultKm: 41 },
@@ -266,7 +281,130 @@ export const DEFAULT_PRESET_ROUTES = [
     toName: 'Bornem AZ Rivierenland',
     defaultKm: 22,
   },
+  {
+    id: 'preset-uza-mechelen',
+    fromId: 'uza',
+    toId: 'mechelen',
+    fromName: 'UZA (Edegem)',
+    toName: 'RKV Mechelen',
+    defaultKm: 18,
+    forfaitVergoeding: 35,
+  },
+  {
+    id: 'preset-uza-brussel',
+    fromId: 'uza',
+    toId: 'uz-brussel',
+    fromName: 'UZA (Edegem)',
+    toName: 'UZ Brussel',
+    defaultKm: 40,
+  },
+  {
+    id: 'preset-leuven-mechelen',
+    fromId: 'uz-leuven',
+    toId: 'mechelen',
+    fromName: 'UZ Leuven',
+    toName: 'RKV Mechelen',
+    defaultKm: 37,
+  },
+  {
+    id: 'preset-diest-leuven',
+    fromId: 'diest',
+    toId: 'uz-leuven',
+    fromName: 'AZ Diest',
+    toName: 'UZ Leuven',
+    defaultKm: 35,
+  },
+  {
+    id: 'preset-genk-uz-gent',
+    fromId: 'genk',
+    toId: 'uz-gent',
+    fromName: 'ZOL Genk',
+    toName: 'Gent UZ',
+    defaultKm: 148,
+  },
+  {
+    id: 'preset-exploro-zottegem',
+    fromId: 'rkv-exploro',
+    toId: 'zottegem',
+    fromName: 'RKV Exploro',
+    toName: 'Zottegem St. Elisabeth AZ',
+    defaultKm: 26,
+  },
+  {
+    id: 'preset-brussel-st-elisabeth',
+    fromId: 'uz-brussel',
+    toId: 'st-elisabeth-turnhout',
+    fromName: 'UZ Brussel',
+    toName: 'Turnhout St. Elisabeth',
+    defaultKm: 86,
+  },
 ];
+
+function presetPairKey(fromId, toId) {
+  return `${fromId}\t${toId}`;
+}
+
+/** Ontbrekende terugritten van vaste routes — zelfde km, gemarkeerd als potentieel. */
+function reversePresetsMissing(actual) {
+  const have = new Set(actual.map((r) => presetPairKey(r.fromId, r.toId)));
+  const out = [];
+  for (const r of actual) {
+    const k = presetPairKey(r.toId, r.fromId);
+    if (have.has(k)) continue;
+    have.add(k);
+    const row = {
+      id: `preset-rev-${r.id}`,
+      fromId: r.toId,
+      toId: r.fromId,
+      fromName: r.toName,
+      toName: r.fromName,
+      defaultKm: r.defaultKm,
+      potentieel: true,
+    };
+    if (r.forfaitVergoeding != null) row.forfaitVergoeding = r.forfaitVergoeding;
+    out.push(row);
+  }
+  return out;
+}
+
+/**
+ * Extra potentiële ritten vanuit de hoofdhubs (Mechelen / Brussel / Leuven)
+ * naar veelvoorkomende Vlaamse ziekenhuizen die nog niet als vaste rit staan.
+ */
+const EXTRA_POTENTIAL_PRESET_ROUTES = [
+  { id: 'preset-pot-mec-imelda', fromId: 'mechelen', toId: 'imelda', fromName: 'RKV Mechelen', toName: 'Bonheiden Imelda', defaultKm: 8, potentieel: true },
+  { id: 'preset-pot-mec-st-maarten', fromId: 'mechelen', toId: 'az-sint-maarten', fromName: 'RKV Mechelen', toName: 'Mechelen AZ Sint-Maarten', defaultKm: 4, potentieel: true },
+  { id: 'preset-pot-mec-duffel', fromId: 'mechelen', toId: 'upc-duffel', fromName: 'RKV Mechelen', toName: 'Duffel UPC', defaultKm: 13, potentieel: true },
+  { id: 'preset-pot-mec-rumst', fromId: 'mechelen', toId: 'rumst', fromName: 'RKV Mechelen', toName: 'Rumst AZ Rivierenland', defaultKm: 20, potentieel: true },
+  { id: 'preset-pot-mec-willebroek', fromId: 'mechelen', toId: 'willebroek', fromName: 'RKV Mechelen', toName: 'Willebroek AZ Rivierenland', defaultKm: 11, potentieel: true },
+  { id: 'preset-pot-mec-vilvoorde', fromId: 'mechelen', toId: 'vilvoorde', fromName: 'RKV Mechelen', toName: 'Vilvoorde AZ Jan Portaels', defaultKm: 19, potentieel: true },
+  { id: 'preset-pot-mec-halle', fromId: 'mechelen', toId: 'halle', fromName: 'RKV Mechelen', toName: 'Halle AZ Sint-Maria', defaultKm: 54, potentieel: true },
+  { id: 'preset-pot-mec-tienen', fromId: 'mechelen', toId: 'tienen', fromName: 'RKV Mechelen', toName: 'Tienen RZ Mariëndal', defaultKm: 63, potentieel: true },
+  { id: 'preset-pot-mec-dendermonde', fromId: 'mechelen', toId: 'dendermonde', fromName: 'RKV Mechelen', toName: 'Dendermonde AZ Sint-Blasius', defaultKm: 30, potentieel: true },
+  { id: 'preset-pot-mec-aalst', fromId: 'mechelen', toId: 'aalst', fromName: 'RKV Mechelen', toName: 'Aalst AZORG', defaultKm: 53, potentieel: true },
+  { id: 'preset-pot-mec-zottegem', fromId: 'mechelen', toId: 'zottegem', fromName: 'RKV Mechelen', toName: 'Zottegem St. Elisabeth AZ', defaultKm: 70, potentieel: true },
+  { id: 'preset-pot-bru-imelda', fromId: 'uz-brussel', toId: 'imelda', fromName: 'UZ Brussel', toName: 'Bonheiden Imelda', defaultKm: 37, potentieel: true },
+  { id: 'preset-pot-bru-halle', fromId: 'uz-brussel', toId: 'halle', fromName: 'UZ Brussel', toName: 'Halle AZ Sint-Maria', defaultKm: 27, potentieel: true },
+  { id: 'preset-pot-bru-vilvoorde', fromId: 'uz-brussel', toId: 'vilvoorde', fromName: 'UZ Brussel', toName: 'Vilvoorde AZ Jan Portaels', defaultKm: 15, potentieel: true },
+  { id: 'preset-pot-bru-aalst', fromId: 'uz-brussel', toId: 'aalst', fromName: 'UZ Brussel', toName: 'Aalst AZORG', defaultKm: 26, potentieel: true },
+  { id: 'preset-pot-bru-st-maarten', fromId: 'uz-brussel', toId: 'az-sint-maarten', fromName: 'UZ Brussel', toName: 'Mechelen AZ Sint-Maarten', defaultKm: 37, potentieel: true },
+  { id: 'preset-pot-leu-tienen', fromId: 'uz-leuven', toId: 'tienen', fromName: 'UZ Leuven', toName: 'Tienen RZ Mariëndal', defaultKm: 33, potentieel: true },
+  { id: 'preset-pot-leu-imelda', fromId: 'uz-leuven', toId: 'imelda', fromName: 'UZ Leuven', toName: 'Bonheiden Imelda', defaultKm: 25, potentieel: true },
+];
+
+const PRESET_ACTUAL_KEYS = new Set(DEFAULT_PRESET_ROUTES.map((r) => presetPairKey(r.fromId, r.toId)));
+const EXTRA_POTENTIAL_UNIQUE = EXTRA_POTENTIAL_PRESET_ROUTES.filter(
+  (r) => !PRESET_ACTUAL_KEYS.has(presetPairKey(r.fromId, r.toId))
+);
+
+/** Terugritten + extra hub-bestemmingen (niet in de vaste lijst). */
+export const POTENTIAL_PRESET_ROUTES = [
+  ...EXTRA_POTENTIAL_UNIQUE,
+  ...reversePresetsMissing([...DEFAULT_PRESET_ROUTES, ...EXTRA_POTENTIAL_UNIQUE]),
+];
+
+/** Vaste + potentiële presets (voor merge in localStorage / UI). */
+export const ALL_PRESET_ROUTES = [...DEFAULT_PRESET_ROUTES, ...POTENTIAL_PRESET_ROUTES];
 
 /** Zelfde rijrouting als in Google Maps (Directions in Maps JavaScript API). Vereist billing in Google Cloud. */
 export const GOOGLE_MAPS_API_KEY =
