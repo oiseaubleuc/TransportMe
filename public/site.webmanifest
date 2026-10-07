@@ -1,18 +1,24 @@
 {
-  "name": "Transporteur",
-  "short_name": "Transporteur",
-  "description": "Ritbeheer en berekeningen voor zelfstandig ziekenhuisvervoer",
+  "name": "TransportMe",
+  "short_name": "TransportMe",
+  "description": "Planning, ritten en facturen voor je team in ziekenhuisvervoer.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "browser"],
-  "background_color": "#f2f2f7",
-  "theme_color": "#5f7f1f",
+  "background_color": "#0e1726",
+  "theme_color": "#0e1726",
+  "lang": "nl-BE",
   "icons": [
     {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
       "src": "/favicon.svg",
-      "sizes": "512x512",
+      "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     }

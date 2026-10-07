@@ -1,11 +1,11 @@
 {
   "name": "TransportMe",
   "short_name": "TransportMe",
-  "description": "Mobiele ritten- en financieel app voor ziekenhuisvervoer.",
+  "description": "Planning, ritten en facturen voor je team in ziekenhuisvervoer.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0b0b0b",
-  "theme_color": "#0b0b0b",
+  "background_color": "#0e1726",
+  "theme_color": "#0e1726",
   "lang": "nl-BE",
   "icons": [
     {

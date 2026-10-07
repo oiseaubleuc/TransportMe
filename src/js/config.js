@@ -50,11 +50,9 @@ export const STORAGE_KEYS = {
 /** Live status "beschikbaar": vervalt automatisch na 6 uur */
 export const LIVE_AVAILABILITY_TTL_MS = 6 * 60 * 60 * 1000;
 
-/** Profielen (zelfstandigen): elk eigen dataset ritten / brandstof / overig in localStorage */
+/** Profielen: elk eigen dataset ritten / brandstof / overig. Code blijft multi-chauffeur. */
 export const PROFILES = [
   { id: 'houdaifa', name: 'Houdaifa' },
-  { id: 'amine', name: 'Amine' },
-  { id: 'frederik', name: 'Frederik' },
 ];
 
 /** Ritten, brandstof en overige kosten: max. bewaard (rolling window, dagen) */
@@ -88,9 +86,7 @@ export const RIT_DUUR_MINUTEN = 150;
 /** Standaard chauffeurs (keuze bij komende ritten) */
 export const DEFAULT_CHAUFFEURS = [
   { id: 'chauffeur-houdaifa', naam: 'Houdaifa' },
-  { id: 'chauffeur-amine', naam: 'Amine' },
-  { id: 'chauffeur-frederik', naam: 'Frederik' },
-  { id: 'chauffeur-student1', naam: 'Student1' },
+  { id: 'chauffeur-student1', naam: 'Student 1' },
 ];
 
 /** Standaard voertuigen (worden bij eerste gebruik of merge toegevoegd) */

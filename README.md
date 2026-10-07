@@ -1,8 +1,8 @@
-# Transporteur Dashboard
+# TransportMe
 
-Dashboard voor **zelfstandig** ziekenhuisvervoer: slim ritbeheer, vergoeding/winst, vaste ritten, kaart en ziekenhuizen. Werkt op **desktop en mobiel**.
+Planning, ritten en facturen voor ziekenhuisvervoer in België. De app is bedoeld voor de **beheerder**: je ziet alle chauffeurs samen, plant ritten, volgt de dagkaart en maakt facturen en een rittenlijst.
 
-**Weergave:** licht/donker volgt automatisch de instelling van je telefoon of computer (geen aparte themaknop).
+Werkt op **telefoon en computer**. Licht/donker volgt de instelling van je toestel.
 
 ## Starten
 
@@ -11,87 +11,55 @@ npm install
 npm run dev
 ```
 
-Open in de browser (of op je telefoon in hetzelfde netwerk): `http://localhost:5173`.
+Open in de browser: `http://localhost:5173`.
 
 Productiebuild: `npm run build` → map `dist/`.
 
-## Gratis API-sleutel (kaart en afstand)
+## Vijf schermen
 
-De **kaart** gebruikt **MapLibre** met **OpenStreetMap**-tegels en werkt zonder sleutel. Voor de **route-lijn** en **automatische afstand** via het wegennet kun je een **gratis** OpenRouteService-sleutel gebruiken:
+Onderaan op de telefoon (bovenaan links op groot scherm):
 
-1. Ga naar [OpenRouteService](https://openrouteservice.org/dev/#/signup) en maak een gratis account.
-2. Kopieer je API-sleutel.
-3. Maak in de projectmap een bestand `.env`:
+1. **Overzicht** — dagkaart per chauffeur, ritten onderweg, deze week, en ritten die nog afgewerkt moeten worden.
+2. **Planning** — alle ritten, gegroepeerd per dag. Zoeken, filteren, starten, voltooien en aanpassen.
+3. **Chauffeurs** — status en cijfers van de maand per chauffeur.
+4. **Financieel** — omzet, kosten en netto van het team of van één chauffeur. Factuur (PDF), rittenlijst (Excel) en kosten.
+5. **Instellingen** — factuurgegevens en logo, back-up, vaste routes, bonnen inlezen, tarieven.
 
-```env
-VITE_OPENROUTE_API_KEY=jouw_gratis_sleutel_hier
-```
+**Nieuwe rit** staat als knop boven de navigatie (telefoon) of onderaan de linkerbalk (computer).
 
-4. Herstart `npm run dev`.
+Op groot scherm (vanaf 1024px) staat de navigatie links (232px). De inhoud is max. 1160px breed.
 
-Zonder sleutel: de kaart toont vertrek en bestemming; je kunt nog steeds **Rit vandaag toevoegen** als de vaste rit een vaste km-waarde heeft. De links naar **Waze** en **Google Maps** voor navigatie werken altijd.
+## Rittenlijst (Excel)
 
-**Ziekenhuizen zoeken** werkt **gratis** via OpenStreetMap (Nominatim) – geen API-sleutel nodig.
+In **Financieel → Ritten en factuur** en in het teamoverzicht:
 
-### Ziekenhuizenlijst (Vlaanderen)
+- **Rittenlijst downloaden (Excel)** — één blad *Rittenregistratie* (of één blad per chauffeur voor het team), in hetzelfde formaat als het klantsjabloon.
+- **Factuur downloaden (PDF)**
+- **CSV voor boekhouder**
 
-De app bevat **alle ziekenhuizen / zorglocaties** uit **OpenStreetMap** binnen het **Vlaams Gewest** (plus vaste ankertjes voor de Excel-preset-routes). Gegevens: © [OpenStreetMap](https://www.openstreetmap.org/copyright)-bijdragers, ODbL.
-
-Lijst vernieuwen (vereist internet):
-
-```bash
-npm run data:ziekenhuizen
-```
-
-Dit schrijft `src/data/ziekenhuizen-vlaanderen.json` opnieuw via de Overpass API.
-
-## Gebruik
-
-### Navigatie (mobiel)
-
-Onderaan het scherm: **Dashboard** | **Ritten** | **Brandstof** | **Kaart** | **Meer**.
-
-### Dashboard
-
-- Financieel overzicht: omzet, benzinekosten, winst (vandaag / week / maand).
-- Kilometers: vandaag, week, maand.
-
-### Ritten
-
-- **Vaste ritten**: standaard o.a. **UZ Brussel → UZ Leuven** en **UZ Brussel → Virga Jesse Hasselt**. Klik op een rit om de afstand in te vullen (eventueel via OpenRouteService als je een sleutel hebt).
-- Vul eventueel datum en km handmatig aan, zie direct vergoeding en geschatte winst.
-- **Rit opslaan**.
-- **Meerdere ritten tegelijk** (achterstand): op dezelfde pagina kun je regels **plakken uit Excel** (tab-scheiding) of scheiden met **puntkomma** of **komma**. Standaardchauffeur (en optioneel voertuig) kies je boven het tekstveld als een regel geen chauffeurkolom heeft. Ritten worden als **voltooid** opgeslagen (geschikt voor nadien invoeren). Optioneel eerste regel met koppen: `Datum`, `Tijd`, `km`, `Chauffeur`, `Voertuig`. Datums ook als `DD/MM/YYYY`.
-
-### Groot scherm (computer)
-
-- Vanaf ca. **1024px** breed: **navigatie links** als kolom, inhoud rechts met meer breedte (max. ~1320px).
-- Op de rittenpagina staan **één rit** en **bulkimport** naast elkaar vanaf ca. **960px**.
-- Tab **Financieel**: op brede schermen staan **KPI-kaarten** en de **weekgrafiek** naast elkaar.
-
-### Brandstof
-
-- Optioneel: foto van tankbon uploaden → automatische invulling (OCR).
-- Of handmatig: datum, liter, prijs.
-
-### Kaart
-
-- **Kies een rit** in de dropdown → kaart toont vertrek en bestemming (OpenStreetMap).
-- **Rit vandaag toevoegen**: voeg de gekozen rit in één klik toe aan vandaag; hij komt in **Mijn ritten** (per week gerangschikt).
-- Met een gratis OpenRouteService-sleutel: route-lijn op de kaart en automatische afstand.
-- Links naar **Waze** en **Google Maps** voor navigatie.
-
-### Meer
-
-- **Ziekenhuizen zoeken**: zoek een ziekenhuis of adres (gratis, OpenStreetMap) en voeg toe aan je lijst.
-- **Nieuwe vaste rit**: kies “Van” en “Naar” uit je ziekenhuizen; afstand wordt opgehaald via OpenRouteService (gratis) en opgeslagen.
-- **Overige kosten** en **Gegevens**: tabellen ritten, brandstof, overige. **Mijn ritten** is per week gerangschikt (nieuwste week eerst).
+De Excel heeft parameters bovenaan (prijs per schijf, opstart, nacht, btw), één regel per bonnummer, en formules voor totaal excl. btw, btw en totaal incl. btw.
 
 ## Vergoeding
 
 - **€15** per rit (opstart)
-- **€25** per 20 km
+- **€25** per begonnen 20 km
+- Nachtrit (20:00–05:00): +30% op het aantal schijven
+- Forfait Sango / RKV Mechelen ↔ UZA Edegem: **€35**, zonder nachttoeslag
 
-Voorbeeld: 45 km → €15 + 3×€25 = **€90**.
+Voorbeeld: 45 km overdag = €15 + 3×€25 = **€90**. ’s Nachts wordt dat **€115**.
 
-Gegevens worden lokaal opgeslagen (**localStorage**). **Ritten, brandstof en overige kosten** ouder dan ca. **twee maanden** (62 dagen) worden automatisch verwijderd om de browser licht te houden. Ziekenhuizen, vaste routes en voertuigen blijven bewaard.
+## Gegevens
+
+Alles blijft op het toestel. Bestaande gegevens blijven werken zonder extra stappen. Een volledige back-up (en terugzetten) vind je onder Instellingen.
+
+## Kaart en afstand
+
+De kaart toont vertrek en bestemming. Afstanden worden over de weg gemeten. Zonder extra instelling werkt de gratis routedienst; met een Google-sleutel kan de app Google Maps gebruiken.
+
+**Ziekenhuizen zoeken** werkt via OpenStreetMap (Nominatim).
+
+Lijst van Vlaamse ziekenhuizen vernieuwen:
+
+```bash
+npm run data:ziekenhuizen
+```

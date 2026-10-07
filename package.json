@@ -11,9 +11,11 @@
     "factuur:beheer": "node scripts/generate-beheer-factuur.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/overpass": "^5.3.0",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "chart.js": "^4.5.1",
+    "exceljs": "^4.4.0",
     "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
     "maplibre-gl": "^5.20.1",
