@@ -18,8 +18,29 @@ function manualChunks(id) {
   if (id.includes("@zxing")) return "vendor-zxing";
 }
 
+function localAuthServer() {
+  return {
+    name: "transportme-auth",
+    configureServer() {
+      import("./server/index.mjs").catch(err => {
+        console.error("Accountserver start mislukt:", err);
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), localAuthServer()],
+  server: {
+    proxy: {
+      "/api": "http://127.0.0.1:8787",
+    },
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: "esnext",
+    },
+  },
   build: {
     rollupOptions: {
       output: { manualChunks },

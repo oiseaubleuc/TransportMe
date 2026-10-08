@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { Component, useState, useEffect, useMemo, useRef, useCallback } from "react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -13,17 +13,36 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { Doughnut, Bar, Line } from "react-chartjs-2";
+import { Doughnut, Bar } from "react-chartjs-2";
 import "./transportme-theme.css";
 import { exportTransporteurData, applyImportPayload } from "./js/dataBackup.js";
 import { recognizeBonImage, terminateBonOcrWorker } from "./js/bonFotoOcr.js";
 import { getFactuurGegevens, nextFactuurVolgNummer, saveFactuurGegevens } from "./js/storage.js";
 import { generateFactuurPdfBlob, triggerPdfDownload } from "./js/invoicePdf.js";
 import { vergoedingVoorRit } from "./js/calculations.js";
-import { getDrivingRouteKm, getDrivingRouteWithGeometry } from "./js/ors.js";
+import { getDrivingRouteKm, getOsrmRouteGeometry } from "./js/ors.js";
 import { createGoogleRouteMap } from "./js/googleMapsView.js";
 import { searchPlacesBelgium } from "./js/placeSearchFree.js";
-import { PRESET_ANCHOR_ZIEKENHUIZEN, GESCHAT_VERBRUIK_L_PER_100KM, hasGoogleMapsApiKey } from "./js/config.js";
+import { leesGeleverdIntents, meldRitLopend, meldingStatus, verwijderGeleverdIntent, vraagMeldingToestemming } from "./js/ritMelding.js";
+import {
+  accountBootstrap,
+  accountCalcFixed,
+  accountData,
+  accountFactuur,
+  accountHasToken,
+  accountSetFactuur,
+  accountSetTeller,
+  accountTeller,
+  accountForgot,
+  accountLogin,
+  accountLogout,
+  accountMarkCalcFixed,
+  accountReset,
+  accountSaveData,
+  accountSignup,
+  accountUser,
+} from "./js/accountSession.js";
+import { PRESET_ANCHOR_ZIEKENHUIZEN, hasGoogleMapsApiKey } from "./js/config.js";
 import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 
 ChartJS.register(
@@ -40,17 +59,14 @@ ChartJS.register(
 ChartJS.defaults.font.family = "'DM Sans', -apple-system, sans-serif";
 ChartJS.defaults.color = "#a3a3a3";
 
-/** Thema-olijfgroen (donkerder) — zelfde basis als --acc in transportme-theme.css */
-const TM_ACC = "#6d8528";
-const TM_ACC2 = "#556b1f";
-const TM_GN = "#92a84a";
-const tmAccRgba = a => `rgba(109, 133, 40, ${a})`;
+const TM_INDIGO = "#2c3f8f";
+const tmIndigoRgba = a => `rgba(44, 63, 143, ${a})`;
 
-/** Donut “Verdeling status”: elke categorie eigen kleur (niet allemaal groen). */
+/** Donut “Verdeling status”: elke categorie eigen kleur. */
 const TM_DONUT_STATUS_BG = [
-  "rgba(56, 189, 248, 0.9)", // Gepland — hemelsblauw
+  "rgba(226, 91, 42, 0.88)", // Gepland — persimmon
   "rgba(251, 191, 36, 0.9)", // Onderweg — amber
-  tmAccRgba(0.92), // Voltooid — themagroen
+  tmIndigoRgba(0.92), // Voltooid — indigo
   "rgba(239, 68, 68, 0.82)", // Geannuleerd — rood
 ];
 
@@ -61,7 +77,7 @@ const TM_CHART_BASE = {
     legend: {
       position: "bottom",
       labels: {
-        color: "#9a9a92",
+        color: "#6b7280",
         boxWidth: 10,
         padding: 10,
         font: { size: 11 },
@@ -408,13 +424,17 @@ function parseXrLikeRow(it, idx, idPrefix) {
   return out;
 }
 
+function rijVan(arr) {
+  return Array.isArray(arr) ? arr.filter(x => x && typeof x === "object") : [];
+}
+
 function normData(x) {
   const o = x && typeof x === "object" ? x : {};
-  const xrRaw = Array.isArray(o.xr) ? o.xr : [];
+  const xrRaw = rijVan(o.xr);
   const xr = xrRaw.map((it, idx) => parseXrLikeRow(it, idx, "xr")).filter(Boolean);
-  const xrArchRaw = Array.isArray(o.xrArch) ? o.xrArch : [];
+  const xrArchRaw = rijVan(o.xrArch);
   const xrArch = xrArchRaw.map((it, idx) => parseXrLikeRow(it, idx, "xra")).filter(Boolean).slice(0, 40);
-  return { r: o.r || [], b: o.b || [], o: o.o || [], xr, xrArch };
+  return { r: rijVan(o.r), b: rijVan(o.b), o: rijVan(o.o), xr, xrArch };
 }
 
 /** Zelfde keys als src/js/config.js STORAGE_KEYS — data van de klassieke Transporteur-app op het toestel. */
@@ -477,9 +497,97 @@ function E(n) {
   return "€" + x.toFixed(2).replace(".", ",");
 }
 
+/** €130 of €65,50 — zonder decimalen als het een heel bedrag is. */
+function euroHeel(n) {
+  const x = Math.round(money(n) * 100) / 100;
+  if (Math.abs(x - Math.round(x)) < 0.001) return "€" + Math.round(x);
+  return E(x);
+}
+
+function addDaysIso(iso, n) {
+  const [y, m, d] = String(iso || td()).slice(0, 10).split("-").map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1);
+  dt.setDate(dt.getDate() + n);
+  return toIsoLocal(dt);
+}
+
+function fmtDagKop(iso) {
+  if (!iso || iso.length < 10) return "";
+  const y = +iso.slice(0, 4);
+  const m = +iso.slice(5, 7) - 1;
+  const d = +iso.slice(8, 10);
+  const dt = new Date(y, m, d);
+  dt.setHours(12, 0, 0, 0);
+  const s = dt.toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function isTmStoreLeeg(data) {
   const n = normData(data);
   return n.r.length === 0 && n.b.length === 0 && (n.o || []).length === 0;
+}
+
+/** Leeg account op dit toestel: eenmalig de oude profielgegevens meenemen. */
+function neemToestelData(data) {
+  const cur = normData(data);
+  if (!isTmStoreLeeg(cur)) return cur;
+  let claimed = false;
+  try {
+    claimed = localStorage.getItem("tm_toestel_overgezet") === "1";
+  } catch {
+    return cur;
+  }
+  if (claimed) return cur;
+  const seen = new Set();
+  const merged = { r: [], b: [], o: [], xr: [], xrArch: [] };
+  const add = (list, item, kind) => {
+    if (!item || typeof item !== "object") return;
+    const key = kind + ":" + (item.id != null && item.id !== "" ? String(item.id) : JSON.stringify(item));
+    if (seen.has(key)) return;
+    seen.add(key);
+    list.push(item);
+  };
+  for (const p of PR) {
+    let raw = null;
+    try {
+      raw = JSON.parse(localStorage.getItem("t_" + p.id) || "null");
+    } catch {
+      raw = null;
+    }
+    const tm = normData(raw);
+    const src = isTmStoreLeeg(tm) ? normData(leesLegacyBundel(p.id)) : tm;
+    src.r.forEach(r => add(merged.r, r, "r"));
+    src.b.forEach(b => add(merged.b, b, "b"));
+    src.o.forEach(o => add(merged.o, o, "o"));
+    src.xr.forEach(x => add(merged.xr, x, "x"));
+    src.xrArch.forEach(x => add(merged.xrArch, x, "a"));
+    try {
+      const fact = JSON.parse(localStorage.getItem("transporteur_factuur_gegevens_" + p.id) || "null");
+      const curFact = accountFactuur() || {};
+      if (fact && typeof fact === "object" && (fact.bedrijfsnaam || fact.iban) && !curFact.bedrijfsnaam && !curFact.iban) {
+        accountSetFactuur(fact);
+      }
+      const teller = JSON.parse(localStorage.getItem("transporteur_factuur_teller_" + p.id) || "null");
+      if (teller && typeof teller === "object" && !Object.keys(accountTeller() || {}).length && Object.keys(teller).length) {
+        accountSetTeller(teller);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  const next = normData(merged);
+  if (isTmStoreLeeg(next) && next.xr.length === 0) return cur;
+  try {
+    localStorage.setItem("tm_toestel_overgezet", "1");
+  } catch {
+    /* ignore */
+  }
+  accountSaveData(next);
+  return next;
+}
+
+function accountDataKlaar(profileId, data) {
+  return autoApplyCalcFix(profileId, neemToestelData(data));
 }
 
 function legacyRitToTm(r) {
@@ -601,6 +709,13 @@ function autoFixRitBerekeningen(data) {
 }
 
 function autoApplyCalcFix(profileId, data) {
+  if (accountUser()) {
+    if (accountCalcFixed()) return data;
+    const fixed = autoFixRitBerekeningen(data);
+    accountMarkCalcFixed();
+    if (fixed !== data) accountSaveData(fixed);
+    return fixed;
+  }
   try {
     if (localStorage.getItem(tmCalcFixKey(profileId)) === "1") return data;
   } catch {
@@ -639,7 +754,16 @@ const ld = p => {
   return autoApplyCalcFix(p, data);
 };
 
-const sv = (p, d) => localStorage.setItem("t_" + p, JSON.stringify(d));
+const sv = (_p, d) => {
+  if (accountUser()) accountSaveData(d);
+  else {
+    try {
+      localStorage.setItem("t_" + _p, JSON.stringify(d));
+    } catch {
+      /* ignore */
+    }
+  }
+};
 
 /**
  * Start (go) / voltooien (ok). Annuleren (no) of ✕ (x): rit wordt verwijderd — geen status “geannuleerd”, telt nergens mee.
@@ -795,10 +919,6 @@ function VoltooiBonSheet({ rit, onBevestig, onAnnuleer }) {
               value={bon}
               onChange={e => setBon(e.target.value)}
             />
-            <p style={{ fontSize: 11, color: "var(--tx3)", margin: "6px 0 0", lineHeight: 1.35 }}>
-              Meerdere bonnen voor dezelfde rit? Scheid met komma, puntkomma of nieuwe regel — factuur en CSV maken dan
-              één regel per bon (bedrag verdeeld).
-            </p>
           </div>
           <div className="tm-bon-scan-row">
             <button type="button" className="btn btn-o btn-full" onClick={startScan}>
@@ -1008,44 +1128,99 @@ function RitMap({ la1, lo1, la2, lo2, labelF, labelT }) {
       }
 
       if (cancelled) return;
-      const map = L.map(node, { zoomControl: true });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap",
-      }).addTo(map);
-      let routeLayer = L.polyline(
-        [
-          [la1, lo1],
-          [la2, lo2],
-        ],
-        { color: TM_ACC, weight: 4, opacity: 0.92 }
-      ).addTo(map);
-      const pin = (lat, lng, letter, tip) =>
-        L.circleMarker([lat, lng], {
-          radius: 9,
-          fillColor: TM_ACC,
-          color: "#141414",
-          weight: 2,
-          fillOpacity: 1,
-        })
-          .bindTooltip(`${letter}: ${tip}`, { permanent: true, direction: "top", className: "tm-leaf-tooltip" })
-          .addTo(map);
-      pin(la1, lo1, "A", labelF || "Start");
-      pin(la2, lo2, "B", labelT || "Einde");
-      map.fitBounds(
-        [
-          [la1, lo1],
-          [la2, lo2],
-        ],
-        { padding: [36, 36], maxZoom: 11 }
-      );
-      getDrivingRouteWithGeometry({ lat: la1, lng: lo1 }, { lat: la2, lng: lo2 })
+      const map = new maplibregl.Map({
+        container: node,
+        style: "https://tiles.openfreemap.org/styles/bright",
+        center: [(Number(lo1) + Number(lo2)) / 2, (Number(la1) + Number(la2)) / 2],
+        zoom: 8,
+        attributionControl: false,
+      });
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+      const pin = (lng, lat, letter, kind) => {
+        const el = document.createElement("div");
+        el.className = `tm-map-pin-dot tm-map-pin-dot--${kind}`;
+        el.textContent = letter;
+        new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([Number(lng), Number(lat)]).addTo(map);
+      };
+      const asCoords = coordinates =>
+        (coordinates || [])
+          .map(c => [Number(c[0]), Number(c[1])])
+          .filter(c => Number.isFinite(c[0]) && Number.isFinite(c[1]));
+      const drawRoute = coordinates => {
+        const coords = asCoords(coordinates);
+        if (coords.length < 2) return;
+        const data = {
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates: coords },
+        };
+        if (map.getSource("rit")) {
+          map.getSource("rit").setData(data);
+          return;
+        }
+        map.addSource("rit", { type: "geojson", data });
+        map.addLayer({
+          id: "rit-casing",
+          type: "line",
+          source: "rit",
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": "#fffdf9", "line-width": 14, "line-opacity": 0.96 },
+        });
+        map.addLayer({
+          id: "rit-line",
+          type: "line",
+          source: "rit",
+          layout: { "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": "#2c3f8f", "line-width": 7 },
+        });
+      };
+      const fit = coordinates => {
+        const coords = asCoords(coordinates);
+        if (coords.length < 2) return;
+        const bounds = coords.reduce(
+          (b, c) => b.extend(c),
+          new maplibregl.LngLatBounds(coords[0], coords[0])
+        );
+        map.resize();
+        map.fitBounds(bounds, {
+          padding: { top: 64, right: 56, bottom: 48, left: 48 },
+          maxZoom: 11,
+          duration: 0,
+        });
+      };
+      let pinsReady = false;
+      let routeCoords = [
+        [Number(lo1), Number(la1)],
+        [Number(lo2), Number(la2)],
+      ];
+      const show = () => {
+        if (cancelled || !map.getStyle()) return;
+        if (!pinsReady) {
+          pinsReady = true;
+          pin(lo1, la1, "A", "a");
+          pin(lo2, la2, "B", "b");
+        }
+        drawRoute(routeCoords);
+        fit(routeCoords);
+      };
+      map.on("load", show);
+      map.once("idle", () => {
+        if (cancelled) return;
+        fit(routeCoords);
+        const attrib = node.querySelector(".maplibregl-ctrl-attrib");
+        if (attrib) {
+          attrib.classList.add("maplibregl-compact");
+          attrib.classList.remove("maplibregl-compact-show");
+          attrib.removeAttribute("open");
+        }
+      });
+      getOsrmRouteGeometry({ lat: la1, lng: lo1 }, { lat: la2, lng: lo2 })
         .then(({ geometry }) => {
           if (cancelled || !geometry?.length) return;
-          map.removeLayer(routeLayer);
-          const latlngs = geometry.map(([lng, lat]) => [lat, lng]);
-          routeLayer = L.polyline(latlngs, { color: TM_ACC, weight: 4, opacity: 0.92 }).addTo(map);
-          map.fitBounds(routeLayer.getBounds(), { padding: [36, 36], maxZoom: 11 });
+          routeCoords = geometry;
+          if (map.isStyleLoaded()) show();
+          else map.once("load", show);
         })
         .catch(() => {});
       cleanup = () => {
@@ -1349,244 +1524,408 @@ function TripCard({ r, onAct }) {
   );
 }
 
-function Home({ D, pr, onPlanRit, onTripAct }) {
-  const [sumP, setSumP] = useState("day");
-  const [s, e] = gr(sumP);
-  const vl = D.r.filter(r => r.s === "voltooid" && statsVenster(r.d) && iR(r.d, s, e));
-  const homeOmzetLine = useMemo(() => {
-    const border = TM_ACC;
-    const fill = tmAccRgba(0.22);
-    if (sumP === "week") {
-      const days = eachDayInclusive(s, e);
-      const labels = days.map(day => {
+const DASH_UUR_VAN = 7;
+const DASH_UUR_TOT = 22;
+
+function tijdNaarMin(ti) {
+  const m = String(ti || "").trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+  return h * 60 + min;
+}
+
+function dashLead(dayRides, isToday, lopendNu) {
+  const lopend = isToday ? lopendNu : dayRides.filter(r => r.s === "lopend");
+  const gepland = dayRides.filter(r => r.s === "komend");
+  const n = gepland.length;
+  const woord = n === 1 ? "rit" : "ritten";
+  if (isToday && lopend.length === 1) {
+    const who = lopend[0].dr || "De chauffeur";
+    if (n === 0) return `${who} rijdt nu. Geen ritten meer gepland vandaag.`;
+    return `${who} rijdt nu, nog ${n} ${woord} gepland vandaag.`;
+  }
+  if (isToday && lopend.length > 1) {
+    return `${lopend.length} ritten onderweg, nog ${n} ${woord} gepland vandaag.`;
+  }
+  if (n > 0) return `${n} ${woord} gepland${isToday ? " vandaag" : " op deze dag"}.`;
+  const done = dayRides.filter(r => r.s === "voltooid").length;
+  if (done > 0) return isToday ? "Alle ritten van vandaag zijn voltooid." : "Alle ritten van deze dag zijn voltooid.";
+  return isToday ? "Geen ritten vandaag." : "Geen ritten op deze dag.";
+}
+
+function DashRitCard({ r, onAct, selected, onSelect }) {
+  const nacht = isN(r.ti);
+  const status =
+    r.s === "lopend" ? "Onderweg" : r.s === "komend" ? "Gepland" : r.s === "voltooid" ? "Voltooid" : r.s;
+  return (
+    <article className={"tm-dash-rit" + (selected ? " is-sel" : "")}>
+      <button type="button" className="tm-dash-rit-hit" onClick={() => onSelect?.(r.id)}>
+        <span className="tm-dash-rit-time">{r.ti || "—"}</span>
+        <span className="tm-dash-rit-route">
+          {r.f} <span aria-hidden="true">→</span> {r.t}
+        </span>
+        <span className="tm-dash-rit-eur">{E(r.v)}</span>
+      </button>
+      <div className="tm-dash-rit-actions">
+        {r.s === "komend" && (
+          <button type="button" className="tm-dash-btn tm-dash-btn--ghost" onClick={() => onAct(r.id, "go")}>
+            Start
+          </button>
+        )}
+        {(r.s === "komend" || r.s === "lopend") && (
+          <button type="button" className="tm-dash-btn tm-dash-btn--solid" onClick={() => onAct(r.id, "ok")}>
+            Voltooien
+          </button>
+        )}
+      </div>
+      <div className="tm-dash-rit-meta">
+        <span className="tm-dash-who-inline">
+          <span className="tm-dash-dot tm-dash-dot--bl" aria-hidden="true" />
+          {r.dr || "—"}
+        </span>
+        <span>{ritKmValue(r)} km</span>
+        {nacht && r.s !== "geannuleerd" && <span className="tm-dash-nacht">Nachttarief</span>}
+        <span className={"tm-dash-status tm-dash-status--" + r.s}>
+          <span className="tm-dash-dot" aria-hidden="true" />
+          {status}
+        </span>
+        {(r.s === "komend" || r.s === "lopend") && (
+          <button type="button" className="tm-dash-cancel" onClick={() => onAct(r.id, "no")}>
+            Annuleer
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function Home({ D, pr, onPlanRit, onTripAct, onOpenFin, onOpenBonnen }) {
+  const [dag, setDag] = useState(() => td());
+  const [selId, setSelId] = useState(null);
+  const [nu, setNu] = useState(() => new Date());
+  const tijdScrollRef = useRef(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setNu(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const vandaag = td();
+  const isToday = dag === vandaag;
+  const dagLabel = isToday ? "Vandaag" : dag === yd() ? "Gisteren" : fmtNlShort(dag);
+
+  const dagRitten = useMemo(
+    () =>
+      D.r
+        .filter(r => r.d === dag && r.s !== "geannuleerd")
+        .sort((a, b) => (a.ti || "99:99").localeCompare(b.ti || "99:99")),
+    [D.r, dag]
+  );
+
+  const verdiend = dagRitten.filter(r => r.s === "voltooid").reduce((a, r) => a + money(r.v), 0);
+  const open = dagRitten.filter(r => r.s === "komend" || r.s === "lopend").reduce((a, r) => a + money(r.v), 0);
+
+  const onderweg = (isToday ? D.r.filter(r => r.s === "lopend") : dagRitten.filter(r => r.s === "lopend")).sort(
+    (a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || ""))
+  );
+  const straks = dagRitten.filter(r => r.s === "komend");
+
+  const rijen = useMemo(() => {
+    const names = [];
+    for (const r of dagRitten) {
+      const n = (r.dr || pr.n || "Chauffeur").trim() || "Chauffeur";
+      if (!names.includes(n)) names.push(n);
+    }
+    if (names.length === 0) names.push(pr.n || "Chauffeur");
+    return names.map(n => ({
+      n,
+      i: n.charAt(0).toUpperCase(),
+      ritten: dagRitten.filter(r => ((r.dr || pr.n || "Chauffeur").trim() || "Chauffeur") === n),
+    }));
+  }, [dagRitten, pr.n]);
+
+  const spanMin = (DASH_UUR_TOT - DASH_UUR_VAN) * 60;
+  const nuMin = nu.getHours() * 60 + nu.getMinutes();
+  const nuPct = Math.max(0, Math.min(100, ((nuMin - DASH_UUR_VAN * 60) / spanMin) * 100));
+  const toonNu = isToday && nuMin >= DASH_UUR_VAN * 60 - 30 && nuMin <= DASH_UUR_TOT * 60 + 30;
+  const nuLabel =
+    String(nu.getHours()).padStart(2, "0") + ":" + String(nu.getMinutes()).padStart(2, "0");
+
+  const [ws, we] = wk();
+  const weekDagen = useMemo(() => eachDayInclusive(ws, we), [ws, we]);
+  const weekKlaar = D.r.filter(r => r.s === "voltooid" && statsVenster(r.d) && iR(r.d, ws, we));
+  const weekOmzet = weekKlaar.reduce((a, r) => a + money(r.v), 0);
+  const weekKosten =
+    D.b.filter(b => statsVenster(b.d) && iR(b.d, ws, we)).reduce((a, b) => a + money(b.a), 0) +
+    (D.o || []).filter(x => statsVenster(x.d) && iR(x.d, ws, we)).reduce((a, x) => a + money(x.a), 0);
+  const weekNetto = weekOmzet - weekKosten;
+  const weekBars = useMemo(
+    () => ({
+      labels: weekDagen.map(day => {
         const dt = new Date(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10));
         dt.setHours(12, 0, 0, 0);
-        return dt.toLocaleDateString("nl-BE", { weekday: "short", day: "numeric" });
-      });
-      const data = days.map(day => vl.filter(r => r.d === day).reduce((a, r) => a + money(r.v), 0));
-      return {
-        labels,
-        datasets: [
-          {
-            label: "Omzet",
-            data,
-            borderColor: border,
-            backgroundColor: fill,
-            fill: true,
-            tension: 0.35,
-            pointRadius: 3,
-            pointHoverRadius: 5,
-            pointBackgroundColor: border,
-            borderWidth: 2,
-          },
-        ],
-      };
-    }
-    const sorted = [...vl].sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
-    if (sorted.length === 0) {
-      return {
-        labels: ["—"],
-        datasets: [
-          {
-            label: "Omzet",
-            data: [0],
-            borderColor: border,
-            backgroundColor: fill,
-            fill: true,
-            tension: 0.25,
-            pointRadius: 0,
-            borderWidth: 2,
-          },
-        ],
-      };
-    }
-    let cum = 0;
-    const data = sorted.map(r => {
-      cum += money(r.v);
-      return cum;
-    });
-    const labels = sorted.map((r, i) => (sorted.length <= 10 ? r.ti || `Rit ${i + 1}` : String(i + 1)));
-    return {
-      labels,
+        return dt.toLocaleDateString("nl-BE", { weekday: "short" }).replace(".", "");
+      }),
       datasets: [
         {
-          label: "Omzet",
-          data,
-          borderColor: border,
-          backgroundColor: fill,
-          fill: true,
-          tension: 0.35,
-          pointRadius: Math.min(4, Math.max(2, 12 - sorted.length)),
-          pointHoverRadius: 6,
-          pointBackgroundColor: border,
-          borderWidth: 2,
+          label: pr.n,
+          data: weekDagen.map(day =>
+            weekKlaar.filter(r => r.d === day).reduce((a, r) => a + money(r.v), 0)
+          ),
+          backgroundColor: TM_INDIGO,
+          borderRadius: 5,
+          maxBarThickness: 28,
         },
       ],
-    };
-  }, [sumP, s, e, D.r]);
-  const homeLineOpts = useMemo(
+    }),
+    [weekDagen, weekKlaar, pr.n]
+  );
+  const weekOpts = useMemo(
     () => ({
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { intersect: false, mode: "index" },
       plugins: {
         legend: { display: false },
         tooltip: {
-          ...TM_CHART_BASE.plugins.tooltip,
-          callbacks: {
-            label: ctx => "Omzet " + E(Number(ctx.parsed.y ?? ctx.raw) || 0),
-          },
+          backgroundColor: "#111827",
+          titleColor: "#fff",
+          bodyColor: "#e5e7eb",
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: { label: ctx => "Omzet " + E(Number(ctx.parsed.y ?? ctx.raw) || 0) },
         },
       },
       scales: {
         x: {
-          ticks: {
-            color: "#8a8a82",
-            maxRotation: sumP === "week" ? 0 : 45,
-            font: { size: 10 },
-          },
-          grid: { color: "rgba(60, 60, 60, 0.35)" },
+          grid: { display: false },
+          ticks: { color: "#9ca3af", font: { size: 11 } },
+          border: { display: false },
         },
         y: {
+          beginAtZero: true,
           ticks: {
-            color: "#8a8a82",
-            font: { size: 10 },
+            color: "#9ca3af",
+            font: { size: 11 },
+            maxTicksLimit: 4,
             callback: v => "€" + v,
           },
-          grid: { color: "rgba(60, 60, 60, 0.4)" },
-          beginAtZero: true,
+          grid: { color: "rgba(17, 24, 39, 0.06)" },
+          border: { display: false },
         },
       },
     }),
-    [sumP]
+    []
   );
-  const om = vl.reduce((a, r) => a + money(r.v), 0);
-  const km = vl.reduce((a, r) => a + ritKmValue(r), 0);
-  const kosten =
-    D.b.filter(b => statsVenster(b.d) && iR(b.d, s, e)).reduce((a, b) => a + money(b.a), 0) +
-    (D.o || []).filter(x => statsVenster(x.d) && iR(x.d, s, e)).reduce((a, x) => a + money(x.a), 0);
-  const nettoBoek = om - kosten;
-  const tanksInPeriode = D.b.filter(b => statsVenster(b.d) && iR(b.d, s, e));
-  const tanksMetL = tanksInPeriode.filter(b => money(b.l) > 0 && money(b.p) >= 0);
-  const avgPl = tanksMetL.length
-    ? tanksMetL.reduce((a, b) => a + money(b.p), 0) / tanksMetL.length
-    : 2.3;
-  const geschatBrandstofRitten =
-    Math.round(km * (GESCHAT_VERBRUIK_L_PER_100KM / 100) * avgPl * 100) / 100;
-  const geschatWinst = Math.round((om - geschatBrandstofRitten) * 100) / 100;
-  const periodRangeLabel =
-    sumP === "day"
-      ? fmtNlVandaagLong()
-      : sumP === "yesterday"
-        ? fmtNlLongFromIso(s)
-        : `${fmtNlShort(s)} t/m ${fmtNlShort(e)}`;
-  const nettoHint =
-    sumP === "day"
-      ? "Na alle kosten vandaag"
-      : sumP === "yesterday"
-        ? "Na alle kosten gisteren"
-        : "Na alle kosten deze week";
-  const lopend = D.r
-    .filter(r => r.s === "lopend")
-    .sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
-  const komend = D.r
-    .filter(r => r.s === "komend")
-    .sort((a, b) => (a.d + (a.ti || "")).localeCompare(b.d + (b.ti || "")));
-  const heeftRitten = lopend.length > 0 || komend.length > 0;
+
+  const [ms, me] = mo();
+  const zonderBon = D.r.filter(
+    r => r.s === "voltooid" && statsVenster(r.d) && iR(r.d, ms, me) && !String(r.bon || "").trim()
+  );
+
+  const sel = selId ? dagRitten.find(r => r.id === selId) : null;
+
+  useEffect(() => {
+    const el = tijdScrollRef.current;
+    if (!el || el.scrollWidth <= el.clientWidth + 8) return;
+    const mark = el.querySelector(".tm-dash-now") || el.querySelector(".tm-dash-pill");
+    if (!mark) return;
+    const host = el.getBoundingClientRect();
+    const box = mark.getBoundingClientRect();
+    el.scrollLeft = Math.max(0, el.scrollLeft + (box.left - host.left) - 170);
+  }, [dag]);
+
+  const pillStyle = ti => {
+    const min = tijdNaarMin(ti);
+    if (min == null) return null;
+    const left = ((min - DASH_UUR_VAN * 60) / spanMin) * 100;
+    if (left < -4 || left > 104) return null;
+    return { left: `clamp(0%, ${left}%, calc(100% - 58px))` };
+  };
 
   return (
-    <div className="tm-home-page">
-      <header className="tm-home-hello">
-        <div className="tm-home-hello-sub">Welkom terug</div>
-        <h1 className="tm-home-hello-name">{pr.n}</h1>
+    <div className="tm-dash">
+      <header className="tm-dash-head">
+        <h1>{fmtDagKop(isToday ? vandaag : dag)}</h1>
+        <p>{dashLead(dagRitten, isToday, onderweg)}</p>
       </header>
 
-      {heeftRitten && (
-        <section className="tm-home-ritten" aria-label="Actieve en geplande ritten">
-          {lopend.length > 0 && (
-            <div className="tm-home-onderweg">
-              <div className="tm-home-onderweg-hd">
-                <span className="tm-home-onderweg-pulse" aria-hidden="true" />
-                <span>Nu onderweg</span>
-                <span className="tm-home-onderweg-c">{lopend.length}</span>
-              </div>
-              <p className="tm-home-onderweg-lead">
-                Start, voltooien of annuleren hieronder. Annuleren verwijdert de rit (telt niet mee).
-              </p>
-              {lopend.map(r => (
-                <TripCard key={r.id} r={r} onAct={onTripAct} />
-              ))}
-            </div>
-          )}
-          {komend.length > 0 && (
-            <div className={lopend.length > 0 ? "tm-home-gepland" : undefined}>
-              <div className="sh">
-                Gepland <span className="sh-c">{komend.length}</span>
-              </div>
-              {komend.slice(0, 6).map(r => (
-                <TripCard key={r.id} r={r} onAct={onTripAct} />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      <section className="tm-home-sum" aria-label="Omzetoverzicht">
-        <header className="tm-home-sum-head">
-          <h2 className="tm-home-sum-title">Omzetoverzicht</h2>
-          <HomeSumPeriodSelect v={sumP} set={setSumP} />
-        </header>
-        <p className="tm-home-sum-range">{periodRangeLabel}</p>
-        <div className="tm-home-sum-body">
-          <div className="tm-home-sum-hero">
-            <div className="tm-home-sum-hero-inner">
-              <span className="tm-home-sum-hero-lab">Omzet</span>
-              <span className="tm-home-sum-hero-val tm-home-sum-hero-val--acc">{E(om)}</span>
-              <div
-                className="tm-home-sum-line-wrap"
-                role="img"
-                aria-label={
-                  sumP === "week"
-                    ? "Omzet per dag in de gekozen week"
-                    : sumP === "yesterday"
-                      ? "Cumulatieve omzet per rit op gisteren"
-                      : "Cumulatieve omzet per rit vandaag"
-                }
-              >
-                <Line data={homeOmzetLine} options={homeLineOpts} />
-              </div>
-              <span className="tm-home-sum-hero-sub">Alleen voltooide ritten in deze periode</span>
-            </div>
+      <section className="tm-dash-tl" aria-label="Dagplanning">
+        <div className="tm-dash-tl-bar">
+          <div className="tm-dash-tl-nav">
+            <button type="button" className="tm-dash-arrow" onClick={() => setDag(d => addDaysIso(d, -1))} aria-label="Vorige dag">
+              ‹
+            </button>
+            <strong>{dagLabel}</strong>
+            <button type="button" className="tm-dash-arrow" onClick={() => setDag(d => addDaysIso(d, 1))} aria-label="Volgende dag">
+              ›
+            </button>
           </div>
-          <div className="tm-home-sum-split">
-            <div className="tm-home-sum-cell">
-              <span className="tm-home-sum-cell-lab">Winst</span>
-              <span className="tm-home-sum-cell-hint">Na geschatte brandstof</span>
-              <span
-                className={
-                  "tm-home-sum-cell-val " + (geschatWinst >= 0 ? "tm-home-stat-pos" : "tm-home-stat-neg")
-                }
-              >
-                {E(geschatWinst)}
-              </span>
-            </div>
-            <div className="tm-home-sum-cell">
-              <span className="tm-home-sum-cell-lab">Netto</span>
-              <span className="tm-home-sum-cell-hint">{nettoHint}</span>
-              <span
-                className={
-                  "tm-home-sum-cell-val " + (nettoBoek >= 0 ? "tm-home-stat-pos" : "tm-home-stat-neg")
-                }
-              >
-                {E(nettoBoek)}
-              </span>
-            </div>
-          </div>
+          <p className="tm-dash-tl-sum">
+            {dagRitten.length} {dagRitten.length === 1 ? "rit" : "ritten"}, {euroHeel(verdiend)} verdiend en{" "}
+            {euroHeel(open)} nog open
+          </p>
         </div>
+        <div className="tm-dash-scroll" ref={tijdScrollRef}>
+        <div className="tm-dash-axis" aria-hidden="true">
+          <span className="tm-dash-axis-pad" />
+          <span className="tm-dash-axis-hours">
+            {Array.from({ length: DASH_UUR_TOT - DASH_UUR_VAN + 1 }, (_, i) => DASH_UUR_VAN + i).map(h => (
+              <span key={h}>{String(h).padStart(2, "0")}</span>
+            ))}
+          </span>
+        </div>
+        <div className="tm-dash-rows">
+          {rijen.map(row => (
+            <div className="tm-dash-row" key={row.n}>
+              <div className="tm-dash-who">
+                <span className="tm-dash-av" aria-hidden="true">
+                  {row.i}
+                </span>
+                <span>{row.n}</span>
+              </div>
+              <div className="tm-dash-track">
+                <span className="tm-dash-track-line" />
+                {row.ritten.map(r => {
+                  const st = pillStyle(r.ti);
+                  if (!st) return null;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      className={
+                        "tm-dash-pill" +
+                        (r.s === "komend" ? " is-open" : " is-vast") +
+                        (selId === r.id ? " is-sel" : "")
+                      }
+                      style={st}
+                      title={`${r.ti || ""} ${r.f} → ${r.t}`}
+                      onClick={() => setSelId(id => (id === r.id ? null : r.id))}
+                    >
+                      {r.ti || "rit"}
+                    </button>
+                  );
+                })}
+                {toonNu && (
+                  <div className="tm-dash-now" style={{ left: `${nuPct}%` }}>
+                    <span>{nuLabel}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        </div>
+        {sel && (
+          <div className="tm-dash-detail">
+            <div>
+              <strong>
+                {sel.ti || "—"} · {sel.f} → {sel.t}
+              </strong>
+              <span>
+                {sel.dr || pr.n} · {ritKmValue(sel)} km · {E(sel.v)}
+                {sel.bon ? ` · Bon ${sel.bon}` : ""}
+                {isN(sel.ti) ? " · Nachttarief" : ""}
+              </span>
+            </div>
+            <div className="tm-dash-rit-actions">
+              {sel.s === "komend" && (
+                <button type="button" className="tm-dash-btn tm-dash-btn--ghost" onClick={() => onTripAct(sel.id, "go")}>
+                  Start
+                </button>
+              )}
+              {(sel.s === "komend" || sel.s === "lopend") && (
+                <button type="button" className="tm-dash-btn tm-dash-btn--solid" onClick={() => onTripAct(sel.id, "ok")}>
+                  Voltooien
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
-      <button type="button" className="btn btn-p btn-full tm-home-plan" onClick={onPlanRit}>
-        Rit plannen
+      <div className="tm-dash-grid">
+        <div className="tm-dash-col">
+          <section aria-label="Nu onderweg">
+            <h2>Nu onderweg</h2>
+            {onderweg.length === 0 ? (
+              <p className="tm-dash-empty">Geen rit onderweg op deze dag.</p>
+            ) : (
+              onderweg.map(r => (
+                <DashRitCard key={r.id} r={r} onAct={onTripAct} selected={selId === r.id} onSelect={setSelId} />
+              ))
+            )}
+          </section>
+          <section aria-label="Straks">
+            <h2>Straks</h2>
+            {straks.length === 0 ? (
+              <p className="tm-dash-empty">Geen ritten meer gepland op deze dag.</p>
+            ) : (
+              straks.map(r => (
+                <DashRitCard key={r.id} r={r} onAct={onTripAct} selected={selId === r.id} onSelect={setSelId} />
+              ))
+            )}
+          </section>
+        </div>
+
+        <div className="tm-dash-col">
+          <section className="tm-dash-week" aria-label="Deze week">
+            <header className="tm-dash-week-hd">
+              <h2>Deze week</h2>
+              <button type="button" className="tm-dash-link" onClick={onOpenFin}>
+                Naar Financieel
+              </button>
+            </header>
+            <div className="tm-dash-kpis">
+              <div>
+                <span>Omzet</span>
+                <strong>{euroHeel(weekOmzet)}</strong>
+              </div>
+              <div>
+                <span>Kosten</span>
+                <strong>{euroHeel(weekKosten)}</strong>
+              </div>
+              <div>
+                <span>Netto</span>
+                <strong className={weekNetto >= 0 ? "is-pos" : "is-neg"}>{euroHeel(weekNetto)}</strong>
+              </div>
+              <div>
+                <span>Ritten</span>
+                <strong>{weekKlaar.length}</strong>
+              </div>
+            </div>
+            <div className="tm-dash-chart">
+              <Bar data={weekBars} options={weekOpts} />
+            </div>
+            <div className="tm-dash-legend">
+              <span>
+                <i className="tm-dash-swatch" aria-hidden="true" />
+                {pr.n}
+              </span>
+              <span>Alleen voltooide ritten</span>
+            </div>
+          </section>
+
+          {zonderBon.length > 0 && (
+            <section className="tm-dash-todo" aria-label="Nog af te werken">
+              <h2>Nog af te werken</h2>
+              <div className="tm-dash-todo-card">
+                <p className="tm-dash-todo-title">
+                  <span className="tm-dash-dot tm-dash-dot--rd" aria-hidden="true" />
+                  {zonderBon.length} voltooide {zonderBon.length === 1 ? "rit" : "ritten"} zonder bonnummer
+                </p>
+                <button type="button" className="tm-dash-btn tm-dash-btn--ghost" onClick={onOpenBonnen}>
+                  Bonnen inlezen
+                </button>
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+
+      <button type="button" className="tm-dash-new-mobile" onClick={onPlanRit}>
+        + Nieuwe rit
       </button>
     </div>
   );
@@ -1631,7 +1970,7 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
         {
           data: [cnt.komend, cnt.lopend, cnt.voltooid, cnt.geannuleerd],
           backgroundColor: [...TM_DONUT_STATUS_BG],
-          borderColor: "#141414",
+          borderColor: "#ffffff",
           borderWidth: 2,
           hoverOffset: 8,
         },
@@ -1646,8 +1985,8 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
         {
           label: "Voltooid",
           data: week.counts,
-          backgroundColor: tmAccRgba(0.45),
-          borderColor: TM_ACC,
+          backgroundColor: TM_INDIGO,
+          borderColor: "#24356f",
           borderWidth: 1,
           borderRadius: 6,
         },
@@ -1661,11 +2000,11 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
       scales: {
         x: {
           ticks: { color: "#6f6f68", maxRotation: 40, font: { size: 10 } },
-          grid: { color: "rgba(40,40,40,0.45)" },
+          grid: { color: "rgba(17, 24, 39, 0.08)" },
         },
         y: {
           ticks: { color: "#6f6f68", stepSize: 1 },
-          grid: { color: "rgba(40,40,40,0.5)" },
+          grid: { color: "rgba(17, 24, 39, 0.08)" },
           beginAtZero: true,
         },
       },
@@ -1704,8 +2043,8 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
         {
           label: "Ritten",
           data: topRoutes.map(([, v]) => v),
-          backgroundColor: tmAccRgba(0.35),
-          borderColor: TM_ACC2,
+          backgroundColor: "rgba(44, 63, 143, 0.55)",
+          borderColor: TM_INDIGO,
           borderWidth: 1,
           borderRadius: 4,
         },
@@ -1720,7 +2059,7 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
       scales: {
         x: {
           ticks: { color: "#6f6f68", stepSize: 1 },
-          grid: { color: "rgba(40,40,40,0.45)" },
+          grid: { color: "rgba(17, 24, 39, 0.08)" },
           beginAtZero: true,
         },
         y: {
@@ -1754,8 +2093,7 @@ function RittenOverzichtCharts({ rides, cnt, onDrill }) {
   return (
     <div className="tm-ritten-charts">
       <p className="tm-chart-lead">
-        <strong>{rides.length}</strong> ritten in totaal. Weekbalk = voltooide ritten per kalenderweek (lokale datum).
-        Open de lijst via een filter hieronder.
+        <strong>{rides.length}</strong> ritten
       </p>
       <div className="tm-chart-grid">
         <div className="tm-chart-card tm-chart-card--donut">
@@ -1935,8 +2273,8 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
 
   return (
     <div>
-      <div className="tm-bar">
-        <h1>Mijn ritten</h1>
+      <div className="tm-bar tm-page-head">
+        <h1>Planning</h1>
         <button type="button" className="btn btn-p btn-pill" onClick={openNieuw}>
           + Nieuw
         </button>
@@ -2080,34 +2418,7 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
                     onChange={e => sM(m => ({ ...m, k: e.target.value, ri: -1, routeKmBron: "" }))}
                   />
                   {routeKmLaden && (
-                    <p className="tm-form-hint tm-form-hint--acc">Rijroute wordt gemeten (even geduld)…</p>
-                  )}
-                  {!routeKmLaden && hasGoogleMapsApiKey() && fm.routeKmBron === "google" && fm.k && (
-                    <p className="tm-form-hint tm-form-hint--gn">
-                      Afstand via <strong>Google Maps</strong> — zelfde motor als google.com.
-                    </p>
-                  )}
-                  {!routeKmLaden && fm.routeKmBron === "osrm" && fm.k && (
-                    <p className="tm-form-hint tm-form-hint--am">
-                      Google niet beschikbaar; afstand via <strong>OSRM</strong> (kan enkele km afwijken).
-                    </p>
-                  )}
-                  {!routeKmLaden && fm.routeKmBron === "ors" && fm.k && (
-                    <p className="tm-form-hint tm-form-hint--am">
-                      Afstand via <strong>OpenRouteService</strong> (kan afwijken van Google).
-                    </p>
-                  )}
-                  {!routeKmLaden && fm.routeKmBron === "preset" && fm.k && (
-                    <p className="tm-form-hint tm-form-hint--am">
-                      Route niet opgehaald — <strong>referentie-km</strong> uit de lijst. Controleer desnoods handmatig.
-                    </p>
-                  )}
-                  {!hasGoogleMapsApiKey() && (
-                    <p className="tm-form-hint">
-                      Tip: <code className="tm-meer-code">VITE_GOOGLE_MAPS_API_KEY</code> in{" "}
-                      <code className="tm-meer-code">.env</code> + herstart <code className="tm-meer-code">npm run dev</code>{" "}
-                      voor km gelijk aan Google.
-                    </p>
+                    <p className="tm-form-hint tm-form-hint--acc">Rijroute wordt gemeten…</p>
                   )}
                 </div>
               </section>
@@ -2246,8 +2557,8 @@ function Financieel({ D, pid }) {
         {
           label: "€",
           data: [omzet, kosten, winst],
-          backgroundColor: [tmAccRgba(0.55), "rgba(239, 68, 68, 0.5)", "rgba(146, 168, 74, 0.5)"],
-          borderColor: [TM_ACC, "#ef4444", winst >= 0 ? TM_GN : "#ef4444"],
+          backgroundColor: [TM_INDIGO, "rgba(196, 92, 74, 0.78)", winst >= 0 ? "rgba(44, 63, 143, 0.45)" : "rgba(196, 92, 74, 0.78)"],
+          borderColor: ["#24356f", "#c45c4a", winst >= 0 ? TM_INDIGO : "#c45c4a"],
           borderWidth: 1,
           borderRadius: 8,
         },
@@ -2279,7 +2590,7 @@ function Financieel({ D, pid }) {
             font: { size: 10 },
             callback: v => "€" + v,
           },
-          grid: { color: "rgba(40,40,40,0.45)" },
+          grid: { color: "rgba(17, 24, 39, 0.08)" },
           beginAtZero: true,
         },
       },
@@ -2291,13 +2602,9 @@ function Financieel({ D, pid }) {
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Financieel overzicht</h1>
-      <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 14px", lineHeight: 1.4 }}>
-        Periode = lokale datum. Alle voltooide ritten en kosten in de gekozen periode. PDF en CSV zijn altijd te
-        downloaden (ook zonder ritten: lege export of factuur €&nbsp;0). Omzet = opgeslagen vergoeding per rit (gebaseerd
-        op de km van toen); voor metingen gelijk aan Google heb je <code className="tm-meer-code">VITE_GOOGLE_MAPS_API_KEY</code>{" "}
-        in de build (zie Meer) en correcte km bij het aanmaken van ritten.
-      </p>
+      <header className="tm-page-head">
+      <h1>Financieel</h1>
+      </header>
       <PP v={p} set={sP} />
 
       {showChart && (
@@ -2336,10 +2643,7 @@ function Financieel({ D, pid }) {
 
       <div className="card" style={{ marginTop: 16, padding: 14, background: "var(--s2)" }}>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Factuur (datum bereik)</div>
-        <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 10px", lineHeight: 1.45 }}>
-          Dashboard hierboven: <strong>{periodLabel}</strong>. Voor PDF/CSV kies je het <strong>inclusieve</strong>{" "}
-          datumbereik (voltooide ritten op ritdatum). Standaard gelijk aan de gekozen dag/week/maand.
-        </p>
+        <p style={{ fontSize: 13, color: "var(--tx3)", margin: "0 0 10px" }}>{periodLabel}</p>
         <div className="tm-g2" style={{ marginBottom: 12 }}>
           <div className="tm-fg">
             <label className="fl">Van (datum)</label>
@@ -2350,9 +2654,8 @@ function Financieel({ D, pid }) {
             <input type="date" value={factuurTot} onChange={ev => setFactuurTot(ev.target.value)} />
           </div>
         </div>
-        <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
-          <strong>{factuurDatumLabel}</strong> — {doneFactuurChron.length} voltooide rit(ten) in dit bereik. Meerdere
-          bonnen per rit → meerdere regels. PDF: <strong>Meer → Factuur &amp; logo</strong> (profiel {pid}).
+        <p style={{ fontSize: 13, color: "var(--tx3)", margin: "0 0 12px" }}>
+          {factuurDatumLabel} · {doneFactuurChron.length} ritten
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <button
@@ -2600,9 +2903,6 @@ function HistoriekVoltooideRitKaart({ r, D, pid, sD }) {
       </div>
       {open && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--br)" }}>
-          <p style={{ fontSize: 11, color: "var(--tx2)", margin: "0 0 10px", lineHeight: 1.4 }}>
-            Aangepaste waarden tellen mee in Home, Financieel, factuur-PDF/CSV en export.
-          </p>
           <div className="tm-g2" style={{ marginBottom: 10 }}>
             <div className="tm-fg">
               <label className="fl">Km</label>
@@ -2701,12 +3001,9 @@ function Historiek({ D, pid, sD }) {
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Historiek</h1>
-      <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 14px", lineHeight: 1.45 }}>
-        Elk bedrag komt rechtstreeks uit je opgeslagen ritten en kosten. Totalen = <strong>som van de lijnen</strong>{" "}
-        (zelfde rekenregels als Financieel). Bij <strong>voltooide</strong> ritten kun je onderaan de kaart{" "}
-        <strong>Km &amp; € aanpassen</strong> als de automatische meting of het tarief niet klopt.
-      </p>
+      <header className="tm-page-head">
+      <h1>Historiek</h1>
+      </header>
       <PPh v={p} set={sP} />
       <div className="card tm-rit-sum" style={{ marginBottom: 16 }}>
         <div className="tm-rvi">
@@ -2729,19 +3026,10 @@ function Historiek({ D, pid, sD }) {
           <span>Netto</span>
           <b style={{ color: netto >= 0 ? "var(--gn)" : "var(--rd)" }}>{E(netto)}</b>
         </div>
-        <p style={{ fontSize: 11, color: "var(--tx3)", margin: "10px 0 0", lineHeight: 1.35 }}>
-          Dagen en maanden volgens je toestel (lokale tijd). <strong>Annuleren</strong> op Home of Ritten{" "}
-          <strong>verwijdert</strong> de rit (telt nergens mee). “Gemist (annulering)” op Financieel geldt alleen nog voor
-          oude/import-ritten met status geannuleerd.
-        </p>
       </div>
 
       <div className="card" style={{ marginBottom: 16, padding: 14, background: "var(--s2)" }}>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Export voor facturen (datum bereik)</div>
-        <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 10px", lineHeight: 1.45 }}>
-          Kies het <strong>inclusieve</strong> datumbereik voor PDF/CSV (voltooide ritten). Standaard gelijk aan de
-          filter hierboven; je mag het vernauwen of verruimen.
-        </p>
         <div className="tm-g2" style={{ marginBottom: 12 }}>
           <div className="tm-fg">
             <label className="fl">Van (datum)</label>
@@ -2752,9 +3040,8 @@ function Historiek({ D, pid, sD }) {
             <input type="date" value={factuurTot} onChange={ev => setFactuurTot(ev.target.value)} />
           </div>
         </div>
-        <p style={{ fontSize: 12, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
-          <strong>{factuurDatumLabel}</strong> — {voltooidExportChron.length} voltooide rit(ten). CSV/PDF:{" "}
-          <strong>Meer → Factuur &amp; logo</strong> (profiel <code style={{ fontSize: 11 }}>{pid}</code>).
+        <p style={{ fontSize: 13, color: "var(--tx3)", margin: "0 0 12px" }}>
+          {factuurDatumLabel} · {voltooidExportChron.length} ritten
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <button
@@ -2886,7 +3173,9 @@ function Kosten({ D, sD, pid }) {
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Kosten registreren</h1>
+      <header className="tm-page-head">
+      <h1>Kosten</h1>
+      </header>
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
         <button type="button" className={"btn " + (type === "brandstof" ? "btn-p" : "btn-o")} onClick={() => sT("brandstof")}>
           Brandstof
@@ -3125,11 +3414,6 @@ function FactuurGegevensScherm({ pid }) {
 
   return (
     <div>
-      <p style={{ fontSize: 13, color: "var(--tx2)", marginBottom: 14, lineHeight: 1.45 }}>
-        Zelfde opslag als de grote Transporteur-app (<code style={{ fontSize: 11 }}>transporteur_factuur_gegevens_{pid}</code>
-        ). Logo en teksten verschijnen op je PDF-factuur (Historiek / Financieel).
-      </p>
-
       <div className="card" style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Logo</div>
         {hasLogo ? (
@@ -3229,10 +3513,7 @@ function FactuurGegevensScherm({ pid }) {
       </div>
 
       <div className="card" style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Weekrapport (klassieke app)</div>
-        <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.4 }}>
-          Alleen relevant als je de grote app nog gebruikt voor het maandag-mailtje.
-        </p>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Weekrapport</div>
         <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer" }}>
           <input
             type="checkbox"
@@ -3249,7 +3530,7 @@ function FactuurGegevensScherm({ pid }) {
       </button>
       {hint && (
         <p style={{ fontSize: 13, color: "var(--gn)", marginTop: 12, textAlign: "center" }}>
-          Opgeslagen voor dit profiel.
+          Opgeslagen.
         </p>
       )}
     </div>
@@ -3469,14 +3750,8 @@ function BonFotoImportSection({ D, sD, pid }) {
   };
 
   return (
-    <div style={{ marginTop: 4, marginBottom: 8 }}>
-      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Bon-foto’s (OCR → ritten)</div>
-      <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 12px", lineHeight: 1.45 }}>
-        Sleep hier foto’s van <strong>voltooide</strong> transportbonnen. De app zoekt <strong>IHcT</strong>-codes in de
-        tekst (Nederlands/Engels OCR). Koppel elke foto aan de juiste rit — daarna verschijnen de bonnen op je{" "}
-        <strong>factuur</strong> en CSV (zelfde als handmatig invullen). Eerste keer laadt Tesseract taalbestanden
-        (internet nodig); daarna kan het uit cache.
-      </p>
+    <div id="tm-bon-inlezen" style={{ marginTop: 4, marginBottom: 8 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Bon-foto’s</div>
       <div className="tm-g2" style={{ marginBottom: 12 }}>
         <div className="tm-fg">
           <label className="fl">Ritten tonen / auto-koppel vanaf</label>
@@ -3492,7 +3767,6 @@ function BonFotoImportSection({ D, sD, pid }) {
         {voltooidePool.filter(r => !String(r.bon || "").trim()).length
           ? ` · ${voltooidePool.filter(r => !String(r.bon || "").trim()).length} zonder bon`
           : ""}
-        . Auto-koppel alleen als er precies één passende rit zonder bon is (eventueel met datum uit de foto).
       </p>
       <div
         {...dropProps}
@@ -3620,7 +3894,13 @@ function BonFotoImportSection({ D, sD, pid }) {
   );
 }
 
-function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
+function Meer({ D, sD, pid, pr, onLogout, onBackupImported, focusBon = 0 }) {
+  useEffect(() => {
+    if (!focusBon) return;
+    const el = document.getElementById("tm-bon-inlezen");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusBon]);
+
   const [v, sV] = useState("m");
   const [erA, setErA] = useState(null);
   const [erB, setErB] = useState(null);
@@ -3661,7 +3941,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   const testGoogleDirections = async () => {
     if (!hasGoogleMapsApiKey()) {
       setGoogleTestMsg(
-        "Geen sleutel in deze build: zet VITE_GOOGLE_MAPS_API_KEY in .env, herstart npm run dev, of rebuild productie met env-vars op je host."
+        "Geen sleutel."
       );
       return;
     }
@@ -3672,7 +3952,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
       const leuven = { lat: 50.8814, lng: 4.671 };
       const { km, source } = await getDrivingRouteKm(brussel, leuven);
       setGoogleTestMsg(
-        `OK — test UZ Brussel → UZ Leuven: ${km} km (bron: ${source || "?"}). Google Directions werkt in deze app.`
+        `OK — ${km} km.`
       );
     } catch (e) {
       const m = String(e?.message || e);
@@ -3837,37 +4117,17 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
         <button type="button" className="btn btn-gh" style={{ marginBottom: 12 }} onClick={() => sV("m")}>
           ← Terug
         </button>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 14 }}>
-          {v === "p" ? "Profiel" : v === "f" ? "Factuur & logo" : "Gegevens"}
+        <h1 className="tm-subhead">
+          {v === "f" ? "Factuur & logo" : "Gegevens"}
         </h1>
-        {v === "p" && (
-          <div className="tm-pg">
-            {PR.map(p => (
-              <button
-                key={p.id}
-                type="button"
-                className={"tm-pc" + (p.id === pid ? " on" : "")}
-                onClick={() => sP(p.id)}
-              >
-                <div className="tm-pav">{p.i}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: p.id === pid ? "var(--acc)" : "var(--tx2)" }}>{p.n}</div>
-                {p.id === pid && <div style={{ fontSize: 10, color: "var(--acc)", marginTop: 3 }}>Actief</div>}
-              </button>
-            ))}
-          </div>
-        )}
         {v === "f" && <FactuurGegevensScherm pid={pid} />}
         {v === "d" && (
           <div>
             <p style={{ marginBottom: 16, color: "var(--tx2)", fontSize: 14 }}>
-              {D.r.length} ritten · {D.b.length} tankbeurten · {(D.o || []).length} overige kosten (actief profiel)
+              {D.r.length} ritten · {D.b.length} tankbeurten · {(D.o || []).length} overige kosten
             </p>
             <div className="card" style={{ marginBottom: 14, padding: 14, background: "var(--s2)" }}>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Volledige backup</div>
-              <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
-                Alle profielen, TransportMe-data en klassieke app-gegevens in één .json-bestand. Bewaar dit op een
-                veilige plek (geen cloud in de app zelf).
-              </p>
               <button type="button" className="btn btn-p btn-full" style={{ marginBottom: 8 }} onClick={() => exportTransporteurData()}>
                 Backup downloaden
               </button>
@@ -3906,11 +4166,6 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
               style={{ marginBottom: 14, padding: 14, background: "var(--s2)", borderColor: "var(--am)" }}
             >
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>Herstel uit klassieke app</div>
-              <p style={{ fontSize: 13, color: "var(--tx2)", margin: "0 0 12px", lineHeight: 1.45 }}>
-                Vervangt de TransportMe-gegevens van <strong>{pr.n}</strong> opnieuw vanuit de oude localStorage (
-                transporteur_*). Gebruik dit als bedragen verkeerd lijken (bijv. door import). Alleen ritten die{" "}
-                <em>alleen</em> in TransportMe stonden, gaan verloren.
-              </p>
               <button
                 type="button"
                 className="btn btn-o btn-full"
@@ -3919,7 +4174,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
                   const n = leg.r.length + leg.b.length + leg.o.length;
                   if (n === 0) {
                     alert(
-                      "Geen gegevens in klassieke opslag voor dit profiel. Probeer een ander profiel, of zet een .json-backup terug."
+                      "Geen gegevens in klassieke opslag."
                     );
                     return;
                   }
@@ -3939,7 +4194,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
                 Opnieuw importeren uit klassieke opslag
               </button>
             </div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--tx3)", marginBottom: 8 }}>Alleen huidig profiel</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--tx3)", marginBottom: 8 }}>Dit account</div>
             <button
               type="button"
               className="btn btn-o btn-full"
@@ -3953,45 +4208,50 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
                 URL.revokeObjectURL(a.href);
               }}
             >
-              JSON export (dit profiel)
+              JSON export
             </button>
             <button
               type="button"
               className="btn btn-r btn-full"
               onClick={() => {
-                if (confirm("Alle gegevens van dit profiel wissen?")) {
+                if (confirm("Alle gegevens van dit account wissen?")) {
                   const n = normData({ r: [], b: [], o: [], xr: [], xrArch: [] });
                   sD(n);
                   sv(pid, n);
                 }
               }}
             >
-              Alles wissen (dit profiel)
+              Alles wissen
             </button>
           </div>
         )}
       </div>
     );
 
-  const googleMapsKey = hasGoogleMapsApiKey();
-
   return (
     <div className="tm-meer-hub">
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 18 }}>Instellingen</h1>
+      <header className="tm-page-head">
+      <h1>Instellingen</h1>
+      </header>
+
+      <MeldingInstelling />
 
       <section className="tm-meer-sec" aria-labelledby="tm-meer-acc">
         <h2 id="tm-meer-acc" className="tm-meer-sec-h">
           Account
         </h2>
         {[
-          { k: "p", t: "Profiel", s: pr.n + " · Wissel chauffeur" },
-          { k: "f", t: "Factuur & logo", s: "Van/Aan, btw, logo — zelfde als grote app" },
+          { k: "f", t: "Factuur & logo", s: pr.email || pr.n },
         ].map(m => (
           <button key={m.k} type="button" className="tm-mi" onClick={() => sV(m.k)}>
             <strong>{m.t}</strong>
             <small>{m.s}</small>
           </button>
         ))}
+        <button type="button" className="tm-mi" onClick={onLogout}>
+          <strong>Uitloggen</strong>
+          <small>{pr.email || pr.n}</small>
+        </button>
       </section>
 
       <section className="tm-meer-sec" aria-labelledby="tm-meer-data">
@@ -4010,9 +4270,6 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
         </h2>
       <div className="card tm-meer-ritten-card">
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Ritten beheren</div>
-        <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.4 }}>
-          Zoeken, bon aanpassen, rit wissen.
-        </p>
         <button
           type="button"
           className="btn btn-o btn-full"
@@ -4022,10 +4279,6 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
         >
           {recalcRittenBusy ? "Bezig met herberekenen…" : "Alle ritten: km + vergoeding (rijroute)"}
         </button>
-        <p style={{ fontSize: 11, color: "var(--tx3)", margin: "-4px 0 12px", lineHeight: 1.35 }}>
-          Zelfde volgorde als elders: Google Maps (indien sleutel), anders OpenRouteService, anders OSRM. Ritten met
-          onbekende namen blijven ongewijzigd.
-        </p>
         <div
           style={{
             marginBottom: 12,
@@ -4036,10 +4289,6 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
           }}
         >
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Werkt Google wel?</div>
-          <p style={{ fontSize: 11, color: "var(--tx3)", margin: "0 0 8px", lineHeight: 1.4 }}>
-            Als de app géén Google-route vindt terwijl je wel een sleutel hebt: gebruik deze test — hieronder verschijnt
-            de <strong>echte</strong> fout van Google (API uit, billing, verkeerde referrer, …).
-          </p>
           <button type="button" className="btn btn-o" disabled={googleTestBusy} onClick={testGoogleDirections}>
             {googleTestBusy ? "Bezig…" : "Test Google-route (UZ Brussel → UZ Leuven)"}
           </button>
@@ -4129,21 +4378,6 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
         <BonFotoImportSection D={D} sD={sD} pid={pid} />
         <div className="tm-meer-split" role="separator" />
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Eigen vaste routes</div>
-        <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.4 }}>
-          OSM-zoeken. <strong>Afstand</strong> is een <strong>rijroute over echte wegen</strong> (autosnelwegen waar de
-          kaart dat toelaat) — geen vogelvlucht. Met{" "}
-          <code className="tm-meer-code">VITE_GOOGLE_MAPS_API_KEY</code> gebruikt de app <strong>Google Directions</strong>{" "}
-          (zelfde motor als google.com); zonder sleutel: gratis OSRM (kan enkele km afwijken).{" "}
-          {googleMapsKey ? (
-            <span style={{ color: "var(--gn)" }}>Google-sleutel zit in deze build.</span>
-          ) : (
-            <>
-              Optioneel: <code className="tm-meer-code">VITE_OPENROUTE_API_KEY</code> als extra fallback.
-            </>
-          )}{" "}
-          Na een wijziging in <code className="tm-meer-code">.env</code>: ontwikkeling = dev-server herstarten; live site
-          = opnieuw <strong>builden</strong> met env-vars op je host (Vite stopt de sleutel in de bundle).
-        </p>
         <PlaatsPicker label="Vertrek" gekozen={erA} onKies={setErA} lijst={ziekenVoorMeer} />
         <PlaatsPicker label="Bestemming" gekozen={erB} onKies={setErB} lijst={ziekenVoorMeer} />
         <button type="button" className="btn btn-o btn-full" style={{ marginBottom: 10 }} disabled={erBusy} onClick={berekenEigenKm}>
@@ -4295,6 +4529,191 @@ function IconNavMeer() {
   );
 }
 
+function IconNavOverzicht() {
+  return (
+    <svg className="tm-nav-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 19V5M4 19h16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M7 15l3.2-3.4 2.4 2.2L18 8" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconNavPlanning() {
+  return (
+    <svg className="tm-nav-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M8 3.5V7M16 3.5V7M4 10h16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconNavChauffeurs() {
+  return (
+    <svg className="tm-nav-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="9" cy="8" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M4.5 18.5c.6-2.6 2.4-4 4.5-4s3.9 1.4 4.5 4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <circle cx="16.5" cy="8.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M16 14.6c1.6.3 2.9 1.3 3.5 3.4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconNavInstellingen() {
+  return (
+    <svg className="tm-nav-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <circle cx="8" cy="7" r="2" fill="currentColor" />
+      <circle cx="15" cy="12" r="2" fill="currentColor" />
+      <circle cx="10" cy="17" r="2" fill="currentColor" />
+    </svg>
+  );
+}
+
+function MeldingInstelling() {
+  const [perm, setPerm] = useState(meldingStatus);
+  const vraag = () => {
+    vraagMeldingToestemming().then(p => setPerm(p || meldingStatus()));
+  };
+  return (
+    <section className="tm-meer-sec" aria-labelledby="tm-meer-meld">
+      <h2 id="tm-meer-meld" className="tm-meer-sec-h">
+        Meldingen
+      </h2>
+      {perm === "granted" ? (
+        <p className="tm-meld-status">Meldingen staan aan.</p>
+      ) : perm === "denied" ? (
+        <p className="tm-meld-status">Meldingen staan uit in de browser.</p>
+      ) : perm === "unsupported" ? (
+        <p className="tm-meld-status">Deze browser ondersteunt geen meldingen.</p>
+      ) : (
+        <button type="button" className="btn btn-p" onClick={vraag}>
+          Meldingen aanzetten
+        </button>
+      )}
+    </section>
+  );
+}
+
+function AccountPane({ pr, onLogout }) {
+  return (
+    <div className="tm-chauf">
+      <header className="tm-page-head">
+        <h1>Account</h1>
+      </header>
+      <div className="tm-chauf-list">
+        <div className="tm-chauf-row">
+          <span className="tm-chauf-av" aria-hidden="true">
+            {pr.i}
+          </span>
+          <span>
+            <strong>{pr.n}</strong>
+            <small>{pr.email}</small>
+          </span>
+        </div>
+        <button type="button" className="btn btn-p" onClick={onLogout}>
+          Uitloggen
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AuthScherm({ onKlaar }) {
+  const [mode, setMode] = useState("in");
+  const [naam, setNaam] = useState("");
+  const [email, setEmail] = useState("");
+  const [wachtwoord, setWachtwoord] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [fout, setFout] = useState("");
+  const [bezig, setBezig] = useState(false);
+
+  const submit = async e => {
+    e.preventDefault();
+    setFout("");
+    setBezig(true);
+    try {
+      if (mode === "nieuw") {
+        const user = await accountSignup(naam, email, wachtwoord);
+        onKlaar(user);
+      } else if (mode === "in") {
+        const user = await accountLogin(email, wachtwoord);
+        onKlaar(user);
+      } else if (mode === "vergeten") {
+        const out = await accountForgot(email);
+        if (!out.resetToken) {
+          setFout("Geen reset mogelijk.");
+          return;
+        }
+        setResetToken(out.resetToken);
+        setWachtwoord("");
+        setMode("reset");
+      } else {
+        await accountReset(resetToken, wachtwoord);
+        const user = await accountLogin(email, wachtwoord);
+        onKlaar(user);
+      }
+    } catch (err) {
+      setFout(err?.message || "Mislukt");
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  const titel = mode === "nieuw" ? "Account maken" : mode === "vergeten" ? "Wachtwoord vergeten" : mode === "reset" ? "Nieuw wachtwoord" : "Inloggen";
+
+  return (
+    <div className="tm-app tm-shell tm-auth-wrap">
+      <form className="tm-auth" onSubmit={submit}>
+        <h1>{titel}</h1>
+        {mode === "nieuw" && (
+          <label className="tm-fg">
+            <span className="fl">Naam</span>
+            <input value={naam} onChange={e => setNaam(e.target.value)} autoComplete="name" required />
+          </label>
+        )}
+        {mode !== "reset" && (
+          <label className="tm-fg">
+            <span className="fl">E-mail</span>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="username" required />
+          </label>
+        )}
+        {mode !== "vergeten" && (
+          <label className="tm-fg">
+            <span className="fl">Wachtwoord</span>
+            <input
+              type="password"
+              value={wachtwoord}
+              onChange={e => setWachtwoord(e.target.value)}
+              autoComplete={mode === "in" ? "current-password" : "new-password"}
+              required
+              minLength={mode === "in" ? undefined : 8}
+            />
+          </label>
+        )}
+        {fout && <p className="tm-auth-fout">{fout}</p>}
+        <button type="submit" className="btn btn-p btn-full" disabled={bezig}>
+          {bezig ? "Bezig…" : titel}
+        </button>
+        {mode === "in" && (
+          <div className="tm-auth-links">
+            <button type="button" className="tm-dash-link" onClick={() => { setMode("nieuw"); setFout(""); }}>
+              Account maken
+            </button>
+            <button type="button" className="tm-dash-link" onClick={() => { setMode("vergeten"); setFout(""); }}>
+              Wachtwoord vergeten
+            </button>
+          </div>
+        )}
+        {mode !== "in" && (
+          <button type="button" className="tm-dash-link" onClick={() => { setMode("in"); setFout(""); }}>
+            Terug naar inloggen
+          </button>
+        )}
+      </form>
+    </div>
+  );
+}
+
 const NAV_ITEMS = [
   { id: "home", label: "Home", Icon: IconNavHome },
   { id: "ritten", label: "Ritten", Icon: IconNavRitten },
@@ -4304,17 +4723,130 @@ const NAV_ITEMS = [
   { id: "meer", label: "Meer", Icon: IconNavMeer },
 ];
 
+const SIDE_ITEMS = [
+  { id: "home", label: "Overzicht", Icon: IconNavOverzicht },
+  { id: "ritten", label: "Planning", Icon: IconNavPlanning },
+  { id: "chauf", label: "Account", Icon: IconNavChauffeurs },
+  { id: "fin", label: "Financieel", Icon: IconNavFin },
+  { id: "hist", label: "Historiek", Icon: IconNavHistoriek },
+  { id: "kosten", label: "Kosten", Icon: IconNavKosten },
+  { id: "meer", label: "Instellingen", Icon: IconNavInstellingen },
+];
+
+class AppVanger extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { fout: "" };
+  }
+
+  static getDerivedStateFromError(err) {
+    return { fout: err?.message || "Mislukt" };
+  }
+
+  render() {
+    if (this.state.fout) {
+      return (
+        <div className="tm-app tm-shell tm-auth-wrap">
+          <div className="tm-auth">
+            <h1>TransportMe</h1>
+            <p className="tm-auth-fout">{this.state.fout}</p>
+            <button type="button" className="btn btn-p btn-full" onClick={() => this.setState({ fout: "" })}>
+              Opnieuw
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [tab, sT] = useState("home");
-  const [pid, sP] = useState(() => initialProfileId());
-  const [D, sD] = useState(() => ld(initialProfileId()));
+  const [user, setUser] = useState(null);
+  const [authKlaar, setAuthKlaar] = useState(false);
+  const [D, sD] = useState(() => normData(null));
   const [okPendingId, setOkPendingId] = useState(null);
   const [nieuwRitReq, setNieuwRitReq] = useState(0);
-  const pr = PR.find(p => p.id === pid) || PR[0];
+  const [bonFocus, setBonFocus] = useState(0);
+  const pid = user?.id || "";
+  const pr = user
+    ? { id: user.id, n: user.name, i: (user.name || "?").slice(0, 1).toUpperCase(), email: user.email }
+    : { id: "", n: "", i: "", email: "" };
   const okPendingRit = okPendingId ? D.r.find(r => r.id === okPendingId) : null;
+
+  const pasGeleverdToe = useCallback((profileId, tripId) => {
+    if (!profileId || !tripId) return;
+    if (profileId === pid) {
+      sD(cur => {
+        const ride = cur.r.find(r => String(r.id) === String(tripId));
+        if (!ride || ride.s !== "lopend") return cur;
+        const rr = applyTripAction(cur.r, ride.id, "ok");
+        if (rr === cur.r) return cur;
+        const nd = { ...cur, r: rr };
+        sv(profileId, nd);
+        return nd;
+      });
+      return;
+    }
+    try {
+      const data = normData(JSON.parse(localStorage.getItem("t_" + profileId) || "null"));
+      const ride = data.r.find(r => String(r.id) === String(tripId));
+      if (!ride || ride.s !== "lopend") return;
+      const rr = applyTripAction(data.r, ride.id, "ok");
+      if (rr === data.r) return;
+      sv(profileId, { ...data, r: rr });
+    } catch {
+      /* ignore */
+    }
+  }, [pid]);
+
+  useEffect(() => {
+    let stop = false;
+    const verwerk = async () => {
+      let intents = [];
+      try {
+        intents = await leesGeleverdIntents();
+      } catch {
+        return;
+      }
+      if (stop) return;
+      for (const it of intents) {
+        pasGeleverdToe(it.profileId, it.tripId);
+        try {
+          await verwijderGeleverdIntent(it.key);
+        } catch {
+          /* volgende keer opnieuw */
+        }
+      }
+    };
+    const onMsg = event => {
+      const d = event.data;
+      if (!d || d.type !== "tm-geleverd") return;
+      pasGeleverdToe(d.profileId, d.tripId);
+      verwijderGeleverdIntent(d.key).catch(() => {});
+    };
+    const onZicht = () => {
+      if (document.visibilityState === "visible") verwerk();
+    };
+    navigator.serviceWorker?.addEventListener("message", onMsg);
+    window.addEventListener("focus", verwerk);
+    document.addEventListener("visibilitychange", onZicht);
+    verwerk();
+    return () => {
+      stop = true;
+      navigator.serviceWorker?.removeEventListener("message", onMsg);
+      window.removeEventListener("focus", verwerk);
+      document.removeEventListener("visibilitychange", onZicht);
+    };
+  }, [pasGeleverdToe]);
 
   const tripAct = useCallback(
     (id, a) => {
+      if (a === "go") {
+        const r = D.r.find(x => x.id === id);
+        if (r && r.s !== "lopend") meldRitLopend(r, pid);
+      }
       if (a === "ok") {
         const r = D.r.find(x => x.id === id);
         if (r && (r.s === "lopend" || r.s === "komend")) {
@@ -4348,28 +4880,60 @@ export default function App() {
     },
     [okPendingId, pid]
   );
-  const sw = id => {
-    sP(id);
-    try {
-      localStorage.setItem("tp", id);
-      localStorage.setItem(LS_LEGACY_PROFILE, id);
-    } catch {
-      /* ignore */
-    }
-    sD(ld(id));
-  };
-  useEffect(() => sD(ld(pid)), [pid]);
-  /** Legacy-data voor alle profielen naar t_* trekken zodat profielwissel meteen gevuld is. */
   useEffect(() => {
-    try {
-      PR.forEach(p => ld(p.id));
-    } catch {
-      /* ignore */
-    }
+    let stop = false;
+    accountBootstrap()
+      .then(u => {
+        if (stop) return;
+        if (u) {
+          setUser(u);
+          sD(accountDataKlaar(u.id, accountData()));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!stop) setAuthKlaar(true);
+      });
+    return () => {
+      stop = true;
+    };
   }, []);
 
+  const uitloggen = async () => {
+    await accountLogout();
+    setUser(null);
+    sD(normData(null));
+    sT("home");
+  };
+
+  const openNieuweRit = () => {
+    sT("ritten");
+    setNieuwRitReq(n => n + 1);
+  };
+
+  if (!authKlaar && !user && accountHasToken()) {
+    return (
+      <div className="tm-app tm-shell tm-auth-wrap" aria-busy="true">
+        <div className="tm-auth">
+          <h1>Inloggen</h1>
+        </div>
+      </div>
+    );
+  }
+  if (!user) {
+    return (
+      <AuthScherm
+        onKlaar={u => {
+          setUser(u);
+          sD(accountDataKlaar(u.id, accountData()));
+        }}
+      />
+    );
+  }
+
   return (
-    <div className="tm-app">
+    <AppVanger>
+    <div className="tm-app tm-shell">
       {okPendingRit ? (
         <VoltooiBonSheet
           key={okPendingId}
@@ -4378,20 +4942,53 @@ export default function App() {
           onAnnuleer={() => setOkPendingId(null)}
         />
       ) : null}
-      <div className="tm-main">
+      <aside className="tm-side" aria-label="Hoofdnavigatie">
+        <div className="tm-side-brand">
+          <span className="tm-side-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.7" />
+              <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+          </span>
+          <strong>TransportMe</strong>
+        </div>
+        <nav className="tm-side-nav">
+          {SIDE_ITEMS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              className={"tm-side-i" + (tab === id ? " on" : "")}
+              onClick={() => sT(id)}
+              aria-current={tab === id ? "page" : undefined}
+            >
+              <Icon />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+        <button type="button" className="tm-side-new" onClick={openNieuweRit}>
+          + Nieuwe rit
+        </button>
+      </aside>
+      <div className="tm-main tm-main--home">
         <div className="tm-tab-page" hidden={tab !== "home"}>
           <Home
             D={D}
             pr={pr}
-            onPlanRit={() => {
-              sT("ritten");
-              setNieuwRitReq(n => n + 1);
-            }}
+            onPlanRit={openNieuweRit}
             onTripAct={tripAct}
+            onOpenFin={() => sT("fin")}
+            onOpenBonnen={() => {
+              sT("meer");
+              setBonFocus(n => n + 1);
+            }}
           />
         </div>
         <div className="tm-tab-page" hidden={tab !== "ritten"}>
           <Ritten D={D} sD={sD} pid={pid} onTripAct={tripAct} openNieuwRequest={nieuwRitReq} />
+        </div>
+        <div className="tm-tab-page" hidden={tab !== "chauf"}>
+          <AccountPane pr={pr} onLogout={uitloggen} />
         </div>
         <div className="tm-tab-page" hidden={tab !== "fin"}>
           <Financieel D={D} pid={pid} />
@@ -4407,13 +5004,10 @@ export default function App() {
             D={D}
             sD={sD}
             pid={pid}
-            sP={sw}
             pr={pr}
-            onBackupImported={() => {
-              const id = initialProfileId();
-              sP(id);
-              sD(ld(id));
-            }}
+            onLogout={uitloggen}
+            focusBon={bonFocus}
+            onBackupImported={() => sD(normData(accountData()))}
           />
         </div>
       </div>
@@ -4433,5 +5027,6 @@ export default function App() {
         ))}
       </nav>
     </div>
+    </AppVanger>
   );
 }

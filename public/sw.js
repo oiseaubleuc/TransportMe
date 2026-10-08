@@ -2,7 +2,10 @@
  * TransportMe PWA — voorkomt wit scherm na deploy:
  * index + Vite /assets/* worden netwerk-eerst geladen (hashed bestandsnamen wijzigen per build).
  */
-const CACHE_NAME = "transportme-v3";
+const CACHE_NAME = "transportme-v4";
+const GELEVERD_DB = "tm-geleverd";
+const GELEVERD_STORE = "intents";
+const IS_LOCAL = self.location.hostname === "localhost" || self.location.hostname === "127.0.0.1";
 const PRECACHE_URLS = ["/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
@@ -32,6 +35,7 @@ function maybeCache(cache, request, response) {
 }
 
 self.addEventListener("fetch", (event) => {
+  if (IS_LOCAL) return;
   const { request } = event;
   if (request.method !== "GET") return;
 
@@ -72,4 +76,74 @@ self.addEventListener("fetch", (event) => {
       );
     })
   );
+});
+
+function openGeleverdDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(GELEVERD_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(GELEVERD_STORE)) {
+        db.createObjectStore(GELEVERD_STORE, { keyPath: "key" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function geldigId(value) {
+  return typeof value === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(value);
+}
+
+function bewaarGeleverd(profileId, tripId) {
+  const key = profileId + ":" + tripId;
+  return openGeleverdDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(GELEVERD_STORE, "readwrite");
+        tx.objectStore(GELEVERD_STORE).put({
+          key,
+          profileId,
+          tripId,
+          at: Date.now(),
+        });
+        tx.oncomplete = () => {
+          db.close();
+          resolve(key);
+        };
+        tx.onerror = () => {
+          db.close();
+          reject(tx.error);
+        };
+      })
+  );
+}
+
+async function verwerkGeleverdActie(data) {
+  const profileId = data && data.profileId;
+  const tripId = data && data.tripId;
+  if (!geldigId(profileId) || !geldigId(tripId)) return;
+  const key = await bewaarGeleverd(profileId, tripId);
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of clients) {
+    client.postMessage({ type: "tm-geleverd", profileId, tripId, key });
+  }
+}
+
+async function openOfFocusApp() {
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of clients) {
+    if ("focus" in client) return client.focus();
+  }
+  if (self.clients.openWindow) return self.clients.openWindow("/");
+}
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  if (event.action === "geleverd") {
+    event.waitUntil(verwerkGeleverdActie(event.notification.data));
+    return;
+  }
+  event.waitUntil(openOfFocusApp());
 });
