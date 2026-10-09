@@ -17,10 +17,7 @@ import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 /** Kaartkleur van de route-lijn — zelfde basis als --acc in transportme-theme.css */
 const TM_ACC = "#2F5BEA";
 
-const PR = [
-  { id: "houdaifa", n: "Houdaifa", i: "H" },
-  { id: "student1", n: "Student 1", i: "S" },
-];
+const PR = [{ id: "houdaifa", n: "Houdaifa", i: "H" }];
 const DR = ["Houdaifa", "Student 1"],
   CA = ["Audi A3 (2-HKN-136)", "BMW Serie 1 (2-GGW-635)"];
 

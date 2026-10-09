@@ -53,7 +53,6 @@ export const LIVE_AVAILABILITY_TTL_MS = 6 * 60 * 60 * 1000;
 /** Profielen: elk eigen dataset ritten / brandstof / overig. Code blijft multi-chauffeur. */
 export const PROFILES = [
   { id: 'houdaifa', name: 'Houdaifa' },
-  { id: 'student1', name: 'Student 1' },
 ];
 
 /** Ritten, brandstof en overige kosten: max. bewaard (rolling window, dagen) */

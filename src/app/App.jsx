@@ -48,8 +48,6 @@ import {
   datumKort,
   telwoord,
   meervoud,
-  chauffeurStand,
-  parsePlakRegels,
 } from "./team.js";
 import "./app.css";
 
@@ -386,20 +384,11 @@ function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw }) {
   const [ws] = periodeBereik("week");
   const we = isoPlusDagen(ws, 6);
   const weekTot = somTotalen(team.map(t => totalen(t.D, ws, we)));
-  const [ms, me] = periodeBereik("maand");
-  const maandTot = somTotalen(team.map(t => totalen(t.D, ms, me)));
-  const dagVoltooid = ritten.filter(r => r.s === "voltooid" && r.d === dag);
-  const dagOpen = ritten.filter(r => (r.s === "komend" || r.s === "lopend") && r.d === dag);
-  const dagKm = dagVoltooid.reduce((a, r) => a + ritKmValue(r), 0);
-  const dagOmzet = dagVoltooid.reduce((a, r) => a + money(r.v), 0);
-  const dagOpenBedrag = dagOpen.reduce((a, r) => a + money(r.v), 0);
-  const geredenVandaag = ritten
-    .filter(r => r.s === "voltooid" && r.d === vandaag)
-    .sort((a, b) => ritSortKey(a).localeCompare(ritSortKey(b)));
 
   const verlopen = ritten
     .filter(r => (r.s === "komend" || r.s === "lopend") && r.d < vandaag)
     .sort((a, b) => ritSortKey(a).localeCompare(ritSortKey(b)));
+  const [ms, me] = periodeBereik("maand");
   const zonderBon = ritten.filter(r => r.s === "voltooid" && r.d >= ms && r.d <= me && !String(r.bon || "").trim());
 
   return (
@@ -412,53 +401,6 @@ function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw }) {
       </header>
 
       <Dagkaart team={team} dag={dag} setDag={setDag} nu={nu} ritActie={ritActie} />
-
-      <dl className="tm-figs tm-figs--day">
-        <div>
-          <dt>{dag === vandaag ? "Vandaag gereden" : "Gereden"}</dt>
-          <dd className="tm-num">{meervoud(dagVoltooid.length, "rit", "ritten")}</dd>
-        </div>
-        <div>
-          <dt>Verdiend</dt>
-          <dd className="tm-num">{euroKort(dagOmzet)}</dd>
-        </div>
-        <div>
-          <dt>Nog open</dt>
-          <dd className="tm-num">
-            {euroKort(dagOpenBedrag)}
-            <small>{meervoud(dagOpen.length, "rit", "ritten")}</small>
-          </dd>
-        </div>
-        <div>
-          <dt>Km</dt>
-          <dd className="tm-num">{Math.round(dagKm).toLocaleString("nl-BE")}</dd>
-        </div>
-      </dl>
-
-      {team.length > 1 ? (
-        <section className="tm-crew" aria-label="Stand per chauffeur">
-          {team.map(t => {
-            const st = chauffeurStand(t.D, vandaag);
-            return (
-              <button
-                key={t.id}
-                type="button"
-                className={"tm-crew-card tm-crew-card--" + st.k}
-                style={{ "--lijn": lijnVar(t.id) }}
-                onClick={() => gaNaar("chauffeurs")}
-              >
-                <span className="tm-dk-av" aria-hidden="true">
-                  {t.i}
-                </span>
-                <span>
-                  <b>{t.n}</b>
-                  <small>{st.t}</small>
-                </span>
-              </button>
-            );
-          })}
-        </section>
-      ) : null}
 
       <div className="tm-grid2">
         <section className="tm-sec" aria-labelledby="ov-nu">
@@ -484,63 +426,16 @@ function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw }) {
               </button>
             </div>
           ) : (
-            <>
-              <ul className="tm-list">
-                {straks.map(r => (
-                  <RitRij key={r._pid + r.id} r={r} ritActie={ritActie} metChauffeur metDatum={r.d !== vandaag} />
-                ))}
-              </ul>
-              {ritten.filter(r => r.s === "komend" && r.d >= vandaag).length > 5 ? (
-                <button type="button" className="tm-link" onClick={() => gaNaar("planning")}>
-                  Alle geplande ritten
-                </button>
-              ) : null}
-            </>
+            <ul className="tm-list">
+              {straks.map(r => (
+                <RitRij key={r._pid + r.id} r={r} ritActie={ritActie} metChauffeur metDatum={r.d !== vandaag} />
+              ))}
+            </ul>
           )}
-
-          {geredenVandaag.length > 0 ? (
-            <>
-              <h2 className="tm-h2 tm-h2--gap">Al gereden vandaag</h2>
-              <ul className="tm-list">
-                {geredenVandaag.map(r => (
-                  <RitRij key={r._pid + r.id} r={r} ritActie={ritActie} metChauffeur />
-                ))}
-              </ul>
-            </>
-          ) : null}
         </section>
 
         <div>
           <WeekBlok team={team} ws={ws} tot={weekTot} gaNaar={gaNaar} />
-
-          <section className="tm-sec" aria-labelledby="ov-maand">
-            <div className="tm-h2-row">
-              <h2 id="ov-maand" className="tm-h2">
-                Deze maand
-              </h2>
-              <button type="button" className="tm-link" onClick={() => gaNaar("financieel", "team")}>
-                Naar Financieel
-              </button>
-            </div>
-            <dl className="tm-figs">
-              <div>
-                <dt>Omzet</dt>
-                <dd className="tm-num">{euroKort(maandTot.omzet)}</dd>
-              </div>
-              <div>
-                <dt>Kosten</dt>
-                <dd className="tm-num">{euroKort(maandTot.kosten)}</dd>
-              </div>
-              <div>
-                <dt>Netto</dt>
-                <dd className={"tm-num" + (maandTot.netto < 0 ? " tm-neg" : "")}>{euroKort(maandTot.netto)}</dd>
-              </div>
-              <div>
-                <dt>Ritten</dt>
-                <dd className="tm-num">{maandTot.ritten}</dd>
-              </div>
-            </dl>
-          </section>
 
           {(verlopen.length > 0 || zonderBon.length > 0) && (
             <section className="tm-sec" aria-labelledby="ov-aandacht">
@@ -950,7 +845,6 @@ function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw })
   const [zoek, setZoek] = useState("");
   const [open, setOpen] = useState(null);
   const [limiet, setLimiet] = useState(40);
-  const [plak, setPlak] = useState(false);
   const vandaag = vandaagIso();
 
   useEffect(() => setLimiet(40), [filter, focus, zoek]);
@@ -996,14 +890,9 @@ function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw })
               : `${meervoud(tel.komend, "rit staat", "ritten staan")} open${focus === "team" ? "" : " voor " + chauffeurNaam(focus)}.`}
           </p>
         </div>
-        <div className="tm-ph-act">
-          <button type="button" className="btn btn-o" onClick={() => setPlak(true)}>
-            Meerdere ritten
-          </button>
-          <button type="button" className="btn btn-p" onClick={() => openNieuw(focus !== "team" ? focus : undefined)}>
-            Nieuwe rit
-          </button>
-        </div>
+        <button type="button" className="btn btn-p" onClick={() => openNieuw(focus !== "team" ? focus : undefined)}>
+          Nieuwe rit
+        </button>
       </header>
 
       <div className="tm-toolbar">
@@ -1092,85 +981,7 @@ function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw })
           Meer tonen ({lijst.length - limiet})
         </button>
       ) : null}
-      {plak ? (
-        <PlakSheet
-          startPid={focus !== "team" ? focus : PR[0].id}
-          onClose={() => setPlak(false)}
-          onSave={(pid, trips) => {
-            setFor(pid, D => normData({ ...D, r: [...D.r, ...trips] }));
-            setPlak(false);
-          }}
-        />
-      ) : null}
     </>
-  );
-}
-
-function PlakSheet({ startPid, onClose, onSave }) {
-  const [pid, setPid] = useState(startPid);
-  const [tekst, setTekst] = useState("");
-  const regels = useMemo(() => parsePlakRegels(tekst), [tekst]);
-  const bewaar = () => {
-    if (regels.length === 0) return;
-    const trips = regels.map(g => {
-      const v = Math.round(tmVergoeding(g.f, g.t, g.k, g.ti) * 100) / 100;
-      return {
-        id: ui(),
-        d: g.d,
-        ti: g.ti,
-        f: g.f,
-        t: g.t,
-        k: g.k,
-        dr: chauffeurNaam(pid),
-        ca: CA[0],
-        s: "voltooid",
-        v,
-      };
-    });
-    onSave(pid, trips);
-  };
-  useEffect(() => {
-    const f = e => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", f);
-    return () => window.removeEventListener("keydown", f);
-  }, [onClose]);
-  return (
-    <div className="tm-ov" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="tm-mo tm-sheet" role="dialog" aria-modal="true" aria-labelledby="plak-t">
-        <div className="tm-mh">
-          <h2 id="plak-t">Meerdere ritten</h2>
-          <button type="button" className="btn btn-gh" onClick={onClose} aria-label="Sluiten">
-            ✕
-          </button>
-        </div>
-        <div className="tm-mb tm-sheet-body">
-          {PR.length > 1 ? (
-            <fieldset className="tm-fs">
-              <legend>Chauffeur</legend>
-              <ScopeChips value={pid} onChange={setPid} metIedereen={false} />
-            </fieldset>
-          ) : null}
-          <p className="tm-card-p">
-            Plak regels uit Excel of typ ze zelf. Eén rit per regel: datum, uur, vertrek, bestemming, km. Scheiding met
-            tab, puntkomma of komma. Ze worden opgeslagen als al gereden.
-          </p>
-          <textarea
-            className="tm-plak"
-            rows={8}
-            value={tekst}
-            onChange={e => setTekst(e.target.value)}
-            placeholder={"08/10/2026; 08:00; UZ Brussel; UZ Leuven; 45"}
-            aria-label="Ritten plakken"
-          />
-          <p className="tm-hint">{regels.length === 0 ? "Nog geen geldige regels." : meervoud(regels.length, "rit klaar", "ritten klaar") + " om op te slaan."}</p>
-        </div>
-        <div className="tm-sheet-foot">
-          <button type="button" className="btn btn-p" disabled={regels.length === 0} onClick={bewaar}>
-            {regels.length === 0 ? "Ritten opslaan" : `${regels.length} ritten opslaan`}
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -1182,11 +993,6 @@ function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
   const [naar, setNaar] = useState(r._pid);
   const [ti, setTi] = useState(r.ti || "");
   const [d, setD] = useState(r.d);
-  const [ca, setCa] = useState(r.ca || CA[0]);
-  const kaart = useMemo(() => {
-    const routes = tmBuildMergedRoutes(all[r._pid]);
-    return routes.find(x => x.__map && x.f === r.f && x.t === r.t) || routes.find(x => x.__map && x.f === r.t && x.t === r.f) || null;
-  }, [all, r._pid, r.f, r.t]);
 
   const kmN = parseLooseNumber(km);
   const vN = parseLooseNumber(v);
@@ -1198,7 +1004,7 @@ function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
     if (!Number.isFinite(vN) || vN < 0) return alert("Vul een geldig bedrag in.");
     const handmatig = Math.abs(vN - (tarief ?? vN)) > 0.004;
     const { _pid, ...rest } = r;
-    const next = { ...rest, k: kInt, v: Math.round(vN * 100) / 100, ti, d, ca };
+    const next = { ...rest, k: kInt, v: Math.round(vN * 100) / 100, ti, d };
     if (handmatig) next.handmatigKv = true;
     else delete next.handmatigKv;
     const b = bon.trim();
@@ -1217,11 +1023,6 @@ function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
   return (
     <div className="tm-rit-detail" onClick={e => e.stopPropagation()}>
       {r.s !== "geannuleerd" ? <RitVergoedingUitleg r={r} /> : null}
-      {kaart ? (
-        <div className="tm-sheet-map tm-detail-map">
-          <RitMap la1={kaart.la1} lo1={kaart.lo1} la2={kaart.la2} lo2={kaart.lo2} labelF={r.f} labelT={r.t} />
-        </div>
-      ) : null}
       <div className="tm-detail-grid">
         <div className="tm-fg">
           <label className="fl" htmlFor={"dd-" + r.id}>
@@ -1280,16 +1081,6 @@ function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
             </select>
           </div>
         ) : null}
-        <div className="tm-fg">
-          <label className="fl" htmlFor={"dca-" + r.id}>
-            Voertuig
-          </label>
-          <select id={"dca-" + r.id} value={ca} onChange={e => setCa(e.target.value)}>
-            {(CA.includes(ca) ? CA : [ca, ...CA]).map(c => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        </div>
       </div>
       <div className="tm-detail-act">
         <button type="button" className="btn btn-p" onClick={opslaan}>
@@ -1313,7 +1104,6 @@ function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
 function NieuweRitSheet({ all, startPid, onClose, onSave }) {
   const [pid, setPid] = useState(startPid);
   const routes = useMemo(() => tmBuildMergedRoutes(all[pid]), [all, pid]);
-  const [soort, setSoort] = useState("vaste");
   const [zoek, setZoek] = useState("");
   const [fm, setFm] = useState(() => ({
     ri: -1,
@@ -1360,15 +1150,9 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
   };
 
   const q = zoek.trim().toLowerCase();
-  const nVaste = routes.filter(r => !r.__potentieel).length;
-  const nPot = routes.filter(r => r.__potentieel).length;
   const gefilterd = routes
     .map((r, i) => ({ r, i }))
-    .filter(({ r }) => {
-      if (soort === "vaste" && r.__potentieel) return false;
-      if (soort === "potentieel" && !r.__potentieel) return false;
-      return !q || `${r.f} ${r.t}`.toLowerCase().includes(q);
-    });
+    .filter(({ r }) => !q || `${r.f} ${r.t}`.toLowerCase().includes(q));
 
   const kInt = Math.max(1, Math.round(Number(String(fm.k).replace(",", ".")) || 0));
   const klaar = !!(fm.f.trim() && fm.t.trim() && Number(String(fm.k).replace(",", ".")) >= 1);
@@ -1413,23 +1197,13 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
 
           <fieldset className="tm-fs">
             <legend>Route</legend>
-            <Seg
-              label="Welke routes"
-              value={soort}
-              onChange={setSoort}
-              options={[
-                ["vaste", `Vaste (${nVaste})`],
-                ["potentieel", `Mogelijk (${nPot})`],
-                ["alle", "Alle"],
-              ]}
-            />
             <input
               type="search"
               className="tm-search"
-              placeholder="Zoek ziekenhuis of route"
+              placeholder="Zoek in vaste routes"
               value={zoek}
               onChange={e => setZoek(e.target.value)}
-              aria-label="Routes zoeken"
+              aria-label="Vaste routes zoeken"
             />
             <div className="tm-routes" role="listbox" aria-label="Vaste routes">
               {gefilterd.length === 0 ? (
@@ -1447,10 +1221,7 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
                     <span>
                       {r.f} <span className="tm-muted">naar</span> {r.t}
                     </span>
-                    <span className="tm-num tm-muted">
-                      {r.__potentieel ? "mogelijk · " : ""}
-                      {r.k} km
-                    </span>
+                    <span className="tm-num tm-muted">{r.k} km</span>
                   </button>
                 ))
               )}
@@ -1594,8 +1365,6 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
 function Chauffeurs({ team, gaNaar, openNieuw }) {
   const vandaag = vandaagIso();
   const [ms, me] = periodeBereik("maand");
-  const [ws] = periodeBereik("week");
-  const we = isoPlusDagen(ws, 6);
   const maandNaam = new Date().toLocaleDateString("nl-BE", { month: "long" });
 
   return (
@@ -1603,15 +1372,28 @@ function Chauffeurs({ team, gaNaar, openNieuw }) {
       <header className="tm-ph">
         <div>
           <h1>Chauffeurs</h1>
-          <p className="tm-ph-sub">Stand nu, cijfers van deze week en van {maandNaam}.</p>
+          <p className="tm-ph-sub">Cijfers van {maandNaam}, alleen voltooide ritten.</p>
         </div>
       </header>
       <div className="tm-drivers">
         {team.map(t => {
           const tot = totalen(t.D, ms, me);
-          const week = totalen(t.D, ws, we);
-          const status = chauffeurStand(t.D, vandaag);
-          const recent = [...t.D.r].sort((a, b) => ritSortKey(b).localeCompare(ritSortKey(a))).slice(0, 3);
+          const lopend = t.D.r.filter(r => r.s === "lopend").sort((a, b) => ritSortKey(b).localeCompare(ritSortKey(a)))[0];
+          const volgende = t.D.r
+            .filter(r => r.s === "komend" && r.d >= vandaag)
+            .sort((a, b) => ritSortKey(a).localeCompare(ritSortKey(b)))[0];
+          const laatste = t.D.r
+            .filter(r => r.s === "voltooid")
+            .sort((a, b) => ritSortKey(b).localeCompare(ritSortKey(a)))[0];
+          const status = lopend
+            ? { k: "on", t: `Onderweg naar ${lopend.t}`, s: `vertrokken om ${lopend.ti || "?"}` }
+            : volgende
+              ? {
+                  k: "plan",
+                  t: `Volgende rit ${volgende.d === vandaag ? "om " + volgende.ti : dagLabel(volgende.d).toLowerCase() + " om " + volgende.ti}`,
+                  s: `${volgende.f} naar ${volgende.t}`,
+                }
+              : { k: "vrij", t: "Niets gepland", s: laatste ? `Laatste rit ${dagLabel(laatste.d).toLowerCase()}` : "Nog geen ritten" };
           const marge = tot.omzet > 0 ? Math.round((tot.netto / tot.omzet) * 100) : null;
           return (
             <article key={t.id} className="tm-driver" style={{ "--lijn": lijnVar(t.id) }}>
@@ -1628,10 +1410,6 @@ function Chauffeurs({ team, gaNaar, openNieuw }) {
                   </p>
                 </div>
               </header>
-              <p className="tm-driver-week">
-                Deze week: {meervoud(week.ritten, "rit", "ritten")}, {euroKort(week.omzet)} omzet, {euroKort(week.netto)}{" "}
-                netto
-              </p>
               <dl className="tm-figs tm-figs--sm">
                 <div>
                   <dt>Ritten</dt>
@@ -1653,19 +1431,6 @@ function Chauffeurs({ team, gaNaar, openNieuw }) {
                   </dd>
                 </div>
               </dl>
-              {recent.length > 0 ? (
-                <ul className="tm-driver-recent">
-                  {recent.map(r => (
-                    <li key={r.id}>
-                      <span className="tm-num">{r.ti || datumKort(r.d)}</span>
-                      <span>
-                        {r.f} → {r.t}
-                      </span>
-                      <StatusWoord s={r.s} />
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
               <div className="tm-driver-act">
                 <button type="button" className="btn btn-o btn-sm" onClick={() => gaNaar("planning", t.id)}>
                   Planning

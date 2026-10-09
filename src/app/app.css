@@ -200,14 +200,6 @@
   max-width: 60ch;
 }
 
-.tm-ph-act {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
 @media (min-width: 1024px) {
   .tm-ph h1 {
     font-size: 40px;
@@ -797,47 +789,6 @@
   }
 }
 
-.tm-crew {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 0 0 22px;
-}
-
-.tm-crew-card {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  text-align: left;
-  padding: 10px 12px;
-  min-height: 44px;
-  border: 1px solid var(--bd);
-  border-radius: var(--rl);
-  background: var(--s1);
-  color: inherit;
-  border-left: 4px solid var(--lijn);
-  font: inherit;
-  cursor: pointer;
-}
-
-.tm-crew-card b {
-  display: block;
-  font-size: 15px;
-}
-
-.tm-crew-card small {
-  display: block;
-  color: var(--tx3);
-  font-size: 12px;
-}
-
-@media (max-width: 380px) {
-  .tm-crew {
-    grid-template-columns: 1fr;
-  }
-}
-
 .tm-chart {
   position: relative;
   height: 180px;
@@ -1061,28 +1012,6 @@
   margin-bottom: 8px;
 }
 
-.tm-fs .tm-seg {
-  margin-bottom: 8px;
-}
-
-.tm-plak {
-  width: 100%;
-  min-width: 0;
-  display: block;
-  font: inherit;
-  line-height: 1.4;
-  padding: 12px;
-  border-radius: var(--r);
-  border: 1px solid var(--bd);
-  background: var(--s2);
-  color: var(--tx);
-  resize: vertical;
-}
-
-.tm-detail-map {
-  margin: 0 0 14px;
-}
-
 .tm-routes {
   max-height: 228px;
   overflow-y: auto;
@@ -1203,36 +1132,6 @@
 .tm-driver-line::after {
   right: -2px;
   background: var(--lijn);
-}
-
-.tm-driver-week {
-  margin: 0 0 12px;
-  font-size: 13px;
-  color: var(--tx2);
-  line-height: 1.4;
-}
-
-.tm-driver-recent {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-}
-
-.tm-driver-recent li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-  padding: 8px 0;
-  border-top: 1px solid var(--bd);
-  font-size: 13px;
-  min-width: 0;
-}
-
-.tm-driver-recent li span:nth-child(2) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .tm-driver-hd {
