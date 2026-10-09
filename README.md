@@ -19,13 +19,13 @@ Productiebuild: `npm run build` → map `dist/`.
 
 Onderaan op de telefoon (bovenaan links op groot scherm):
 
-1. **Overzicht** — dagkaart per chauffeur, ritten onderweg, deze week, en ritten die nog afgewerkt moeten worden.
-2. **Planning** — alle ritten, gegroepeerd per dag. Zoeken, filteren, starten, voltooien en aanpassen.
-3. **Chauffeurs** — status en cijfers van de maand per chauffeur.
+1. **Overzicht** — dagkaart per chauffeur, cijfers van de gekozen dag, wie rijdt of wat er straks komt, al gereden, deze week, deze maand, en wat nog af te werken is.
+2. **Planning** — alle ritten per dag. Zoeken, filteren, starten, voltooien, aanpassen, of **meerdere ritten** plakken (achterstand).
+3. **Chauffeurs** — stand nu, cijfers van de week en de maand, laatste ritten. Standaard: Houdaifa en Student 1.
 4. **Financieel** — omzet, kosten en netto van het team of van één chauffeur. Factuur (PDF), rittenlijst (Excel) en kosten.
 5. **Instellingen** — factuurgegevens en logo, back-up, vaste routes, bonnen inlezen, tarieven.
 
-**Nieuwe rit** staat als knop boven de navigatie (telefoon) of onderaan de linkerbalk (computer).
+**Nieuwe rit** (knop in het menu): chauffeur (als er meer dan één is), vaste of mogelijke routes, of zelf invullen, datum en uur. Met “Al gereden” voer je een achterstand in.
 
 Op groot scherm (vanaf 1024px) staat de navigatie links (232px). De inhoud is max. 1160px breed.
 
