@@ -611,9 +611,9 @@ export function getFactuurGegevens(profileId = getCurrentProfileId()) {
 }
 
 export function saveFactuurGegevens(partial, profileId = getCurrentProfileId()) {
-  if (!VALID_PROFILE_IDS.has(profileId)) return;
   const cur = getFactuurGegevens(profileId);
   const next = mergeFactuurGegevens({ ...cur, ...partial });
+  if (!VALID_PROFILE_IDS.has(profileId)) return;
   const key = `${STORAGE_KEYS.factuurGegevens}_${profileId}`;
   localStorage.setItem(key, JSON.stringify(next));
 }
@@ -622,8 +622,9 @@ export function saveFactuurGegevens(partial, profileId = getCurrentProfileId()) 
  * Volgende factuurcode voor dit jaar (bv. 2026-006). Telt op bij elke succesvolle PDF.
  */
 export function nextFactuurVolgNummer(profileId = getCurrentProfileId()) {
-  if (!VALID_PROFILE_IDS.has(profileId)) profileId = PROFILES[0].id;
   const year = new Date().getFullYear();
+  const yk = String(year);
+  if (!VALID_PROFILE_IDS.has(profileId)) profileId = PROFILES[0].id;
   const key = `${STORAGE_KEYS.factuurTeller}_${profileId}`;
   let map = {};
   try {
@@ -632,7 +633,6 @@ export function nextFactuurVolgNummer(profileId = getCurrentProfileId()) {
   } catch {
     map = {};
   }
-  const yk = String(year);
   const n = (Number(map[yk]) || 0) + 1;
   map[yk] = n;
   localStorage.setItem(key, JSON.stringify(map));

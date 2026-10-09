@@ -25,7 +25,6 @@ if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     });
   } else {
-    // In dev: remove older SW + caches so latest code always appears.
     navigator.serviceWorker.getRegistrations().then((regs) => {
       regs.forEach((r) => r.unregister());
     });

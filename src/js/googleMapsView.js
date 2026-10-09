@@ -87,9 +87,19 @@ export async function createGoogleRouteMap(containerEl, from, to) {
     map = new g.Map(containerEl, {
       zoom: 8,
       center,
-      mapTypeControl: true,
+      mapTypeControl: false,
       streetViewControl: false,
-      fullscreenControl: true,
+      fullscreenControl: false,
+      styles: [
+        { featureType: "poi", stylers: [{ visibility: "off" }] },
+        { featureType: "transit", stylers: [{ visibility: "off" }] },
+        { elementType: "geometry", stylers: [{ color: "#f6f1ea" }] },
+        { featureType: "water", elementType: "geometry", stylers: [{ color: "#d5d8e6" }] },
+        { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#efe6dc" }] },
+        { featureType: "road", elementType: "geometry", stylers: [{ color: "#fffdf9" }] },
+        { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#f0d3c4" }] },
+        { elementType: "labels.text.fill", stylers: [{ color: "#5c534c" }] },
+      ],
     });
     await assertGoogleMapUsable(map, containerEl, g);
   } catch (e) {
@@ -106,7 +116,12 @@ export async function createGoogleRouteMap(containerEl, from, to) {
   let km = null;
 
   if (hasFrom && hasTo) {
-    renderer = new g.DirectionsRenderer({ map, suppressMarkers: false, preserveViewport: false });
+    renderer = new g.DirectionsRenderer({
+      map,
+      suppressMarkers: false,
+      preserveViewport: false,
+      polylineOptions: { strokeColor: "#2c3f8f", strokeWeight: 6, strokeOpacity: 0.95 },
+    });
     const svc = new g.DirectionsService();
     await new Promise(resolve => {
       svc.route(
