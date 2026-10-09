@@ -7,20 +7,13 @@ import {
   STORAGE_KEYS,
   DEFAULT_ZIEKENHUIZEN,
   PRESET_ANCHOR_ZIEKENHUIZEN,
-  DEFAULT_PRESET_ROUTES,
+  ALL_PRESET_ROUTES,
   DEFAULT_VOERTUIGEN,
   PROFILES,
   DATA_RETENTION_DAYS,
   LIVE_AVAILABILITY_TTL_MS,
 } from './config.js';
 import { backfillMissingVolgordeNrs } from './ritVolgorde.js';
-import {
-  accountFactuur,
-  accountFactuurActive,
-  accountSetFactuur,
-  accountSetTeller,
-  accountTeller,
-} from './accountSession.js';
 
 const VALID_PROFILE_IDS = new Set(PROFILES.map((p) => p.id));
 const VALID_STATUS = new Set(['komend', 'lopend', 'voltooid', 'geannuleerd']);
@@ -465,13 +458,13 @@ function ensureDefaultPresetRoutes() {
   const key = profileKey(STORAGE_KEYS.presetRoutes);
   const raw = localStorage.getItem(key);
   if (!raw) {
-    localStorage.setItem(key, JSON.stringify(DEFAULT_PRESET_ROUTES));
-    return DEFAULT_PRESET_ROUTES;
+    localStorage.setItem(key, JSON.stringify(ALL_PRESET_ROUTES));
+    return ALL_PRESET_ROUTES;
   }
   const stored = JSON.parse(raw);
   const merged = [...stored];
   let changed = false;
-  for (const d of DEFAULT_PRESET_ROUTES) {
+  for (const d of ALL_PRESET_ROUTES) {
     const idx = merged.findIndex((m) => m.fromId === d.fromId && m.toId === d.toId);
     if (idx === -1) {
       merged.push(d);
@@ -481,15 +474,20 @@ function ensureDefaultPresetRoutes() {
       const km = d.defaultKm != null ? d.defaultKm : cur.defaultKm;
       const nextForfait = d.forfaitVergoeding != null ? d.forfaitVergoeding : cur.forfaitVergoeding;
       const forfaitChanged = nextForfait !== cur.forfaitVergoeding;
+      const nextPotentieel = d.potentieel === true;
+      const potentieelChanged = !!cur.potentieel !== nextPotentieel;
       if (
         cur.fromName !== d.fromName ||
         cur.toName !== d.toName ||
         cur.defaultKm !== km ||
-        forfaitChanged
+        forfaitChanged ||
+        potentieelChanged
       ) {
         const next = { ...cur, fromName: d.fromName, toName: d.toName, defaultKm: km };
         if (nextForfait != null) next.forfaitVergoeding = nextForfait;
         else delete next.forfaitVergoeding;
+        if (nextPotentieel) next.potentieel = true;
+        else delete next.potentieel;
         merged[idx] = next;
         changed = true;
       }
@@ -602,7 +600,6 @@ function mergeFactuurGegevens(raw) {
 }
 
 export function getFactuurGegevens(profileId = getCurrentProfileId()) {
-  if (accountFactuurActive()) return mergeFactuurGegevens(accountFactuur());
   let pid = profileId;
   if (!VALID_PROFILE_IDS.has(pid)) pid = PROFILES[0].id;
   const key = `${STORAGE_KEYS.factuurGegevens}_${pid}`;
@@ -616,10 +613,6 @@ export function getFactuurGegevens(profileId = getCurrentProfileId()) {
 export function saveFactuurGegevens(partial, profileId = getCurrentProfileId()) {
   const cur = getFactuurGegevens(profileId);
   const next = mergeFactuurGegevens({ ...cur, ...partial });
-  if (accountFactuurActive()) {
-    accountSetFactuur(next);
-    return;
-  }
   if (!VALID_PROFILE_IDS.has(profileId)) return;
   const key = `${STORAGE_KEYS.factuurGegevens}_${profileId}`;
   localStorage.setItem(key, JSON.stringify(next));
@@ -631,14 +624,6 @@ export function saveFactuurGegevens(partial, profileId = getCurrentProfileId()) 
 export function nextFactuurVolgNummer(profileId = getCurrentProfileId()) {
   const year = new Date().getFullYear();
   const yk = String(year);
-  if (accountFactuurActive()) {
-    const map = { ...(accountTeller() || {}) };
-    const n = (Number(map[yk]) || 0) + 1;
-    map[yk] = n;
-    accountSetTeller(map);
-    const padded = String(n).padStart(3, '0');
-    return { year, volgNummer: n, factuurCode: `${year}-${padded}`, orderDisplay: padded };
-  }
   if (!VALID_PROFILE_IDS.has(profileId)) profileId = PROFILES[0].id;
   const key = `${STORAGE_KEYS.factuurTeller}_${profileId}`;
   let map = {};

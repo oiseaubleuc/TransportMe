@@ -16,32 +16,13 @@ function manualChunks(id) {
   if (id.includes("tesseract")) return "vendor-tesseract";
   if (id.includes("pdfjs-dist")) return "vendor-pdfjs";
   if (id.includes("@zxing")) return "vendor-zxing";
-}
-
-function localAuthServer() {
-  return {
-    name: "transportme-auth",
-    configureServer() {
-      import("./server/index.mjs").catch(err => {
-        console.error("Accountserver start mislukt:", err);
-      });
-    },
-  };
+  if (id.includes("exceljs")) return "vendor-exceljs";
 }
 
 export default defineConfig({
-  plugins: [react(), localAuthServer()],
-  server: {
-    proxy: {
-      "/api": "http://127.0.0.1:8787",
-    },
-  },
-  optimizeDeps: {
-    esbuildOptions: {
-      target: "esnext",
-    },
-  },
+  plugins: [react()],
   build: {
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: { manualChunks },
     },

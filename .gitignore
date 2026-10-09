@@ -9,9 +9,6 @@ dist/
 .env.local
 .env.*.local
 
-# Accountgegevens van de lokale server
-server/data/
-
 # IDE / OS
 .DS_Store
 *.log
