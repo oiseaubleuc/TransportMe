@@ -26,7 +26,7 @@ import {
 } from "../TransportMe.jsx";
 import { getDrivingRouteKm } from "../js/ors.js";
 import { getFactuurGegevens } from "../js/storage.js";
-import { downloadRittenExcel } from "../js/rittenExcel.js";
+import { downloadRittenExcel, leesRittenExcel, voegExcelRittenToe, meldingExcelInlees } from "../js/rittenExcel.js";
 import {
   LIJN_HEX,
   chauffeurIndex,
@@ -840,12 +840,66 @@ function RitRij({ r, ritActie, metChauffeur = false, metDatum = false, open = fa
 /* Planning                                                             */
 /* ------------------------------------------------------------------ */
 
+function ExcelInlezenKnop({ pid, setFor, className, label, onKlaar }) {
+  const inp = useRef(null);
+  const [busy, setBusy] = useState(false);
+
+  const onFile = async e => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const { ritten, overgeslagen } = await leesRittenExcel(buf, {
+        bestandsnaam: file.name,
+        chauffeur: chauffeurNaam(pid),
+        voertuig: CA[0],
+        maakId: ui,
+      });
+      let duplicaten = 0;
+      let n = 0;
+      setFor(pid, D => {
+        const uit = voegExcelRittenToe(D.r, ritten);
+        duplicaten = uit.duplicaten;
+        n = uit.toegevoegd.length;
+        return n === 0 ? D : normData({ ...D, r: uit.ritten });
+      });
+      alert(meldingExcelInlees({ toegevoegd: n, duplicaten, overgeslagen }));
+      if (n > 0) onKlaar?.(n);
+    } catch (err) {
+      console.error(err);
+      alert("Excel inlezen mislukt: " + (err?.message || err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <input
+        ref={inp}
+        type="file"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        className="tm-file-hidden"
+        onChange={onFile}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+      <button type="button" className={className || "btn btn-o"} disabled={busy} onClick={() => inp.current?.click()}>
+        {busy ? "Excel wordt ingelezen…" : label || "Rittenlijst inlezen"}
+      </button>
+    </>
+  );
+}
+
 function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw }) {
   const [filter, setFilter] = useState("komend");
   const [zoek, setZoek] = useState("");
   const [open, setOpen] = useState(null);
   const [limiet, setLimiet] = useState(40);
   const vandaag = vandaagIso();
+  const excelPid = focus !== "team" ? focus : PR[0].id;
 
   useEffect(() => setLimiet(40), [filter, focus, zoek]);
 
@@ -916,6 +970,12 @@ function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw })
             onChange={e => setZoek(e.target.value)}
             aria-label="Ritten zoeken"
           />
+          <ExcelInlezenKnop
+            pid={excelPid}
+            setFor={setFor}
+            className="btn btn-o btn-sm"
+            onKlaar={() => setFilter("voltooid")}
+          />
         </div>
       </div>
 
@@ -926,14 +986,30 @@ function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw })
           ) : filter === "komend" ? (
             <>
               Niets open. Plan een rit in, dan verschijnt ze hier en op de dagkaart.
-              <div>
-                <button type="button" className="btn btn-p" style={{ marginTop: 14 }} onClick={() => openNieuw(focus !== "team" ? focus : undefined)}>
+              <div className="tm-empty-act">
+                <button type="button" className="btn btn-p" onClick={() => openNieuw(focus !== "team" ? focus : undefined)}>
                   Nieuwe rit
                 </button>
+                <ExcelInlezenKnop
+                  pid={excelPid}
+                  setFor={setFor}
+                  className="btn btn-o"
+                  onKlaar={() => setFilter("voltooid")}
+                />
               </div>
             </>
           ) : (
-            "Nog geen ritten."
+            <>
+              Nog geen ritten.
+              <div className="tm-empty-act">
+                <ExcelInlezenKnop
+                  pid={excelPid}
+                  setFor={setFor}
+                  className="btn btn-o"
+                  onKlaar={() => setFilter("voltooid")}
+                />
+              </div>
+            </>
           )}
         </div>
       ) : (

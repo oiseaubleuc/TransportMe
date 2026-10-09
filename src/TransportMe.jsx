@@ -6,7 +6,7 @@ import { exportTransporteurData, applyImportPayload } from "./js/dataBackup.js";
 import { recognizeBonImage, terminateBonOcrWorker } from "./js/bonFotoOcr.js";
 import { getFactuurGegevens, nextFactuurVolgNummer, saveFactuurGegevens } from "./js/storage.js";
 import { generateFactuurPdfBlob, triggerPdfDownload } from "./js/invoicePdf.js";
-import { downloadRittenExcel } from "./js/rittenExcel.js";
+import { downloadRittenExcel, leesRittenExcel, voegExcelRittenToe, meldingExcelInlees } from "./js/rittenExcel.js";
 import { vergoedingVoorRit, vergoedingUitsplitsingVoorRit } from "./js/calculations.js";
 import { getDrivingRouteKm, getDrivingRouteWithGeometry } from "./js/ors.js";
 import { createGoogleRouteMap } from "./js/googleMapsView.js";
@@ -1352,6 +1352,8 @@ function Historiek({ D, pid, sD }) {
   const [p, sP] = useState("month");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [xlsBusy, setXlsBusy] = useState(false);
+  const [xlsInBusy, setXlsInBusy] = useState(false);
+  const xlsInRef = useRef(null);
   const [s, e] = grExt(p, D.r);
   const [factuurVan, setFactuurVan] = useState(s);
   const [factuurTot, setFactuurTot] = useState(e);
@@ -1469,6 +1471,50 @@ function Historiek({ D, pid, sD }) {
             }}
           >
             {xlsBusy ? "Excel wordt gemaakt…" : "Rittenlijst downloaden (Excel)"}
+          </button>
+          <input
+            ref={xlsInRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            style={{ display: "none" }}
+            onChange={async ev => {
+              const file = ev.target.files?.[0];
+              ev.target.value = "";
+              if (!file) return;
+              setXlsInBusy(true);
+              try {
+                const buf = await file.arrayBuffer();
+                const naam = (PR.find(x => x.id === pid) || { n: pid }).n;
+                const { ritten, overgeslagen } = await leesRittenExcel(buf, {
+                  bestandsnaam: file.name,
+                  chauffeur: naam,
+                  voertuig: CA[0],
+                  maakId: ui,
+                });
+                let duplicaten = 0;
+                let n = 0;
+                sD(nd => {
+                  const uit = voegExcelRittenToe(nd.r, ritten);
+                  duplicaten = uit.duplicaten;
+                  n = uit.toegevoegd.length;
+                  return n ? normData({ ...nd, r: uit.ritten }) : nd;
+                });
+                alert(meldingExcelInlees({ toegevoegd: n, duplicaten, overgeslagen }));
+              } catch (err) {
+                console.error(err);
+                alert("Excel inlezen mislukt: " + (err?.message || err));
+              } finally {
+                setXlsInBusy(false);
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="btn btn-o btn-full"
+            disabled={xlsInBusy}
+            onClick={() => xlsInRef.current?.click()}
+          >
+            {xlsInBusy ? "Excel wordt ingelezen…" : "Rittenlijst inlezen (Excel)"}
           </button>
           <button
             type="button"

@@ -34,6 +34,7 @@ Op groot scherm (vanaf 1024px) staat de navigatie links (232px). De inhoud is ma
 In **Financieel → Ritten en factuur** en in het teamoverzicht:
 
 - **Rittenlijst downloaden (Excel)** — één blad *Rittenregistratie* (of één blad per chauffeur voor het team), in hetzelfde formaat als het klantsjabloon.
+- **Rittenlijst inlezen (Excel)** — in Planning of bij de factuur: dezelfde klantbestanden (zoals `Ritten_maand_augustus.xlsx`) vullen automatisch de voltooide ritten in.
 - **Factuur downloaden (PDF)**
 - **CSV voor boekhouder**
 

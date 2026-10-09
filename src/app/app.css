@@ -879,6 +879,29 @@
   font-size: 15px;
 }
 
+.tm-empty-act {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.tm-empty-act .btn {
+  margin-top: 0;
+}
+
+.tm-file-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
+}
+
 /* ---------- Werkbalk: chauffeurkeuze, filters ---------- */
 .tm-toolbar {
   display: flex;
