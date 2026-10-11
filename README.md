@@ -58,7 +58,7 @@ Onderaan het scherm: **Dashboard** | **Ritten** | **Brandstof** | **Kaart** | **
 
 ### Ritten
 
-- **Vaste ritten**: standaard o.a. **UZ Brussel → UZ Leuven** en **UZ Brussel → Virga Jesse Hasselt**. Klik op een rit om de afstand in te vullen (eventueel via OpenRouteService als je een sleutel hebt).
+- **Vaste ritten**: uit de **prijslijst van 26 mei** (hubs RKV Sango, Exploro, Brussel, Genk, Leuven) plus extra terugritten. In **Meer** kun je een ontbrekende rit toevoegen of een foute km aanpassen; die wijziging gaat voor op de prijslijst.
 - Vul eventueel datum en km handmatig aan, zie direct vergoeding en geschatte winst.
 - **Rit opslaan**.
 - **Meerdere ritten tegelijk** (achterstand): op dezelfde pagina kun je regels **plakken uit Excel** (tab-scheiding) of scheiden met **puntkomma** of **komma**. Standaardchauffeur (en optioneel voertuig) kies je boven het tekstveld als een regel geen chauffeurkolom heeft. Ritten worden als **voltooid** opgeslagen (geschikt voor nadien invoeren). Optioneel eerste regel met koppen: `Datum`, `Tijd`, `km`, `Chauffeur`, `Voertuig`. Datums ook als `DD/MM/YYYY`.

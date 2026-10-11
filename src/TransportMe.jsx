@@ -208,9 +208,12 @@ function tmResolveRitRouteCoords(f, t, mergedRows) {
   return null;
 }
 
-/** Zelfde samenvoeging als Ritten → vaste routes (voor km-herberekening). */
+function tmNamePair(f, t) {
+  return `${tmNormRouteName(f)}\t${tmNormRouteName(t)}`;
+}
+
+/** Zelfde samenvoeging als Ritten → vaste routes (voor km-herberekening). Eigen routes overschrijven de prijslijst. */
 function tmBuildMergedRoutes(D) {
-  const built = ROUTES.map(r => ({ ...r, __map: true }));
   const custom = (D.xr || []).map(r => {
     const hasMap =
       r.la1 != null && r.lo1 != null && r.la2 != null && r.lo2 != null && Number.isFinite(Number(r.la1));
@@ -224,8 +227,11 @@ function tmBuildMergedRoutes(D) {
       lo2: r.lo2,
       __map: hasMap,
       __id: r.id,
+      __eigen: true,
     };
   });
+  const overrideKeys = new Set(custom.map(r => tmNamePair(r.f, r.t)));
+  const built = ROUTES.filter(r => !overrideKeys.has(tmNamePair(r.f, r.t))).map(r => ({ ...r, __map: true }));
   const activeKeys = new Set((D.xr || []).map(tmRouteKey));
   const arch = (D.xrArch || [])
     .filter(r => !activeKeys.has(tmRouteKey(r)))
@@ -2087,7 +2093,7 @@ function Ritten({ D, sD, pid, onTripAct, openNieuwRequest = 0 }) {
                   Potentiële ritten ({potentieleRouteRows.length})
                 </div>
                 <p className="tm-form-hint" style={{ marginTop: 0 }}>
-                  Terugritten en extra bestemmingen vanuit Mechelen, Brussel en Leuven.
+                  Terugritten en extra bestemmingen, bovenop de prijslijst.
                 </p>
                 <div className="tm-prs tm-prs--modal">
                   {potentieleRouteRows.length === 0 ? (
@@ -3689,6 +3695,7 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
   const [erB, setErB] = useState(null);
   const [erK, setErK] = useState("");
   const [erBusy, setErBusy] = useState(false);
+  const [routeLijstZoek, setRouteLijstZoek] = useState("");
   const [ritZoek, setRitZoek] = useState("");
   const [meerToonVoltooide, setMeerToonVoltooide] = useState(false);
   const [bonEdit, setBonEdit] = useState({});
@@ -3882,20 +3889,17 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
       alert("Vul een geldige afstand (km), of gebruik ‘Kortste weg’.");
       return;
     }
-    const dup =
-      ROUTES.some(r => r.f === f && r.t === t) || (D.xr || []).some(r => r.f === f && r.t === t);
-    if (dup) {
-      alert("Deze route staat al in de lijst (standaard of eigen).");
-      return;
-    }
-    const row = { id: ui(), f, t, k };
+    const zelfde = x => tmNamePair(x.f, x.t) === tmNamePair(f, t);
+    const bestaand = (D.xr || []).find(zelfde);
+    const row = bestaand ? { ...bestaand, f, t, k } : { id: ui(), f, t, k };
     if (erA?.lat != null && erB?.lat != null) {
       row.la1 = erA.lat;
       row.lo1 = erA.lng;
       row.la2 = erB.lat;
       row.lo2 = erB.lng;
     }
-    const nd = normData({ ...D, xr: [...(D.xr || []), row] });
+    const xr = bestaand ? (D.xr || []).map(x => (x.id === bestaand.id ? row : x)) : [...(D.xr || []), row];
+    const nd = normData({ ...D, xr });
     sD(nd);
     sv(pid, nd);
     setErA(null);
@@ -4230,54 +4234,90 @@ function Meer({ D, sD, pid, sP, pr, onBackupImported }) {
         <div className="tm-meer-split" role="separator" />
         <BonFotoImportSection D={D} sD={sD} pid={pid} />
         <div className="tm-meer-split" role="separator" />
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Eigen vaste routes</div>
-        <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.4 }}>
-          OSM-zoeken. <strong>Afstand</strong> is een <strong>rijroute over echte wegen</strong> (autosnelwegen waar de
-          kaart dat toelaat) — geen vogelvlucht. Met{" "}
-          <code className="tm-meer-code">VITE_GOOGLE_MAPS_API_KEY</code> gebruikt de app <strong>Google Directions</strong>{" "}
-          (zelfde motor als google.com); zonder sleutel: gratis OSRM (kan enkele km afwijken).{" "}
-          {googleMapsKey ? (
-            <span style={{ color: "var(--gn)" }}>Google-sleutel zit in deze build.</span>
-          ) : (
-            <>
-              Optioneel: <code className="tm-meer-code">VITE_OPENROUTE_API_KEY</code> als extra fallback.
-            </>
-          )}{" "}
-          Na een wijziging in <code className="tm-meer-code">.env</code>: ontwikkeling = dev-server herstarten; live site
-          = opnieuw <strong>builden</strong> met env-vars op je host (Vite stopt de sleutel in de bundle).
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Prijslijst aanvullen</div>
+        <p style={{ fontSize: 12, color: "var(--tx3)", margin: "0 0 10px", lineHeight: 1.45 }}>
+          De vaste ritten komen uit de prijslijst van 26 mei ({ROUTES.filter(r => !r.__potentieel).length} ritten), plus extra
+          terugritten. Klopt een km niet of ontbreekt een rit? Pas hieronder aan of voeg toe. Jouw wijziging gaat voor op de
+          prijslijst.
         </p>
         <PlaatsPicker label="Vertrek" gekozen={erA} onKies={setErA} lijst={ziekenVoorMeer} />
         <PlaatsPicker label="Bestemming" gekozen={erB} onKies={setErB} lijst={ziekenVoorMeer} />
         <button type="button" className="btn btn-o btn-full" style={{ marginBottom: 10 }} disabled={erBusy} onClick={berekenEigenKm}>
-          {erBusy ? "Bezig…" : "Rijroute-km berekenen"}
+          {erBusy ? "Bezig…" : "Afstand over de weg meten"}
         </button>
         <div className="tm-fg">
           <label className="fl">Afstand (km)</label>
-          <input type="number" min="1" step="1" placeholder="Handmatig of via knop hierboven" value={erK} onChange={e => setErK(e.target.value)} />
+          <input type="number" min="1" step="1" placeholder="Handmatig of via de knop hierboven" value={erK} onChange={e => setErK(e.target.value)} />
         </div>
         <button type="button" className="btn btn-p btn-full" style={{ marginBottom: 14 }} onClick={addEigenRoute}>
-          Route toevoegen
+          {(D.xr || []).some(x => erA && erB && tmNamePair(x.f, x.t) === tmNamePair(erA.name, erB.name))
+            ? "Wijziging opslaan"
+            : "Route toevoegen"}
         </button>
-        {(D.xr || []).length === 0 ? (
-          <p style={{ fontSize: 12, color: "var(--tx3)", margin: 0 }}>Nog geen eigen routes.</p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {(D.xr || []).map(r => (
-              <div
-                key={r.id}
-                className="tm-brow"
-                style={{ alignItems: "center", flexWrap: "nowrap", gap: 8 }}
-              >
+        {(D.xr || []).length > 0 ? (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Jouw aanvullingen</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {(D.xr || []).map(r => (
+                <div key={r.id} className="tm-brow" style={{ alignItems: "center", flexWrap: "nowrap", gap: 8 }}>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
+                    {r.f} → {r.t} · {r.k} km
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-gh"
+                    onClick={() => {
+                      setErA({ name: r.f, lat: r.la1, lng: r.lo1 });
+                      setErB({ name: r.t, lat: r.la2, lng: r.lo2 });
+                      setErK(String(r.k));
+                    }}
+                  >
+                    Wijzig
+                  </button>
+                  <button type="button" className="btn btn-gh" onClick={() => delEigenRoute(r.id)} aria-label="Verwijderen">
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Uit de prijslijst</div>
+        <input
+          type="search"
+          placeholder="Zoek een rit om de km te controleren"
+          value={routeLijstZoek}
+          onChange={e => setRouteLijstZoek(e.target.value)}
+          aria-label="Prijslijst zoeken"
+          style={{ width: "100%", marginBottom: 8 }}
+        />
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 280, overflow: "auto" }}>
+          {ROUTES.filter(r => {
+            const q = routeLijstZoek.trim().toLowerCase();
+            if (!q) return !r.__potentieel;
+            return `${r.f} ${r.t}`.toLowerCase().includes(q);
+          })
+            .slice(0, 40)
+            .map((r, i) => (
+              <div key={(r.f || "") + (r.t || "") + i} className="tm-brow" style={{ alignItems: "center", flexWrap: "nowrap", gap: 8 }}>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
                   {r.f} → {r.t} · {r.k} km
+                  {r.__potentieel ? <span style={{ color: "var(--tx3)" }}> · extra</span> : null}
                 </span>
-                <button type="button" className="btn btn-gh" onClick={() => delEigenRoute(r.id)} aria-label="Verwijderen">
-                  ✕
+                <button
+                  type="button"
+                  className="btn btn-gh"
+                  onClick={() => {
+                    setErA({ name: r.f, lat: r.la1, lng: r.lo1 });
+                    setErB({ name: r.t, lat: r.la2, lng: r.lo2 });
+                    setErK(String(r.k));
+                  }}
+                >
+                  Aanpassen
                 </button>
               </div>
             ))}
-          </div>
-        )}
+        </div>
       </div>
       </section>
 

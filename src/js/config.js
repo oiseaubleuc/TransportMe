@@ -2,6 +2,8 @@
  * Configuratie – vergoeding, storage keys, vaste ritten
  */
 
+import { PRIJSLIJST_ANCHORS, PRIJSLIJST_ROUTES } from '../data/prijslijst-mei.js';
+
 export const OPSTART_PREMIE = 15;
 export const VERGOEDING_PER_20KM = 25;
 export const KM_SCHIJF = 20;
@@ -103,7 +105,7 @@ export const DEFAULT_VOERTUIGEN = [
  * Vaste ankertjes voor preset-routes (id’s moeten overeenkomen met DEFAULT_PRESET_ROUTES).
  * Daarna alle ziekenhuizen/locaties uit OpenStreetMap binnen Vlaams Gewest (BE-VLG).
  */
-export const PRESET_ANCHOR_ZIEKENHUIZEN = [
+const LEGACY_ANCHORS = [
   { id: 'uz-brussel', name: 'UZ Brussel', address: 'UZ Brussel', lat: 50.8824, lng: 4.2745 },
   { id: 'uz-leuven', name: 'UZ Leuven', address: 'UZ Leuven', lat: 50.8814, lng: 4.671 },
   { id: 'uza', name: 'UZA (Edegem)', address: 'UZA (Edegem)', lat: 51.1552, lng: 4.4452 },
@@ -160,14 +162,22 @@ export const PRESET_ANCHOR_ZIEKENHUIZEN = [
   { id: 'aalst', name: 'Aalst AZORG', address: 'AZORG Aalst Moorselbaan', lat: 50.9439, lng: 4.0551 },
 ];
 
+/** Prijslijst 26 mei + eerdere ankertjes (zelfde id: prijslijst wint). */
+export const PRESET_ANCHOR_ZIEKENHUIZEN = (() => {
+  const m = new Map();
+  for (const a of LEGACY_ANCHORS) m.set(a.id, a);
+  for (const a of PRIJSLIJST_ANCHORS) m.set(a.id, { ...(m.get(a.id) || {}), ...a });
+  return [...m.values()];
+})();
+
 /** Beperkte, herkenbare standaardlijst (geen volledige OSM-massa) */
 export const DEFAULT_ZIEKENHUIZEN = [...PRESET_ANCHOR_ZIEKENHUIZEN];
 
 /**
- * Vaste ritten — defaultKm = afgeronde OSRM rijroute (driving-car), in lijn met Google Maps.
- * Uitgebreid met factuurritten (o.a. UZA↔Brussel, Leuven↔Mechelen, Exploro→Zottegem, Genk→UZ Gent).
+ * Vaste ritten uit de prijslijst (26 mei) plus eerdere extra ritten die daar niet in staan.
+ * defaultKm = km uit de prijslijst (afgerond); tariefformule blijft ongewijzigd.
  */
-export const DEFAULT_PRESET_ROUTES = [
+const LEGACY_PRESET_ROUTES = [
   { id: 'preset-excel-1', fromId: 'uz-brussel', toId: 'uz-leuven', fromName: 'UZ Brussel', toName: 'UZ Leuven', defaultKm: 36 },
   { id: 'preset-excel-2', fromId: 'uz-brussel', toId: 'uza', fromName: 'UZ Brussel', toName: 'UZA (Edegem)', defaultKm: 41 },
   { id: 'preset-excel-3', fromId: 'uz-brussel', toId: 'deurne', fromName: 'UZ Brussel', toName: 'AZ Deurne (AZ Monica)', defaultKm: 47 },
@@ -343,6 +353,12 @@ export const DEFAULT_PRESET_ROUTES = [
 function presetPairKey(fromId, toId) {
   return `${fromId}\t${toId}`;
 }
+
+const PRIJSLIJST_PAIRS = new Set(PRIJSLIJST_ROUTES.map((r) => presetPairKey(r.fromId, r.toId)));
+export const DEFAULT_PRESET_ROUTES = [
+  ...PRIJSLIJST_ROUTES,
+  ...LEGACY_PRESET_ROUTES.filter((r) => !PRIJSLIJST_PAIRS.has(presetPairKey(r.fromId, r.toId))),
+];
 
 /** Ontbrekende terugritten van vaste routes — zelfde km, gemarkeerd als potentieel. */
 function reversePresetsMissing(actual) {
