@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import App from "./TransportMe.jsx";
+import "@fontsource-variable/overpass";
+import App from "./app/App.jsx";
 
 const rootEl = document.getElementById("root");
 if (!rootEl) {
@@ -24,7 +25,6 @@ if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     });
   } else {
-    // In dev: remove older SW + caches so latest code always appears.
     navigator.serviceWorker.getRegistrations().then((regs) => {
       regs.forEach((r) => r.unregister());
     });

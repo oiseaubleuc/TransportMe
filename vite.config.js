@@ -16,11 +16,13 @@ function manualChunks(id) {
   if (id.includes("tesseract")) return "vendor-tesseract";
   if (id.includes("pdfjs-dist")) return "vendor-pdfjs";
   if (id.includes("@zxing")) return "vendor-zxing";
+  if (id.includes("exceljs")) return "vendor-exceljs";
 }
 
 export default defineConfig({
   plugins: [react()],
   build: {
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: { manualChunks },
     },
