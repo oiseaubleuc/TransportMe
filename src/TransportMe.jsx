@@ -859,7 +859,10 @@ function PlaatsPicker({ label, gekozen, onKies, lijst }) {
     setRemote([]);
   };
 
-  const showHits = q.trim().length > 0 && (localHits.length > 0 || remote.length > 0 || busy);
+  const showHits =
+    q.trim().length > 0 &&
+    q.trim() !== (gekozen?.name || "") &&
+    (localHits.length > 0 || remote.length > 0 || busy);
 
   return (
     <div className="tm-fg">
