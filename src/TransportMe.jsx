@@ -15,7 +15,7 @@ import { PRESET_ANCHOR_ZIEKENHUIZEN, ALL_PRESET_ROUTES, hasGoogleMapsApiKey } fr
 import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 
 /** Kaartkleur van de route-lijn — zelfde basis als --acc in transportme-theme.css */
-const TM_ACC = "#2F5BEA";
+const TM_ACC = "#1a7a72";
 
 const PR = [{ id: "houdaifa", n: "Houdaifa", i: "H" }];
 const DR = ["Houdaifa", "Student 1"],
@@ -970,7 +970,7 @@ function RitMap({ la1, lo1, la2, lo2, labelF, labelT }) {
         L.circleMarker([lat, lng], {
           radius: 9,
           fillColor: TM_ACC,
-          color: "#141414",
+          color: "#16332f",
           weight: 2,
           fillOpacity: 1,
         })
@@ -2259,7 +2259,7 @@ function BonFotoImportSection({ D, sD, pid }) {
           borderStyle: "dashed",
           borderWidth: 2,
           borderColor: dragOver ? "var(--acc)" : "var(--bd)",
-          background: dragOver ? "rgba(109, 133, 40, 0.08)" : "var(--s2)",
+          background: dragOver ? "var(--accBg)" : "var(--s2)",
           textAlign: "center",
           cursor: "pointer",
         }}

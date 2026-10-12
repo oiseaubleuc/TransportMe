@@ -12,7 +12,7 @@
 html,
 body {
   margin: 0;
-  background: var(--bg, #eef1f5);
+  background: var(--bg, #f2eee6);
 }
 
 body {
@@ -29,40 +29,40 @@ body {
 /* ---------- Tokens ---------- */
 :root,
 .tm-app {
-  /* Ondergrond en vlakken: koel grijs zoals een ziekenhuisgang, wit als signalisatiebord */
-  --bg: #eef1f5;
-  --s1: #ffffff;
-  --s2: #f5f7fa;
-  --s3: #e6eaf0;
-  --bd: #d7dde5;
-  --bd2: #c3cbd6;
+  /* Linnen papier, ivoor kaarten */
+  --bg: #f2eee6;
+  --s1: #fffcf7;
+  --s2: #f6f1e8;
+  --s3: #ebe4d7;
+  --bd: #ddd4c6;
+  --bd2: #c9bdaa;
 
-  /* Tekst: nachtblauw */
-  --tx: #0e1726;
-  --tx2: #3d4757;
-  --tx3: #667083;
-  --ink: #0e1726;
-  --ink-tx: #ffffff;
+  /* Warme inkt */
+  --tx: #1c1915;
+  --tx2: #534c43;
+  --tx3: #82786c;
+  --ink: #1a4540;
+  --ink-tx: #f6f2e9;
 
-  /* Functionele kleuren */
-  --acc: #2f5bea;
-  --accBg: rgba(47, 91, 234, 0.1);
-  --gn: #0b7f57;
-  --gnBg: rgba(11, 127, 87, 0.1);
-  --rd: #c8372d;
-  --rdBg: rgba(200, 55, 45, 0.09);
-  --am: #a86a00;
-  --amBg: rgba(201, 138, 0, 0.12);
+  /* Koper als accent, mos als oké, terracotta als fout */
+  --acc: #b5522a;
+  --accBg: rgba(181, 82, 42, 0.12);
+  --gn: #2a7a58;
+  --gnBg: rgba(42, 122, 88, 0.12);
+  --rd: #b63c32;
+  --rdBg: rgba(182, 60, 50, 0.1);
+  --am: #b07a1a;
+  --amBg: rgba(176, 122, 26, 0.14);
 
-  /* Lijnkleuren per chauffeur (zoals routelijnen op de vloer) */
-  --l1: #2f5bea;
-  --l2: #c98a00;
-  --l3: #0e9467;
-  --l4: #8a4fd6;
+  /* Lijnkleuren per chauffeur */
+  --l1: #1a7a72;
+  --l2: #c47a22;
+  --l3: #3d8a5c;
+  --l4: #7a5aa8;
 
-  --rail: #0e1726;
-  --rail-tx: #c9d1de;
-  --rail-on: #ffffff;
+  --rail: #16332f;
+  --rail-tx: #c5d4d0;
+  --rail-on: #f6f1e4;
 
   --r: 10px;
   --rl: 14px;
@@ -74,32 +74,32 @@ body {
 @media (prefers-color-scheme: dark) {
   :root,
   .tm-app {
-    --bg: #0a0f18;
-    --s1: #111926;
-    --s2: #172131;
-    --s3: #1e2a3d;
-    --bd: #243147;
-    --bd2: #33425b;
-    --tx: #e9edf4;
-    --tx2: #b7c0ce;
-    --tx3: #8691a3;
-    --ink: #e9edf4;
-    --ink-tx: #0a0f18;
-    --acc: #7895ff;
-    --accBg: rgba(120, 149, 255, 0.14);
-    --gn: #3cc98f;
-    --gnBg: rgba(60, 201, 143, 0.12);
-    --rd: #ff6b5e;
-    --rdBg: rgba(255, 107, 94, 0.12);
-    --am: #f2b630;
-    --amBg: rgba(242, 182, 48, 0.13);
-    --l1: #7895ff;
-    --l2: #f2b630;
-    --l3: #3cc98f;
-    --l4: #b48af0;
-    --rail: #060a11;
-    --rail-tx: #97a2b4;
-    --rail-on: #ffffff;
+    --bg: #121614;
+    --s1: #1a211e;
+    --s2: #222b27;
+    --s3: #2c3631;
+    --bd: #3a4641;
+    --bd2: #4c5a54;
+    --tx: #eee8dc;
+    --tx2: #c4bdb0;
+    --tx3: #958c80;
+    --ink: #e8dcc8;
+    --ink-tx: #163430;
+    --acc: #e08a5a;
+    --accBg: rgba(224, 138, 90, 0.16);
+    --gn: #5dce9a;
+    --gnBg: rgba(93, 206, 154, 0.12);
+    --rd: #f07a6e;
+    --rdBg: rgba(240, 122, 110, 0.12);
+    --am: #e0b04a;
+    --amBg: rgba(224, 176, 74, 0.14);
+    --l1: #5ec4b8;
+    --l2: #e0a84a;
+    --l3: #6dca90;
+    --l4: #b89ae0;
+    --rail: #0e1614;
+    --rail-tx: #a8b8b3;
+    --rail-on: #f3ead8;
   }
 }
 
@@ -180,7 +180,7 @@ body {
 }
 
 .tm-app select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23667083' stroke-width='1.6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%2382786c' stroke-width='1.6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   background-size: 12px;
@@ -367,7 +367,7 @@ body {
 .tm-seg-b.on {
   background: var(--s1);
   color: var(--tx);
-  box-shadow: 0 1px 2px rgba(14, 23, 38, 0.12);
+  box-shadow: 0 1px 2px rgba(28, 25, 21, 0.1);
 }
 
 /* ---------- Vlakken ---------- */
@@ -724,7 +724,7 @@ body {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(6, 10, 17, 0.5);
+  background: rgba(22, 51, 47, 0.46);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -741,7 +741,7 @@ body {
   background: var(--s1);
   color: var(--tx);
   border-radius: 18px 18px 0 0;
-  box-shadow: 0 -10px 40px rgba(6, 10, 17, 0.25);
+  box-shadow: 0 -10px 40px rgba(22, 51, 47, 0.22);
   animation: tmUp 0.2s cubic-bezier(0.2, 0.9, 0.3, 1);
   font-family: var(--font);
 }

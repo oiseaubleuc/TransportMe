@@ -7,8 +7,8 @@
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "browser"],
-  "background_color": "#f2f2f7",
-  "theme_color": "#5f7f1f",
+  "background_color": "#f2eee6",
+  "theme_color": "#16332f",
   "icons": [
     {
       "src": "/favicon.svg",

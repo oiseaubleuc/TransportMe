@@ -46,7 +46,7 @@ const DEFAULT_ZOOM = 8;
 /** Grenzen Vlaams Gewest (België) – standaardweergave voor vertrek/aankomst kiezen */
 const FLANDERS_BOUNDS = new maplibregl.LngLatBounds([2.54, 50.68], [5.92, 51.51]);
 
-const ROUTE_COLOR = '#6b8e23';
+const ROUTE_COLOR = '#1a7a72';
 const ROUTE_WIDTH = 4;
 
 /** Inzoomen op punt A–B: voldoende padding, hoog maxZoom zodat we niet uitzoomen */

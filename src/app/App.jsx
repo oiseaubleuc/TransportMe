@@ -722,8 +722,8 @@ function WeekBlok({ team, ws, tot, gaNaar }) {
       stack: "omzet",
     })),
   };
-  const as = donker ? "#8691A3" : "#6B7586";
-  const grid = donker ? "rgba(134,145,163,.14)" : "rgba(14,23,38,.07)";
+  const as = donker ? "#958c80" : "#82786c";
+  const grid = donker ? "rgba(149,140,128,.16)" : "rgba(28,25,21,.07)";
   const opts = {
     responsive: true,
     maintainAspectRatio: false,
@@ -732,9 +732,9 @@ function WeekBlok({ team, ws, tot, gaNaar }) {
       legend: { display: false },
       tooltip: {
         callbacks: { label: c => `${c.dataset.label}: ${euro(c.parsed.y)}` },
-        backgroundColor: donker ? "#E9EDF4" : "#0E1726",
-        titleColor: donker ? "#0E1726" : "#fff",
-        bodyColor: donker ? "#0E1726" : "#fff",
+        backgroundColor: donker ? "#eee8dc" : "#1a4540",
+        titleColor: donker ? "#1c1915" : "#f6f2e9",
+        bodyColor: donker ? "#1c1915" : "#f6f2e9",
         padding: 10,
         cornerRadius: 8,
       },
@@ -1680,7 +1680,7 @@ function FinTeam({ team, setFocus }) {
   const nuWs = weekStart(vandaagIso());
   const weken = Array.from({ length: 10 }, (_, i) => isoPlusDagen(nuWs, -7 * (9 - i)));
   const kleuren = LIJN_HEX[donker ? "dark" : "light"];
-  const as = donker ? "#8691A3" : "#6B7586";
+  const as = donker ? "#958c80" : "#82786c";
   const data = {
     labels: weken.map(w => datumKort(w)),
     datasets: [
@@ -1696,7 +1696,7 @@ function FinTeam({ team, setFocus }) {
       {
         label: "Kosten",
         data: weken.map(w => team.reduce((a, t) => a + totalen(t.D, w, isoPlusDagen(w, 6)).kosten, 0)),
-        backgroundColor: donker ? "rgba(255,107,94,.55)" : "rgba(200,55,45,.45)",
+        backgroundColor: donker ? "rgba(240,122,110,.55)" : "rgba(182,60,50,.42)",
         stack: "kosten",
         borderRadius: 3,
         borderSkipped: false,
@@ -1712,9 +1712,9 @@ function FinTeam({ team, setFocus }) {
       legend: { display: false },
       tooltip: {
         callbacks: { title: c => "Week van " + c[0].label, label: c => `${c.dataset.label}: ${euro(c.parsed.y)}` },
-        backgroundColor: donker ? "#E9EDF4" : "#0E1726",
-        titleColor: donker ? "#0E1726" : "#fff",
-        bodyColor: donker ? "#0E1726" : "#fff",
+        backgroundColor: donker ? "#eee8dc" : "#1a4540",
+        titleColor: donker ? "#1c1915" : "#f6f2e9",
+        bodyColor: donker ? "#1c1915" : "#f6f2e9",
         padding: 10,
         cornerRadius: 8,
       },
@@ -1724,7 +1724,7 @@ function FinTeam({ team, setFocus }) {
       y: {
         stacked: true,
         border: { display: false },
-        grid: { color: donker ? "rgba(134,145,163,.14)" : "rgba(14,23,38,.07)" },
+        grid: { color: donker ? "rgba(149,140,128,.16)" : "rgba(28,25,21,.07)" },
         ticks: { color: as, font: { size: 11 }, maxTicksLimit: 5, callback: v => "€" + v },
       },
     },
