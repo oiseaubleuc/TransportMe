@@ -867,16 +867,11 @@ function PlaatsPicker({ label, gekozen, onKies, lijst }) {
       <input
         type="text"
         value={q}
-        placeholder="Zoek ziekenhuis of adres (België)…"
+        placeholder="Zoek een ziekenhuis…"
         autoComplete="off"
         onChange={e => setQ(e.target.value)}
       />
-      {gekozen?.name && (
-        <div style={{ fontSize: 11, color: "var(--acc)", marginTop: 4 }}>
-          Gekozen: {gekozen.name}
-          {gekozen.lat != null ? " · coördinaten OK" : ""}
-        </div>
-      )}
+      {gekozen?.name ? <div className="tm-pk-gekozen">{gekozen.name}</div> : null}
       {showHits && (
         <div
           className="tm-prs"
@@ -898,7 +893,7 @@ function PlaatsPicker({ label, gekozen, onKies, lijst }) {
             </button>
           ))}
           {localHits.length > 0 && remote.length > 0 && (
-            <div style={{ fontSize: 10, color: "var(--tx3)", padding: "4px 0" }}>— ook in heel België —</div>
+            <div className="tm-pk-split">Andere plaatsen</div>
           )}
           {busy && qDeb.length >= 3 && <div style={{ fontSize: 11, color: "var(--tx3)", padding: 6 }}>Zoeken…</div>}
           {remote.map((h, i) => (
@@ -1454,10 +1449,10 @@ function Historiek({ D, pid, sD }) {
           {voltooidExportChron.length === 1 ? "1 voltooide rit" : `${voltooidExportChron.length} voltooide ritten`} van{" "}
           {factuurDatumLabel.replace(/^Dag /, "")}. Factuurgegevens en logo pas je aan in Instellingen.
         </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="tm-export-grid">
           <button
             type="button"
-            className="btn btn-o btn-full"
+            className="btn btn-o"
             disabled={xlsBusy}
             onClick={async () => {
               setXlsBusy(true);
@@ -1516,7 +1511,7 @@ function Historiek({ D, pid, sD }) {
           />
           <button
             type="button"
-            className="btn btn-o btn-full"
+            className="btn btn-o"
             disabled={xlsInBusy}
             onClick={() => xlsInRef.current?.click()}
           >
@@ -1524,7 +1519,7 @@ function Historiek({ D, pid, sD }) {
           </button>
           <button
             type="button"
-            className="btn btn-p btn-full"
+            className="btn btn-p"
             disabled={pdfBusy}
             onClick={async () => {
               setPdfBusy(true);
@@ -1546,7 +1541,7 @@ function Historiek({ D, pid, sD }) {
           </button>
           <button
             type="button"
-            className="btn btn-gh btn-full"
+            className="btn btn-gh"
             onClick={() => downloadFactuurCsv(voltooidExportChron, exportStem)}
           >
             CSV voor boekhouder
@@ -1584,31 +1579,37 @@ function Historiek({ D, pid, sD }) {
         )
       )}
 
-      <div className="sh" style={{ marginTop: 16 }}>
-        Tankbeurten ({brandstofL.length})
-      </div>
-      {brandstofL.length === 0 && <p className="tm-em">Geen tankbeurten in deze periode.</p>}
-      {brandstofL.map(b => (
-        <div key={b.id} className="tm-f-row" style={{ flexWrap: "wrap", alignItems: "center" }}>
-          <span className="tm-f-date">{b.d}</span>
-          <span style={{ flex: 1, minWidth: 100 }}>
-            {money(b.l)} L × {E(money(b.p))}/L
-          </span>
-          <span className="tm-f-eur">{E(b.a)}</span>
-        </div>
-      ))}
+      {brandstofL.length > 0 ? (
+        <>
+          <div className="sh" style={{ marginTop: 16 }}>
+            Tankbeurten ({brandstofL.length})
+          </div>
+          {brandstofL.map(b => (
+            <div key={b.id} className="tm-f-row" style={{ flexWrap: "wrap", alignItems: "center" }}>
+              <span className="tm-f-date">{b.d}</span>
+              <span style={{ flex: 1, minWidth: 100 }}>
+                {money(b.l)} L × {E(money(b.p))}/L
+              </span>
+              <span className="tm-f-eur">{E(b.a)}</span>
+            </div>
+          ))}
+        </>
+      ) : null}
 
-      <div className="sh" style={{ marginTop: 16 }}>
-        Overige kosten ({overigL.length})
-      </div>
-      {overigL.length === 0 && <p className="tm-em">Geen posten in deze periode.</p>}
-      {overigL.map(x => (
-        <div key={x.id} className="tm-f-row" style={{ flexWrap: "wrap" }}>
-          <span className="tm-f-date">{x.d}</span>
-          <span style={{ flex: 1, minWidth: 120 }}>{x.desc || "—"}</span>
-          <span className="tm-f-eur">{E(x.a)}</span>
-        </div>
-      ))}
+      {overigL.length > 0 ? (
+        <>
+          <div className="sh" style={{ marginTop: 16 }}>
+            Overige kosten ({overigL.length})
+          </div>
+          {overigL.map(x => (
+            <div key={x.id} className="tm-f-row" style={{ flexWrap: "wrap" }}>
+              <span className="tm-f-date">{x.d}</span>
+              <span style={{ flex: 1, minWidth: 120 }}>{x.desc || "—"}</span>
+              <span className="tm-f-eur">{E(x.a)}</span>
+            </div>
+          ))}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -2379,35 +2380,14 @@ function Meer({ D, sD, pid, pr, onBackupImported }) {
   const [erK, setErK] = useState("");
   const [erBusy, setErBusy] = useState(false);
   const [routeLijstZoek, setRouteLijstZoek] = useState("");
+  const [plForm, setPlForm] = useState(false);
   const [recalcRittenBusy, setRecalcRittenBusy] = useState(false);
   const [herberekenTariefBusy, setHerberekenTariefBusy] = useState(false);
-  const [googleTestBusy, setGoogleTestBusy] = useState(false);
-  const [googleTestMsg, setGoogleTestMsg] = useState("");
   const backupFileRef = useRef(null);
   const ziekenVoorMeer = useMemo(
     () => ziekenLijstMetArchief(TM_ZIEKENHUIZEN_LIJST, D.xrArch || []),
     [D.xrArch]
   );
-
-  const testGoogleDirections = async () => {
-    if (!hasGoogleMapsApiKey()) {
-      setGoogleTestMsg("Afstanden worden gemeten met de gratis routedienst. Die kan enkele kilometers afwijken.");
-      return;
-    }
-    setGoogleTestBusy(true);
-    setGoogleTestMsg("");
-    try {
-      const brussel = { lat: 50.8824, lng: 4.2745 };
-      const leuven = { lat: 50.8814, lng: 4.671 };
-      const { km } = await getDrivingRouteKm(brussel, leuven);
-      setGoogleTestMsg(`OK: UZ Brussel naar UZ Leuven is ${km} km.`);
-    } catch (e) {
-      const m = String(e?.message || e);
-      setGoogleTestMsg(`Meting mislukt: ${m}. Probeer later opnieuw of vul de km handmatig in.`);
-    } finally {
-      setGoogleTestBusy(false);
-    }
-  };
 
   const berekenEigenKm = async () => {
     if (erA?.lat == null || erB?.lat == null) {
@@ -2527,6 +2507,7 @@ function Meer({ D, sD, pid, pr, onBackupImported }) {
     setErA(null);
     setErB(null);
     setErK("");
+    setPlForm(false);
   };
 
   const delEigenRoute = id => {
@@ -2659,51 +2640,22 @@ function Meer({ D, sD, pid, pr, onBackupImported }) {
       </div>
     );
 
-  const googleMapsKey = hasGoogleMapsApiKey();
+  const vulRoute = r => {
+    setErA({ name: r.f, lat: r.la1, lng: r.lo1 });
+    setErB({ name: r.t, lat: r.la2, lng: r.lo2 });
+    setErK(String(r.k));
+    setPlForm(true);
+  };
 
   return (
     <div className="tm-meer-hub">
       <section className="tm-meer-sec">
-        <h2 className="tm-meer-sec-h">Facturatie</h2>
-        <button type="button" className="tm-mi" onClick={() => sV("f")}>
-          <strong>Factuurgegevens en logo</strong>
-          <small>Naam, adres, btw en logo op de facturen van {pr.n}</small>
-        </button>
-        <button type="button" className="tm-mi" onClick={() => sV("d")}>
-          <strong>Back-up en herstel</strong>
-          <small>Alle gegevens bewaren of terugzetten op een ander toestel</small>
-        </button>
-      </section>
-
-      <section className="tm-meer-sec">
-        <h2 className="tm-meer-sec-h">Prijslijst aanvullen</h2>
-        <div className="card">
+        <h2 className="tm-meer-sec-h">Prijslijst</h2>
+        <div className="card tm-pl-card">
           <p className="tm-card-p">
-            De vaste ritten komen uit de prijslijst van 26 mei ({ROUTES.filter(r => !r.__potentieel).length} ritten),
-            plus extra terugritten. Klopt een km niet of ontbreekt een rit? Pas hieronder aan of voeg toe. Jouw
-            wijziging gaat voor op de prijslijst.
+            {ROUTES.filter(r => !r.__potentieel).length} vaste ritten. Klopt een km niet? Tik op Aanpassen. Ontbreekt een
+            rit? Voeg die onderaan toe. Jouw wijziging gaat voor.
           </p>
-          <PlaatsPicker label="Vertrek" gekozen={erA} onKies={setErA} lijst={ziekenVoorMeer} />
-          <PlaatsPicker label="Bestemming" gekozen={erB} onKies={setErB} lijst={ziekenVoorMeer} />
-          <button type="button" className="btn btn-o btn-full" style={{ marginBottom: 10 }} disabled={erBusy} onClick={berekenEigenKm}>
-            {erBusy ? "Afstand meten…" : "Afstand over de weg meten"}
-          </button>
-          <div className="tm-fg">
-            <label className="fl">Afstand (km)</label>
-            <input
-              type="number"
-              min="1"
-              step="1"
-              placeholder="Handmatig of via de knop hierboven"
-              value={erK}
-              onChange={e => setErK(e.target.value)}
-            />
-          </div>
-          <button type="button" className="btn btn-p btn-full" style={{ marginBottom: 14 }} onClick={addEigenRoute}>
-            {(D.xr || []).some(x => erA && erB && tmNamePair(x.f, x.t) === tmNamePair(erA.name, erB.name))
-              ? "Wijziging opslaan"
-              : "Route toevoegen"}
-          </button>
           {(D.xr || []).length > 0 ? (
             <div className="tm-pl-block">
               <div className="tm-pl-h">Jouw aanvullingen</div>
@@ -2714,15 +2666,7 @@ function Meer({ D, sD, pid, pr, onBackupImported }) {
                       {r.f} <span className="tm-muted">naar</span> {r.t}
                     </span>
                     <span className="tm-num tm-muted">{r.k} km</span>
-                    <button
-                      type="button"
-                      className="btn btn-gh btn-sm"
-                      onClick={() => {
-                        setErA({ name: r.f, lat: r.la1, lng: r.lo1 });
-                        setErB({ name: r.t, lat: r.la2, lng: r.lo2 });
-                        setErK(String(r.k));
-                      }}
-                    >
+                    <button type="button" className="btn btn-gh btn-sm" onClick={() => vulRoute(r)}>
                       Wijzig
                     </button>
                     <button
@@ -2739,11 +2683,10 @@ function Meer({ D, sD, pid, pr, onBackupImported }) {
             </div>
           ) : null}
           <div className="tm-pl-block">
-            <div className="tm-pl-h">Uit de prijslijst</div>
             <input
               type="search"
               className="tm-search"
-              placeholder="Zoek een rit om de km te controleren"
+              placeholder="Zoek Sango, Leuven, UZA…"
               value={routeLijstZoek}
               onChange={e => setRouteLijstZoek(e.target.value)}
               aria-label="Prijslijst zoeken"
@@ -2754,7 +2697,7 @@ function Meer({ D, sD, pid, pr, onBackupImported }) {
                 if (!q) return !r.__potentieel;
                 return `${r.f} ${r.t}`.toLowerCase().includes(q);
               })
-                .slice(0, 40)
+                .slice(0, 50)
                 .map((r, i) => (
                   <li key={(r.f || "") + (r.t || "") + i} className="tm-pl-row">
                     <span className="tm-pl-route">
@@ -2762,22 +2705,63 @@ function Meer({ D, sD, pid, pr, onBackupImported }) {
                       {r.__potentieel ? <span className="tm-tag">extra</span> : null}
                     </span>
                     <span className="tm-num tm-muted">{r.k} km</span>
-                    <button
-                      type="button"
-                      className="btn btn-gh btn-sm"
-                      onClick={() => {
-                        setErA({ name: r.f, lat: r.la1, lng: r.lo1 });
-                        setErB({ name: r.t, lat: r.la2, lng: r.lo2 });
-                        setErK(String(r.k));
-                      }}
-                    >
+                    <button type="button" className="btn btn-gh btn-sm" onClick={() => vulRoute(r)}>
                       Aanpassen
                     </button>
                   </li>
                 ))}
             </ul>
           </div>
+          {plForm ? (
+            <div className="tm-pl-form">
+              <div className="tm-pl-h">Rit aanpassen of toevoegen</div>
+              <PlaatsPicker label="Vertrek" gekozen={erA} onKies={setErA} lijst={ziekenVoorMeer} />
+              <PlaatsPicker label="Bestemming" gekozen={erB} onKies={setErB} lijst={ziekenVoorMeer} />
+              <button type="button" className="btn btn-o btn-full" style={{ marginBottom: 10 }} disabled={erBusy} onClick={berekenEigenKm}>
+                {erBusy ? "Afstand meten…" : "Afstand over de weg meten"}
+              </button>
+              <div className="tm-fg">
+                <label className="fl">Afstand (km)</label>
+                <input type="number" min="1" step="1" placeholder="Km" value={erK} onChange={e => setErK(e.target.value)} />
+              </div>
+              <div className="tm-pl-form-act">
+                <button type="button" className="btn btn-p" onClick={addEigenRoute}>
+                  {(D.xr || []).some(x => erA && erB && tmNamePair(x.f, x.t) === tmNamePair(erA.name, erB.name))
+                    ? "Wijziging opslaan"
+                    : "Route toevoegen"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-gh"
+                  onClick={() => {
+                    setPlForm(false);
+                    setErA(null);
+                    setErB(null);
+                    setErK("");
+                  }}
+                >
+                  Annuleren
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" className="btn btn-o btn-full tm-pl-add" onClick={() => setPlForm(true)}>
+              Ontbrekende rit toevoegen
+            </button>
+          )}
         </div>
+      </section>
+
+      <section className="tm-meer-sec">
+        <h2 className="tm-meer-sec-h">Facturatie</h2>
+        <button type="button" className="tm-mi" onClick={() => sV("f")}>
+          <strong>Factuurgegevens en logo</strong>
+          <small>Naam, adres, btw en logo op de facturen van {pr.n}</small>
+        </button>
+        <button type="button" className="tm-mi" onClick={() => sV("d")}>
+          <strong>Back-up en herstel</strong>
+          <small>Alle gegevens bewaren of terugzetten op een ander toestel</small>
+        </button>
       </section>
 
       <section className="tm-meer-sec">
@@ -2832,20 +2816,6 @@ function Meer({ D, sD, pid, pr, onBackupImported }) {
           >
             {recalcRittenBusy ? "Bezig met meten…" : "Afstanden opnieuw meten (internet nodig)"}
           </button>
-          <div className="tm-card-t">Routedienst</div>
-          <p className="tm-card-p">
-            {googleMapsKey
-              ? "Afstanden worden gemeten met Google Maps."
-              : "Afstanden worden gemeten met de gratis routedienst. Die kan enkele kilometers afwijken."}
-          </p>
-          <button type="button" className="btn btn-o" disabled={googleTestBusy} onClick={testGoogleDirections}>
-            {googleTestBusy ? "Bezig…" : "Routedienst testen"}
-          </button>
-          {googleTestMsg ? (
-            <p className="tm-card-p" style={{ margin: "10px 0 0", color: googleTestMsg.startsWith("OK") ? "var(--gn)" : "var(--rd)" }}>
-              {googleTestMsg}
-            </p>
-          ) : null}
         </div>
       </details>
     </div>

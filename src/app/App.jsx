@@ -24,7 +24,6 @@ import {
   Kosten,
   Meer,
 } from "../TransportMe.jsx";
-import { getDrivingRouteKm } from "../js/ors.js";
 import { getFactuurGegevens } from "../js/storage.js";
 import { downloadRittenExcel, leesRittenExcel, voegExcelRittenToe, meldingExcelInlees } from "../js/rittenExcel.js";
 import {
@@ -353,10 +352,11 @@ export default function App() {
 /* Overzicht                                                            */
 /* ------------------------------------------------------------------ */
 
-function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw }) {
+function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw, setFor }) {
   const nu = useNu();
   const vandaag = vandaagIso();
   const [dag, setDag] = useState(vandaag);
+  const leegAlles = ritten.length === 0;
 
   const lopend = ritten.filter(r => r.s === "lopend").sort((a, b) => ritSortKey(a).localeCompare(ritSortKey(b)));
   const komendVandaag = ritten.filter(r => r.s === "komend" && r.d === vandaag);
@@ -398,10 +398,18 @@ function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw }) {
           <h1>{datumLang(vandaag)}</h1>
           <p className="tm-ph-sub">{zin}</p>
         </div>
+        <button type="button" className="btn btn-p" onClick={() => openNieuw()}>
+          Nieuwe rit
+        </button>
       </header>
 
-      <Dagkaart team={team} dag={dag} setDag={setDag} nu={nu} ritActie={ritActie} />
+      {leegAlles ? (
+        <StartVandaag openNieuw={openNieuw} setFor={setFor} />
+      ) : (
+        <Dagkaart team={team} dag={dag} setDag={setDag} nu={nu} ritActie={ritActie} />
+      )}
 
+      {!leegAlles ? (
       <div className="tm-grid2">
         <section className="tm-sec" aria-labelledby="ov-nu">
           <h2 id="ov-nu" className="tm-h2">
@@ -500,7 +508,28 @@ function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw }) {
           )}
         </div>
       </div>
+      ) : null}
     </>
+  );
+}
+
+function StartVandaag({ openNieuw, setFor }) {
+  return (
+    <section className="tm-start" aria-label="Aan de slag">
+      <h2 className="tm-start-h">Aan de slag</h2>
+      <p className="tm-start-p">Plan een rit uit de prijslijst, of lees een Excel-rittenlijst in. De ritten verschijnen daarna hier op de dagkaart.</p>
+      <div className="tm-start-cards">
+        <button type="button" className="tm-start-card" onClick={() => openNieuw()}>
+          <strong>Nieuwe rit</strong>
+          <span>Kies vertrek en bestemming. Het bedrag volgt uit de prijslijst.</span>
+        </button>
+        <div className="tm-start-card">
+          <strong>Rittenlijst inlezen</strong>
+          <span>Een bestand zoals Ritten_maand_augustus.xlsx vult de gereden ritten in.</span>
+          <ExcelInlezenKnop pid={PR[0].id} setFor={setFor} className="btn btn-p" label="Excel kiezen" />
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -748,18 +777,22 @@ function WeekBlok({ team, ws, tot, gaNaar }) {
           <dd className="tm-num">{tot.ritten}</dd>
         </div>
       </dl>
-      <div className="tm-chart tm-chart--week" role="img" aria-label="Omzet per dag deze week, per chauffeur">
-        <Bar data={data} options={opts} />
-      </div>
-      <div className="tm-legend" aria-hidden="true">
-        {team.map(t => (
-          <span key={t.id}>
-            <Dot pid={t.id} size={8} />
-            {t.n}
-          </span>
-        ))}
-        <span className="tm-legend-note">{dagen.includes(vandaag) ? "Alleen voltooide ritten" : ""}</span>
-      </div>
+      {tot.ritten > 0 ? (
+        <>
+          <div className="tm-chart tm-chart--week" role="img" aria-label="Omzet per dag deze week, per chauffeur">
+            <Bar data={data} options={opts} />
+          </div>
+          <div className="tm-legend" aria-hidden="true">
+            {team.map(t => (
+              <span key={t.id}>
+                <Dot pid={t.id} size={8} />
+                {t.n}
+              </span>
+            ))}
+            <span className="tm-legend-note">{dagen.includes(vandaag) ? "Alleen voltooide ritten" : ""}</span>
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -1193,9 +1226,6 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
     s: "komend",
     bron: "",
   }));
-  const [meten, setMeten] = useState(false);
-  const req = useRef(0);
-
   useEffect(() => {
     const f = e => e.key === "Escape" && onClose();
     window.addEventListener("keydown", f);
@@ -1207,22 +1237,7 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
   const kies = i => {
     const r = routes[i];
     if (!r) return;
-    const token = ++req.current;
-    const coords = [r.la1, r.lo1, r.la2, r.lo2].every(x => x != null && Number.isFinite(Number(x)));
-    setFm(m => ({ ...m, ri: i, f: r.f, t: r.t, k: String(r.k), bron: coords ? "" : "lijst" }));
-    if (!coords) return;
-    setMeten(true);
-    getDrivingRouteKm({ lat: r.la1, lng: r.lo1 }, { lat: r.la2, lng: r.lo2 })
-      .then(({ km, source }) => {
-        if (token !== req.current || !(km >= 1)) return;
-        setFm(m => (m.ri === i ? { ...m, k: String(km), bron: source || "route" } : m));
-      })
-      .catch(() => {
-        if (token === req.current) setFm(m => (m.ri === i ? { ...m, bron: "lijst" } : m));
-      })
-      .finally(() => {
-        if (token === req.current) setMeten(false);
-      });
+    setFm(m => ({ ...m, ri: i, f: r.f, t: r.t, k: String(r.k), bron: "lijst" }));
   };
 
   const q = zoek.trim().toLowerCase();
@@ -1375,7 +1390,7 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
                 <input
                   id="nr-f"
                   type="text"
-                  placeholder="UZ Brussel"
+                  placeholder="Kies een rit"
                   value={fm.f}
                   onChange={e => setFm(m => ({ ...m, f: e.target.value, ri: -1, bron: "" }))}
                 />
@@ -1387,7 +1402,7 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
                 <input
                   id="nr-t2"
                   type="text"
-                  placeholder="UZ Leuven"
+                  placeholder="Kies een rit"
                   value={fm.t}
                   onChange={e => setFm(m => ({ ...m, t: e.target.value, ri: -1, bron: "" }))}
                 />
@@ -1407,15 +1422,7 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
               </div>
             </div>
             <p className="tm-hint" aria-live="polite">
-              {meten
-                ? "Afstand over de weg meten…"
-                : fm.bron === "google"
-                  ? "Afstand gemeten met Google Maps."
-                  : fm.bron === "osrm" || fm.bron === "ors" || fm.bron === "route"
-                    ? "Afstand over de weg gemeten. Kan enkele km afwijken van Google."
-                    : fm.bron === "lijst"
-                      ? "Afstand uit de lijst met vaste routes."
-                      : ""}
+              {fm.bron === "lijst" ? "Afstand uit de prijslijst. Je mag de km nog aanpassen." : ""}
             </p>
             {sel && sel.__map ? (
               <div className="tm-sheet-map">
@@ -1597,23 +1604,24 @@ function Chauffeurs({ team, gaNaar, openNieuw }) {
 
 function Financieel({ all, team, setFor, focus, setFocus }) {
   const [sub, setSub] = useState("facturen");
+  const eenChauffeur = PR.length === 1;
+  const finPid = eenChauffeur ? PR[0].id : focus;
+  const chauffeurWeergave = eenChauffeur || focus !== "team";
   return (
     <>
       <header className="tm-ph">
         <div>
           <h1>Financieel</h1>
           <p className="tm-ph-sub">
-            {focus === "team"
-              ? PR.length === 1
-                ? `Omzet en kosten. Facturen en kosten vind je onder ${PR[0].n}.`
-                : "Omzet en kosten van het hele team. Kies een chauffeur voor facturen en kosten."
-              : `Facturen en kosten van ${chauffeurNaam(focus)}.`}
+            {chauffeurWeergave
+              ? `Rittenlijst, factuur en kosten van ${chauffeurNaam(finPid)}.`
+              : "Omzet en kosten van het hele team. Kies een chauffeur voor facturen."}
           </p>
         </div>
       </header>
       <div className="tm-toolbar">
-        <ScopeChips value={focus} onChange={setFocus} />
-        {focus !== "team" ? (
+        {eenChauffeur ? null : <ScopeChips value={focus} onChange={setFocus} />}
+        {chauffeurWeergave ? (
           <div className="tm-toolbar-r">
             <Seg
               label="Onderdeel"
@@ -1627,15 +1635,15 @@ function Financieel({ all, team, setFor, focus, setFocus }) {
           </div>
         ) : null}
       </div>
-      {focus === "team" ? (
+      {!chauffeurWeergave ? (
         <FinTeam team={team} setFocus={setFocus} />
       ) : sub === "facturen" ? (
-        <div className="tm-legacy" key={"h-" + focus}>
-          <Historiek D={all[focus]} pid={focus} sD={upd => setFor(focus, upd)} />
+        <div className="tm-legacy" key={"h-" + finPid}>
+          <Historiek D={all[finPid]} pid={finPid} sD={upd => setFor(finPid, upd)} />
         </div>
       ) : (
-        <div className="tm-legacy tm-legacy--narrow" key={"k-" + focus}>
-          <Kosten D={all[focus]} pid={focus} sD={upd => setFor(focus, upd)} />
+        <div className="tm-legacy tm-legacy--narrow" key={"k-" + finPid}>
+          <Kosten D={all[finPid]} pid={finPid} sD={upd => setFor(finPid, upd)} />
         </div>
       )}
     </>
@@ -1853,7 +1861,7 @@ function Instellingen({ pid, setPid, D, setFor, onBackupImported }) {
       <header className="tm-ph">
         <div>
           <h1>Instellingen</h1>
-          <p className="tm-ph-sub">Prijslijst, factuurgegevens en back-up van {pr.n}.</p>
+          <p className="tm-ph-sub">Prijslijst controleren, factuurgegevens en back-up van {pr.n}.</p>
         </div>
       </header>
       <div className="tm-toolbar">
@@ -1870,7 +1878,7 @@ function Instellingen({ pid, setPid, D, setFor, onBackupImported }) {
           metIedereen={false}
         />
       </div>
-      <div className="tm-legacy tm-legacy--narrow" key={pid}>
+      <div className="tm-legacy" key={pid}>
         <Meer D={D} sD={upd => setFor(pid, upd)} pid={pid} pr={pr} onBackupImported={onBackupImported} />
       </div>
     </>
