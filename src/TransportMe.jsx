@@ -9,13 +9,12 @@ import { generateFactuurPdfBlob, triggerPdfDownload } from "./js/invoicePdf.js";
 import { downloadRittenExcel, leesRittenExcel, voegExcelRittenToe, meldingExcelInlees } from "./js/rittenExcel.js";
 import { vergoedingVoorRit, vergoedingUitsplitsingVoorRit } from "./js/calculations.js";
 import { getDrivingRouteKm, getDrivingRouteWithGeometry } from "./js/ors.js";
-import { createGoogleRouteMap } from "./js/googleMapsView.js";
 import { searchPlacesBelgium } from "./js/placeSearchFree.js";
-import { PRESET_ANCHOR_ZIEKENHUIZEN, ALL_PRESET_ROUTES, hasGoogleMapsApiKey } from "./js/config.js";
+import { PRESET_ANCHOR_ZIEKENHUIZEN, ALL_PRESET_ROUTES } from "./js/config.js";
 import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 
-/** Kaartkleur van de route-lijn — zelfde basis als --acc in transportme-theme.css */
-const TM_ACC = "#3d6b9a";
+/** Kaartkleur van de route-lijn — zwart op de witte kaart */
+const TM_ACC = "#111111";
 
 const PR = [{ id: "houdaifa", n: "Houdaifa", i: "H" }];
 const DR = ["Houdaifa", "Student 1"],
@@ -914,101 +913,119 @@ function PlaatsPicker({ label, gekozen, onKies, lijst }) {
   );
 }
 
+function tmNumCoord(n) {
+  const x = Number(n);
+  return Number.isFinite(x) ? x : null;
+}
+
 function RitMap({ la1, lo1, la2, lo2, labelF, labelT }) {
   const el = useRef(null);
+  const a1 = tmNumCoord(la1);
+  const o1 = tmNumCoord(lo1);
+  const a2 = tmNumCoord(la2);
+  const o2 = tmNumCoord(lo2);
+  const ok = a1 != null && o1 != null && a2 != null && o2 != null;
+
   useEffect(() => {
     const node = el.current;
-    if (!node) return;
+    if (!node || !ok) return;
     let cancelled = false;
-    let cleanup = () => {};
+    let map = null;
+    let routeLayer = null;
+    let observer = null;
+    const timers = [];
+    const line = { color: TM_ACC, weight: 5, opacity: 0.95 };
 
-    (async () => {
-      if (hasGoogleMapsApiKey()) {
-        try {
-          const ctx = await createGoogleRouteMap(
-            node,
-            { lat: la1, lng: lo1, name: labelF || "Start" },
-            { lat: la2, lng: lo2, name: labelT || "Einde" }
-          );
-          if (cancelled) {
-            ctx?.dispose?.();
-            return;
-          }
-          if (ctx) {
-            const ro = new ResizeObserver(() => ctx.triggerResize());
-            ro.observe(node);
-            cleanup = () => {
-              try {
-                ro.disconnect();
-              } catch {
-                /* ignore */
-              }
-              ctx.dispose();
-            };
-            ctx.triggerResize();
-            return;
-          }
-        } catch (e) {
-          console.warn("Google Maps-kaart (rit) mislukt, fallback OSM:", e);
-        }
+    const sizeFix = () => {
+      if (cancelled || !map) return;
+      try {
+        map.invalidateSize({ animate: false });
+      } catch {
+        /* ignore */
       }
+    };
 
-      if (cancelled) return;
-      const map = L.map(node, { zoomControl: true });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap",
-      }).addTo(map);
-      let routeLayer = L.polyline(
-        [
-          [la1, lo1],
-          [la2, lo2],
-        ],
-        { color: TM_ACC, weight: 4, opacity: 0.92 }
-      ).addTo(map);
-      const pin = (lat, lng, letter, tip) =>
-        L.circleMarker([lat, lng], {
-          radius: 9,
-          fillColor: TM_ACC,
-          color: "#111111",
-          weight: 2,
-          fillOpacity: 1,
-        })
-          .bindTooltip(`${letter}: ${tip}`, { permanent: true, direction: "top", className: "tm-leaf-tooltip" })
-          .addTo(map);
-      pin(la1, lo1, "A", labelF || "Start");
-      pin(la2, lo2, "B", labelT || "Einde");
-      map.fitBounds(
-        [
-          [la1, lo1],
-          [la2, lo2],
-        ],
-        { padding: [36, 36], maxZoom: 11 }
-      );
-      getDrivingRouteWithGeometry({ lat: la1, lng: lo1 }, { lat: la2, lng: lo2 })
-        .then(({ geometry }) => {
-          if (cancelled || !geometry?.length) return;
-          map.removeLayer(routeLayer);
-          const latlngs = geometry.map(([lng, lat]) => [lat, lng]);
-          routeLayer = L.polyline(latlngs, { color: TM_ACC, weight: 4, opacity: 0.92 }).addTo(map);
-          map.fitBounds(routeLayer.getBounds(), { padding: [36, 36], maxZoom: 11 });
-        })
-        .catch(() => {});
-      cleanup = () => {
-        try {
-          map.remove();
-        } catch {
-          /* ignore */
-        }
-      };
-    })();
+    const tekenWeg = geometry => {
+      if (cancelled || !map || !geometry?.length) return;
+      const latlngs = geometry.map(([lng, lat]) => [lat, lng]);
+      if (routeLayer) map.removeLayer(routeLayer);
+      routeLayer = L.polyline(latlngs, line).addTo(map);
+      map.fitBounds(routeLayer.getBounds(), { padding: [28, 28], maxZoom: 12 });
+      sizeFix();
+    };
+
+    const geoPromise = getDrivingRouteWithGeometry({ lat: a1, lng: o1 }, { lat: a2, lng: o2 }).catch(() => null);
+
+    map = L.map(node, { zoomControl: true });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap",
+    }).addTo(map);
+    routeLayer = L.polyline(
+      [
+        [a1, o1],
+        [a2, o2],
+      ],
+      line
+    ).addTo(map);
+    const pin = (lat, lng, letter, tip) =>
+      L.circleMarker([lat, lng], {
+        radius: 9,
+        fillColor: TM_ACC,
+        color: "#ffffff",
+        weight: 2,
+        fillOpacity: 1,
+      })
+        .bindTooltip(`${letter}: ${tip}`, { permanent: true, direction: "top", className: "tm-leaf-tooltip" })
+        .addTo(map);
+    pin(a1, o1, "A", labelF || "Vertrek");
+    pin(a2, o2, "B", labelT || "Bestemming");
+    map.fitBounds(
+      [
+        [a1, o1],
+        [a2, o2],
+      ],
+      { padding: [28, 28], maxZoom: 12 }
+    );
+
+    observer = new ResizeObserver(sizeFix);
+    observer.observe(node);
+    timers.push(requestAnimationFrame(sizeFix));
+    timers.push(setTimeout(sizeFix, 80));
+    timers.push(setTimeout(sizeFix, 360));
+
+    geoPromise.then(result => {
+      if (result?.geometry?.length) tekenWeg(result.geometry);
+    });
 
     return () => {
       cancelled = true;
-      cleanup();
+      timers.forEach(id => {
+        clearTimeout(id);
+        cancelAnimationFrame(id);
+      });
+      try {
+        observer?.disconnect();
+      } catch {
+        /* ignore */
+      }
+      try {
+        map?.remove();
+      } catch {
+        /* ignore */
+      }
     };
-  }, [la1, lo1, la2, lo2, labelF, labelT]);
-  return <div className="tm-rit-map" ref={el} role="presentation" />;
+  }, [ok, a1, o1, a2, o2, labelF, labelT]);
+
+  if (!ok) return null;
+  return (
+    <div
+      className="tm-rit-map"
+      ref={el}
+      role="img"
+      aria-label={`Kaart van ${labelF || "vertrek"} naar ${labelT || "bestemming"}`}
+    />
+  );
 }
 
 const TM_SWIPE_MAX = 92;
@@ -2836,6 +2853,7 @@ export {
   applyTripAction,
   tmVergoeding,
   tmBuildMergedRoutes,
+  tmResolveRitRouteCoords,
   parseLooseNumber,
   money,
   E,

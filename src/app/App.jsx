@@ -10,6 +10,7 @@ import {
   applyTripAction,
   tmVergoeding,
   tmBuildMergedRoutes,
+  tmResolveRitRouteCoords,
   parseLooseNumber,
   money,
   ritKmValue,
@@ -1094,7 +1095,7 @@ function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw })
   );
 }
 
-/** Uitgeklapte rit: bon, km/bedrag, andere chauffeur, verwijderen. */
+/** Uitgeklapte rit: kaart, bon, km/bedrag, andere chauffeur, verwijderen. */
 function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
   const [bon, setBon] = useState(r.bon || "");
   const [km, setKm] = useState(String(r.k ?? ""));
@@ -1102,6 +1103,10 @@ function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
   const [naar, setNaar] = useState(r._pid);
   const [ti, setTi] = useState(r.ti || "");
   const [d, setD] = useState(r.d);
+  const kaart = useMemo(() => {
+    const merged = tmBuildMergedRoutes(all[r._pid] || { xr: [], xrArch: [] });
+    return tmResolveRitRouteCoords(r.f, r.t, merged);
+  }, [all, r._pid, r.f, r.t]);
 
   const kmN = parseLooseNumber(km);
   const vN = parseLooseNumber(v);
@@ -1131,6 +1136,18 @@ function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
 
   return (
     <div className="tm-rit-detail" onClick={e => e.stopPropagation()}>
+      {kaart ? (
+        <div className="tm-sheet-map tm-detail-map">
+          <RitMap
+            la1={kaart.a.lat}
+            lo1={kaart.a.lng}
+            la2={kaart.b.lat}
+            lo2={kaart.b.lng}
+            labelF={r.f}
+            labelT={r.t}
+          />
+        </div>
+      ) : null}
       {r.s !== "geannuleerd" ? <RitVergoedingUitleg r={r} /> : null}
       <div className="tm-detail-grid">
         <div className="tm-fg">
@@ -1268,6 +1285,19 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
   const klaar = !!(fm.f.trim() && fm.t.trim() && Number(String(fm.k).replace(",", ".")) >= 1);
   const bedrag = klaar ? tmVergoeding(fm.f.trim(), fm.t.trim(), kInt, fm.ti) : 0;
   const sel = fm.ri >= 0 ? routes[fm.ri] : null;
+  const kaart = useMemo(() => {
+    if (
+      sel &&
+      sel.la1 != null &&
+      sel.lo1 != null &&
+      sel.la2 != null &&
+      sel.lo2 != null &&
+      Number.isFinite(Number(sel.la1))
+    ) {
+      return { a: { lat: Number(sel.la1), lng: Number(sel.lo1) }, b: { lat: Number(sel.la2), lng: Number(sel.lo2) }, f: sel.f, t: sel.t };
+    }
+    return tmResolveRitRouteCoords(fm.f, fm.t, routes);
+  }, [sel, fm.f, fm.t, routes]);
 
   const bewaar = () => {
     if (!klaar) return;
@@ -1307,6 +1337,7 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
 
           <fieldset className="tm-fs">
             <legend>Route</legend>
+            {sel ? null : (
             <input
               type="search"
               className="tm-search"
@@ -1315,6 +1346,24 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
               onChange={e => setZoek(e.target.value)}
               aria-label="Prijslijst zoeken"
             />
+            )}
+            {sel ? (
+              <div className="tm-routes" role="listbox" aria-label="Gekozen rit">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected="true"
+                  className="tm-route on"
+                  onClick={() => setFm(m => ({ ...m, ri: -1, f: "", t: "", k: "", bron: "" }))}
+                >
+                  <span>
+                    {sel.f} <span className="tm-muted">naar</span> {sel.t}
+                  </span>
+                  <span className="tm-num tm-muted">{sel.k} km</span>
+                </button>
+                <p className="tm-routes-more">Tik op de rit om een andere te kiezen.</p>
+              </div>
+            ) : (
             <div className="tm-routes" role="listbox" aria-label="Prijslijst">
               {!heeftResultaat ? (
                 <p className="tm-empty">
@@ -1382,6 +1431,19 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
                 </>
               )}
             </div>
+            )}
+            {kaart ? (
+              <div className="tm-sheet-map">
+                <RitMap
+                  la1={kaart.a.lat}
+                  lo1={kaart.a.lng}
+                  la2={kaart.b.lat}
+                  lo2={kaart.b.lng}
+                  labelF={kaart.f || fm.f}
+                  labelT={kaart.t || fm.t}
+                />
+              </div>
+            ) : null}
             <div className="tm-g3">
               <div className="tm-fg">
                 <label className="fl" htmlFor="nr-f">
@@ -1424,11 +1486,6 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
             <p className="tm-hint" aria-live="polite">
               {fm.bron === "lijst" ? "Afstand uit de prijslijst. Je mag de km nog aanpassen." : ""}
             </p>
-            {sel && sel.__map ? (
-              <div className="tm-sheet-map">
-                <RitMap la1={sel.la1} lo1={sel.lo1} la2={sel.la2} lo2={sel.lo2} labelF={sel.f} labelT={sel.t} />
-              </div>
-            ) : null}
           </fieldset>
 
           <fieldset className="tm-fs">

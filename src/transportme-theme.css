@@ -823,13 +823,17 @@ body {
 .tm-rit-map,
 .tm-rit-map-ph {
   width: 100%;
-  height: 180px;
+  height: 260px;
+  min-height: 260px;
+  background: #e8e8e8;
 }
 
 .tm-app .leaflet-container {
+  width: 100% !important;
+  height: 100% !important;
   font-family: var(--font);
   font-size: 12px;
-  background: var(--s2) !important;
+  background: #e8e8e8 !important;
   z-index: 0;
 }
 
