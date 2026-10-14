@@ -6,8 +6,8 @@ import { PR, money, ritKmValue, toIsoLocal } from "../TransportMe.jsx";
 
 /** Vaste kleur per chauffeur (index in PR) — komt overeen met --l1..--l4 in app.css. */
 export const LIJN_HEX = {
-  light: ["#1A7A72", "#C47A22", "#3D8A5C", "#7A5AA8"],
-  dark: ["#5EC4B8", "#E0A84A", "#6DCA90", "#B89AE0"],
+  light: ["#3D6B9A", "#C4892A", "#2E8A5A", "#7A5AA8"],
+  dark: ["#7AA3CC", "#E0B05A", "#5DCA8A", "#B89AE0"],
 };
 
 export function chauffeurIndex(pid) {

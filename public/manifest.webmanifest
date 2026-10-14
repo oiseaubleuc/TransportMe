@@ -4,8 +4,8 @@
   "description": "Mobiele ritten- en financieel app voor ziekenhuisvervoer.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f2eee6",
-  "theme_color": "#16332f",
+  "background_color": "#f5f5f5",
+  "theme_color": "#1a1a1a",
   "lang": "nl-BE",
   "icons": [
     {

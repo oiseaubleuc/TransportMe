@@ -722,8 +722,8 @@ function WeekBlok({ team, ws, tot, gaNaar }) {
       stack: "omzet",
     })),
   };
-  const as = donker ? "#958c80" : "#82786c";
-  const grid = donker ? "rgba(149,140,128,.16)" : "rgba(28,25,21,.07)";
+  const as = donker ? "#8a8a8a" : "#767676";
+  const grid = donker ? "rgba(255,255,255,.1)" : "rgba(0,0,0,.07)";
   const opts = {
     responsive: true,
     maintainAspectRatio: false,
@@ -732,9 +732,9 @@ function WeekBlok({ team, ws, tot, gaNaar }) {
       legend: { display: false },
       tooltip: {
         callbacks: { label: c => `${c.dataset.label}: ${euro(c.parsed.y)}` },
-        backgroundColor: donker ? "#eee8dc" : "#1a4540",
-        titleColor: donker ? "#1c1915" : "#f6f2e9",
-        bodyColor: donker ? "#1c1915" : "#f6f2e9",
+        backgroundColor: donker ? "#f2f2f2" : "#111111",
+        titleColor: donker ? "#111111" : "#ffffff",
+        bodyColor: donker ? "#111111" : "#ffffff",
         padding: 10,
         cornerRadius: 8,
       },
@@ -1680,7 +1680,7 @@ function FinTeam({ team, setFocus }) {
   const nuWs = weekStart(vandaagIso());
   const weken = Array.from({ length: 10 }, (_, i) => isoPlusDagen(nuWs, -7 * (9 - i)));
   const kleuren = LIJN_HEX[donker ? "dark" : "light"];
-  const as = donker ? "#958c80" : "#82786c";
+  const as = donker ? "#8a8a8a" : "#767676";
   const data = {
     labels: weken.map(w => datumKort(w)),
     datasets: [
@@ -1712,9 +1712,9 @@ function FinTeam({ team, setFocus }) {
       legend: { display: false },
       tooltip: {
         callbacks: { title: c => "Week van " + c[0].label, label: c => `${c.dataset.label}: ${euro(c.parsed.y)}` },
-        backgroundColor: donker ? "#eee8dc" : "#1a4540",
-        titleColor: donker ? "#1c1915" : "#f6f2e9",
-        bodyColor: donker ? "#1c1915" : "#f6f2e9",
+        backgroundColor: donker ? "#f2f2f2" : "#111111",
+        titleColor: donker ? "#111111" : "#ffffff",
+        bodyColor: donker ? "#111111" : "#ffffff",
         padding: 10,
         cornerRadius: 8,
       },
@@ -1724,7 +1724,7 @@ function FinTeam({ team, setFocus }) {
       y: {
         stacked: true,
         border: { display: false },
-        grid: { color: donker ? "rgba(149,140,128,.16)" : "rgba(28,25,21,.07)" },
+        grid: { color: donker ? "rgba(255,255,255,.1)" : "rgba(0,0,0,.07)" },
         ticks: { color: as, font: { size: 11 }, maxTicksLimit: 5, callback: v => "€" + v },
       },
     },

@@ -93,7 +93,7 @@
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(22, 51, 47, 0.28);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
 }
 
 .tm-nav-cta::before {
@@ -149,10 +149,10 @@
   }
   .tm-nav-i:hover {
     color: var(--rail-on);
-    background: rgba(246, 241, 228, 0.08);
+    background: rgba(255, 255, 255, 0.08);
   }
   .tm-nav-i.on {
-    background: rgba(246, 241, 228, 0.12);
+    background: rgba(255, 255, 255, 0.12);
   }
   .tm-nav-i.on::before {
     top: 12px;
@@ -966,7 +966,7 @@
   max-width: 100%;
   min-height: 40px;
   padding-left: 36px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='6.5' fill='none' stroke='%2382786c' stroke-width='2'/%3E%3Cpath d='M16 16l4.5 4.5' stroke='%2382786c' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='6.5' fill='none' stroke='%23767676' stroke-width='2'/%3E%3Cpath d='M16 16l4.5 4.5' stroke='%23767676' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: 11px center;
   background-size: 17px;
