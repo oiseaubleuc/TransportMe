@@ -27,6 +27,7 @@ import {
 } from "../TransportMe.jsx";
 import { getFactuurGegevens } from "../js/storage.js";
 import { downloadRittenExcel, leesRittenExcel, voegExcelRittenToe, meldingExcelInlees } from "../js/rittenExcel.js";
+import BonInvoegenSheet from "./BonInvoegen.jsx";
 import {
   LIJN_HEX,
   chauffeurIndex,
@@ -207,6 +208,7 @@ export default function App() {
   const [instPid, setInstPid] = useState(() => initialProfileId());
   const [pending, setPending] = useState(null); // { pid, id } — rit die voltooid wordt (bon vragen)
   const [nieuw, setNieuw] = useState(null); // null | { pid }
+  const [bonIn, setBonIn] = useState(null); // null | { pid }
   const mainRef = useRef(null);
 
   useEffect(() => {
@@ -263,7 +265,9 @@ export default function App() {
   const team = useMemo(() => PR.map(p => ({ ...p, D: all[p.id] })), [all]);
   const ritten = useMemo(() => team.flatMap(t => t.D.r.map(r => ({ ...r, _pid: t.id }))), [team]);
 
-  const ctx = { all, team, ritten, setFor, ritActie, gaNaar, focus, setFocus, openNieuw: pid => setNieuw({ pid: pid || (focus !== "team" ? focus : PR[0].id) }) };
+  const openNieuw = pid => setNieuw({ pid: pid || (focus !== "team" ? focus : PR[0].id) });
+  const openBon = pid => setBonIn({ pid: pid || (focus !== "team" ? focus : PR[0].id) });
+  const ctx = { all, team, ritten, setFor, ritActie, gaNaar, focus, setFocus, openNieuw, openBon };
 
   let pagina = null;
   if (tab === "overzicht") pagina = <Overzicht {...ctx} />;
@@ -278,6 +282,7 @@ export default function App() {
         D={all[instPid]}
         setFor={setFor}
         onBackupImported={herlaad}
+        openBon={() => setBonIn({ pid: instPid })}
       />
     );
 
@@ -339,9 +344,35 @@ export default function App() {
           all={all}
           startPid={nieuw.pid}
           onClose={() => setNieuw(null)}
+          onOpenBon={() => {
+            const pid = nieuw.pid;
+            setNieuw(null);
+            setBonIn({ pid });
+          }}
           onSave={(pid, trip) => {
             setFor(pid, D => normData({ ...D, r: [...D.r, trip] }));
             setNieuw(null);
+          }}
+        />
+      ) : null}
+
+      {bonIn ? (
+        <BonInvoegenSheet
+          all={all}
+          startPid={bonIn.pid}
+          onClose={() => setBonIn(null)}
+          onSave={(pid, trips) => {
+            let n = 0;
+            let duplicaten = 0;
+            setFor(pid, D => {
+              const uit = voegExcelRittenToe(D.r, trips);
+              n = uit.toegevoegd.length;
+              duplicaten = uit.duplicaten;
+              return n === 0 ? D : normData({ ...D, r: uit.ritten });
+            });
+            setBonIn(null);
+            if (n === 0 && duplicaten) alert("Deze bon staat al in de lijst.");
+            else if (n && duplicaten) alert(`${n === 1 ? "1 rit toegevoegd" : n + " ritten toegevoegd"}. ${duplicaten === 1 ? "1 stond al in de lijst." : duplicaten + " stonden al in de lijst."}`);
           }}
         />
       ) : null}
@@ -353,7 +384,7 @@ export default function App() {
 /* Overzicht                                                            */
 /* ------------------------------------------------------------------ */
 
-function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw, setFor }) {
+function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw, openBon, setFor }) {
   const nu = useNu();
   const vandaag = vandaagIso();
   const [dag, setDag] = useState(vandaag);
@@ -399,13 +430,18 @@ function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw, setFor }) {
           <h1>{datumLang(vandaag)}</h1>
           <p className="tm-ph-sub">{zin}</p>
         </div>
-        <button type="button" className="btn btn-p" onClick={() => openNieuw()}>
-          Nieuwe rit
-        </button>
+        <div className="tm-ph-act">
+          <button type="button" className="btn btn-o" onClick={() => openBon()}>
+            Transportbon
+          </button>
+          <button type="button" className="btn btn-p" onClick={() => openNieuw()}>
+            Nieuwe rit
+          </button>
+        </div>
       </header>
 
       {leegAlles ? (
-        <StartVandaag openNieuw={openNieuw} setFor={setFor} />
+        <StartVandaag openNieuw={openNieuw} openBon={openBon} setFor={setFor} />
       ) : (
         <Dagkaart team={team} dag={dag} setDag={setDag} nu={nu} ritActie={ritActie} />
       )}
@@ -498,8 +534,8 @@ function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw, setFor }) {
                       </span>
                     </div>
                     <div className="tm-todo-a">
-                      <button type="button" className="btn btn-o btn-sm" onClick={() => gaNaar("instellingen")}>
-                        Bonnen inlezen
+                      <button type="button" className="btn btn-o btn-sm" onClick={() => openBon()}>
+                        Transportbon
                       </button>
                     </div>
                   </li>
@@ -514,12 +550,16 @@ function Overzicht({ team, ritten, ritActie, gaNaar, openNieuw, setFor }) {
   );
 }
 
-function StartVandaag({ openNieuw, setFor }) {
+function StartVandaag({ openNieuw, openBon, setFor }) {
   return (
     <section className="tm-start" aria-label="Aan de slag">
       <h2 className="tm-start-h">Aan de slag</h2>
-      <p className="tm-start-p">Plan een rit uit de prijslijst, of lees een Excel-rittenlijst in. De ritten verschijnen daarna hier op de dagkaart.</p>
+      <p className="tm-start-p">Voeg een transportbon toe, plan een rit uit de prijslijst, of lees een Excel-rittenlijst in.</p>
       <div className="tm-start-cards">
+        <button type="button" className="tm-start-card" onClick={() => openBon()}>
+          <strong>Transportbon</strong>
+          <span>Foto van de bon. De rit wordt berekend en komt in de lijst.</span>
+        </button>
         <button type="button" className="tm-start-card" onClick={() => openNieuw()}>
           <strong>Nieuwe rit</strong>
           <span>Kies vertrek en bestemming. Het bedrag volgt uit de prijslijst.</span>
@@ -927,7 +967,7 @@ function ExcelInlezenKnop({ pid, setFor, className, label, onKlaar }) {
   );
 }
 
-function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw }) {
+function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw, openBon }) {
   const [filter, setFilter] = useState("komend");
   const [zoek, setZoek] = useState("");
   const [open, setOpen] = useState(null);
@@ -978,9 +1018,14 @@ function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw })
               : `${meervoud(tel.komend, "rit staat", "ritten staan")} open${focus === "team" ? "" : " voor " + chauffeurNaam(focus)}.`}
           </p>
         </div>
-        <button type="button" className="btn btn-p" onClick={() => openNieuw(focus !== "team" ? focus : undefined)}>
-          Nieuwe rit
-        </button>
+        <div className="tm-ph-act">
+          <button type="button" className="btn btn-o" onClick={() => openBon(focus !== "team" ? focus : undefined)}>
+            Transportbon
+          </button>
+          <button type="button" className="btn btn-p" onClick={() => openNieuw(focus !== "team" ? focus : undefined)}>
+            Nieuwe rit
+          </button>
+        </div>
       </header>
 
       <div className="tm-toolbar">
@@ -1004,6 +1049,13 @@ function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw })
             onChange={e => setZoek(e.target.value)}
             aria-label="Ritten zoeken"
           />
+          <button
+            type="button"
+            className="btn btn-o btn-sm"
+            onClick={() => openBon(focus !== "team" ? focus : undefined)}
+          >
+            Transportbon
+          </button>
           <ExcelInlezenKnop
             pid={excelPid}
             setFor={setFor}
@@ -1023,6 +1075,13 @@ function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw })
               <div className="tm-empty-act">
                 <button type="button" className="btn btn-p" onClick={() => openNieuw(focus !== "team" ? focus : undefined)}>
                   Nieuwe rit
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-o"
+                  onClick={() => openBon(focus !== "team" ? focus : undefined)}
+                >
+                  Transportbon
                 </button>
                 <ExcelInlezenKnop
                   pid={excelPid}
@@ -1227,7 +1286,7 @@ function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
 /* Nieuwe rit                                                           */
 /* ------------------------------------------------------------------ */
 
-function NieuweRitSheet({ all, startPid, onClose, onSave }) {
+function NieuweRitSheet({ all, startPid, onClose, onSave, onOpenBon }) {
   const [pid, setPid] = useState(startPid);
   const routes = useMemo(() => tmBuildMergedRoutes(all[pid]), [all, pid]);
   const [zoek, setZoek] = useState("");
@@ -1328,6 +1387,14 @@ function NieuweRitSheet({ all, startPid, onClose, onSave }) {
           </button>
         </div>
         <div className="tm-mb tm-sheet-body">
+          {onOpenBon ? (
+            <p className="tm-hint" style={{ marginTop: 0 }}>
+              <button type="button" className="tm-link" onClick={onOpenBon}>
+                Foto van de transportbon
+              </button>
+              {" — "}we rekenen de rit en zetten hem in de lijst.
+            </p>
+          ) : null}
           {PR.length > 1 ? (
             <fieldset className="tm-fs">
               <legend>Chauffeur</legend>
@@ -1911,7 +1978,7 @@ function FinTeam({ team, setFocus }) {
 /* Instellingen                                                         */
 /* ------------------------------------------------------------------ */
 
-function Instellingen({ pid, setPid, D, setFor, onBackupImported }) {
+function Instellingen({ pid, setPid, D, setFor, onBackupImported, openBon }) {
   const pr = PR.find(p => p.id === pid) || PR[0];
   return (
     <>
@@ -1936,7 +2003,14 @@ function Instellingen({ pid, setPid, D, setFor, onBackupImported }) {
         />
       </div>
       <div className="tm-legacy" key={pid}>
-        <Meer D={D} sD={upd => setFor(pid, upd)} pid={pid} pr={pr} onBackupImported={onBackupImported} />
+        <Meer
+          D={D}
+          sD={upd => setFor(pid, upd)}
+          pid={pid}
+          pr={pr}
+          onBackupImported={onBackupImported}
+          onBonInvoegen={openBon}
+        />
       </div>
     </>
   );

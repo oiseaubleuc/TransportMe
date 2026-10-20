@@ -16,3 +16,5 @@ dist/
 
 # Optional
 *.xlsx
+*.traineddata
+public/tessdata/

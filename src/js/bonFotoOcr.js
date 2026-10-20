@@ -3,6 +3,9 @@
  * Gebruikt tesseract.js (lokaal in de browser).
  */
 import Tesseract from "tesseract.js";
+import workerPath from "tesseract.js/dist/worker.min.js?url";
+import corePath from "tesseract.js-core/tesseract-core-simd-lstm.wasm.js?url";
+import { extractBonCodesFromOcrText } from "./transportBon.js";
 
 /** Datumfragmenten uit OCR-tekst (Belgische bonnen: vaak dd/mm/jjjj). */
 function extractIsoDatesFromText(text) {
@@ -30,24 +33,7 @@ function extractIsoDatesFromText(text) {
   return out;
 }
 
-/**
- * IHcT-codes uit ruwe OCR (hoofdletters normaliseren waar zinvol).
- */
-export function extractBonCodesFromOcrText(text) {
-  const raw = String(text || "");
-  const found = [];
-  const seen = new Set();
-  let m;
-  const re = new RegExp(IHCT_RE.source, "gi");
-  while ((m = re.exec(raw)) !== null) {
-    const code = m[0].replace(/^IHCT/i, "IHcT");
-    const key = code.toUpperCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    found.push(code);
-  }
-  return found;
-}
+export { extractBonCodesFromOcrText };
 
 function loadImageFromFile(file) {
   return new Promise((resolve, reject) => {
@@ -89,6 +75,10 @@ export async function getBonOcrWorker(logger) {
       logger: m => {
         if (typeof logger === "function") logger(m);
       },
+      workerPath,
+      corePath,
+      langPath: "https://tessdata.projectnaptha.com/4.0.0",
+      gzip: true,
     });
   }
   return workerPromise;
@@ -110,8 +100,26 @@ export async function terminateBonOcrWorker() {
  * @param {{ logger?: (m: object) => void }} [opts]
  * @returns {Promise<{ text: string, codes: string[], dates: string[] }>}
  */
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error("Bestand lezen mislukt"));
+    r.readAsDataURL(file);
+  });
+}
+
 export async function recognizeBonImage(file, opts = {}) {
-  const dataUrl = await imageFileToDataUrlForOcr(file);
+  let dataUrl = null;
+  if (file && file.size && file.size < 2_500_000) {
+    try {
+      const img = await loadImageFromFile(file);
+      if (Math.max(img.width, img.height) <= 2400) dataUrl = await fileToDataUrl(file);
+    } catch {
+      dataUrl = null;
+    }
+  }
+  if (!dataUrl) dataUrl = await imageFileToDataUrlForOcr(file, 2200, 0.95);
   if (!dataUrl) throw new Error("Kon afbeelding niet verwerken");
   const worker = await getBonOcrWorker(opts.logger);
   const {
