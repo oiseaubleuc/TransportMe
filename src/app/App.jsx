@@ -28,6 +28,8 @@ import {
 import { getFactuurGegevens } from "../js/storage.js";
 import { downloadRittenExcel, leesRittenExcel, voegExcelRittenToe, meldingExcelInlees } from "../js/rittenExcel.js";
 import BonInvoegenSheet from "./BonInvoegen.jsx";
+import { haalBonBestand, openBonBlob } from "../js/bonArchief.js";
+import { bonInhoudRegels } from "../js/transportBon.js";
 import {
   LIJN_HEX,
   chauffeurIndex,
@@ -361,7 +363,7 @@ export default function App() {
           all={all}
           startPid={bonIn.pid}
           onClose={() => setBonIn(null)}
-          onSave={(pid, trips) => {
+          onSave={(pid, trips, extra) => {
             let n = 0;
             let duplicaten = 0;
             setFor(pid, D => {
@@ -371,8 +373,9 @@ export default function App() {
               return n === 0 ? D : normData({ ...D, r: uit.ritten });
             });
             setBonIn(null);
-            if (n === 0 && duplicaten) alert("Deze bon staat al in de lijst.");
+            if (n === 0 && duplicaten) alert("Deze bon staat al in de lijst." + (extra?.archiefFout ? " Het originele bestand kon niet worden bewaard." : " Het origineel blijft bewaard."));
             else if (n && duplicaten) alert(`${n === 1 ? "1 rit toegevoegd" : n + " ritten toegevoegd"}. ${duplicaten === 1 ? "1 stond al in de lijst." : duplicaten + " stonden al in de lijst."}`);
+            else if (extra?.archiefFout) alert("De rit is bewaard, maar het originele bestand paste niet op dit toestel.");
           }}
         />
       ) : null}
@@ -558,7 +561,7 @@ function StartVandaag({ openNieuw, openBon, setFor }) {
       <div className="tm-start-cards">
         <button type="button" className="tm-start-card" onClick={() => openBon()}>
           <strong>Transportbon</strong>
-          <span>Foto van de bon. De rit wordt berekend en komt in de lijst.</span>
+          <span>Foto of PDF van de bon. De rit wordt berekend; het origineel blijft bewaard.</span>
         </button>
         <button type="button" className="tm-start-card" onClick={() => openNieuw()}>
           <strong>Nieuwe rit</strong>
@@ -1162,6 +1165,7 @@ function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
   const [naar, setNaar] = useState(r._pid);
   const [ti, setTi] = useState(r.ti || "");
   const [d, setD] = useState(r.d);
+  const extra = useMemo(() => bonInhoudRegels(r.bonInhoud), [r.bonInhoud]);
   const kaart = useMemo(() => {
     const merged = tmBuildMergedRoutes(all[r._pid] || { xr: [], xrArch: [] });
     return tmResolveRitRouteCoords(r.f, r.t, merged);
@@ -1267,7 +1271,37 @@ function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
           </div>
         ) : null}
       </div>
+      {extra.length ? (
+        <dl className="tm-bon-extra">
+          {extra.map(row => (
+            <div key={row.l}>
+              <dt>{row.l}</dt>
+              <dd>{row.v}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
       <div className="tm-detail-act">
+        {r.bonBestandId ? (
+          <button
+            type="button"
+            className="btn btn-o"
+            onClick={async () => {
+              try {
+                const rec = await haalBonBestand(r.bonBestandId);
+                if (!rec?.blob) {
+                  alert("Het originele bestand staat niet meer op dit toestel.");
+                  return;
+                }
+                openBonBlob(rec);
+              } catch {
+                alert("Het originele bestand kon niet worden geopend.");
+              }
+            }}
+          >
+            Originele bon openen
+          </button>
+        ) : null}
         <button type="button" className="btn btn-p" onClick={opslaan}>
           Wijzigingen opslaan
         </button>
@@ -1390,7 +1424,7 @@ function NieuweRitSheet({ all, startPid, onClose, onSave, onOpenBon }) {
           {onOpenBon ? (
             <p className="tm-hint" style={{ marginTop: 0 }}>
               <button type="button" className="tm-link" onClick={onOpenBon}>
-                Foto van de transportbon
+                Foto of PDF van de transportbon
               </button>
               {" — "}we rekenen de rit en zetten hem in de lijst.
             </p>

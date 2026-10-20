@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PR, CA, ui, isN, RitMap, tmVergoeding } from "../TransportMe.jsx";
 import { chauffeurNaam, euro, lijnVar } from "./team.js";
-import { recognizeBonImage, terminateBonOcrWorker } from "../js/bonFotoOcr.js";
-import { voorstelUitBonTekst, voorstelIsKlaar, tripUitVoorstel } from "../js/transportBon.js";
+import { terminateBonOcrWorker } from "../js/bonFotoOcr.js";
+import { isBonBestand, isPdfBestand, leesBonBestand } from "../js/leesBonBestand.js";
+import { zetBonBestand } from "../js/bonArchief.js";
+import { voorstelUitBonTekst, voorstelIsKlaar, tripUitVoorstel, bonInhoudRegels } from "../js/transportBon.js";
 
 const MAX_BESTANDEN = 12;
 const MAX_MB = 14;
@@ -31,6 +33,7 @@ function RijEditor({ v, onChange, i }) {
   const kInt = Math.max(0, Math.round(Number(String(v.k).replace(",", ".")) || 0));
   const bedrag = v.f && v.t && kInt >= 1 ? tmVergoeding(v.f, v.t, kInt, v.ti) : 0;
   const kaart = v.coords;
+  const extra = bonInhoudRegels(v.inhoud);
   return (
     <article className="tm-bon-rij">
       <header className="tm-bon-rij-h">
@@ -122,6 +125,16 @@ function RijEditor({ v, onChange, i }) {
           />
         </div>
       </div>
+      {extra.length ? (
+        <dl className="tm-bon-extra">
+          {extra.map(row => (
+            <div key={row.l}>
+              <dt>{row.l}</dt>
+              <dd>{row.v}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
       <p className="tm-hint" aria-live="polite">
         {kInt >= 1 && v.f && v.t
           ? `${euro(bedrag)}${isN(v.ti) ? ", nachttarief" : ""}`
@@ -137,6 +150,7 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
   const [fout, setFout] = useState("");
   const [voortgang, setVoortgang] = useState(null);
   const [rijen, setRijen] = useState([]);
+  const [bewaren, setBewaren] = useState(false);
   const inp = useRef(null);
   const D = all[pid] || { xr: [] };
   const extra = useMemo(() => extraUitData(D), [D]);
@@ -151,8 +165,11 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
 
   const leesBestanden = useCallback(
     async fileList => {
-      const arr = Array.from(fileList || []).filter(f => f.type.startsWith("image/"));
-      if (!arr.length) return;
+      const arr = Array.from(fileList || []).filter(isBonBestand);
+      if (!arr.length) {
+        setFout("Kies een foto of een PDF van de transportbon.");
+        return;
+      }
       const teGroot = arr.filter(f => f.size > MAX_MB * 1024 * 1024);
       const ok = arr.filter(f => f.size <= MAX_MB * 1024 * 1024).slice(0, MAX_BESTANDEN);
       if (teGroot.length) setFout(`Een bestand is groter dan ${MAX_MB} MB.`);
@@ -165,23 +182,28 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
       const next = [];
       try {
         for (let i = 0; i < ok.length; i++) {
-          setVoortgang((i + 0.4) / ok.length);
-          const { text } = await recognizeBonImage(ok[i], {
+          const file = ok[i];
+          const bestand = { id: ui(), file };
+          setVoortgang((i + 0.15) / ok.length);
+          const stukken = await leesBonBestand(file, {
             logger: m => {
               if (m.status === "recognizing text" && typeof m.progress === "number") {
-                setVoortgang((i + m.progress) / ok.length);
+                setVoortgang((i + 0.2 + m.progress * 0.7) / ok.length);
               }
             },
+            onVoortgang: p => setVoortgang((i + p) / ok.length),
           });
-          const voorstel = await voorstelUitBonTekst(text || "", { extraKm, extraPlaatsen });
-          next.push({ ...voorstel, id: ui() });
+          for (const stuk of stukken) {
+            const voorstel = await voorstelUitBonTekst(stuk.text || "", { extraKm, extraPlaatsen });
+            next.push({ ...voorstel, id: ui(), bestand });
+          }
           setVoortgang((i + 1) / ok.length);
         }
         setRijen(next);
         setFase("check");
       } catch (e) {
         console.error(e);
-        setFout("De bon kon niet worden gelezen. Probeer een scherpere foto, of vul de rit zelf in.");
+        setFout("De bon kon niet worden gelezen. Probeer een scherpere foto of een andere PDF, of vul de rit zelf in.");
         setFase("kies");
       } finally {
         setVoortgang(null);
@@ -191,15 +213,45 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
   );
 
   const klaar = rijen.filter(voorstelIsKlaar);
-  const bewaar = () => {
-    if (!klaar.length) return;
+
+  const bewaar = async () => {
+    if (!klaar.length || bewaren) return;
+    setBewaren(true);
+    let archiefFout = false;
+    const seen = new Set();
+    for (const v of rijen) {
+      const b = v.bestand;
+      if (!b?.file || seen.has(b.id)) continue;
+      seen.add(b.id);
+      try {
+        const type = b.file.type || (isPdfBestand(b.file) ? "application/pdf" : "image/jpeg");
+        await zetBonBestand({
+          id: b.id,
+          pid,
+          naam: b.file.name || "transportbon",
+          type,
+          blob: b.file.slice(0, b.file.size, type),
+          bon: v.bon || "",
+          d: v.d || "",
+          tripId: "",
+          toegevoegd: new Date().toISOString(),
+        });
+      } catch {
+        archiefFout = true;
+      }
+    }
     const trips = klaar.map(v =>
       tripUitVoorstel(
         { ...v, k: Math.max(1, Math.round(Number(String(v.k).replace(",", ".")) || 0)) },
-        { id: ui(), chauffeur: chauffeurNaam(pid), voertuig: CA[0] }
+        {
+          id: ui(),
+          chauffeur: chauffeurNaam(pid),
+          voertuig: CA[0],
+          bestandId: v.bestand?.id,
+        }
       )
     );
-    onSave(pid, trips);
+    onSave(pid, trips, { archiefFout });
   };
 
   return (
@@ -234,7 +286,7 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
             <fieldset className="tm-fs">
               <legend>Bon</legend>
               <p className="tm-card-p" style={{ marginTop: 0 }}>
-                Foto of bestand van de transportbon. We lezen vertrek, bestemming, uur en bonnummer, rekenen de rit en zetten hem in de lijst.
+                Foto of PDF van de transportbon. We bewaren het origineel, lezen alle velden, rekenen de rit en zetten hem in de lijst.
               </p>
               <label
                 className={"btn btn-p btn-full" + (fase === "lezen" ? " tm-btn-busy" : "")}
@@ -250,11 +302,11 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
                   ? voortgang != null
                     ? `Lezen… ${Math.round(voortgang * 100)}%`
                     : "Bon lezen…"
-                  : "Foto of bestand kiezen"}
+                  : "Foto of PDF kiezen"}
                 <input
                   ref={inp}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf,.pdf"
                   multiple
                   disabled={fase === "lezen"}
                   className="tm-file-hidden"
@@ -278,7 +330,7 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
                 />
               ))}
               <button type="button" className="btn btn-o" onClick={() => { setRijen([]); setFase("kies"); }}>
-                Andere foto
+                Ander bestand
               </button>
             </fieldset>
           )}
@@ -290,14 +342,14 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
                 <b className="tm-num">
                   {klaar.length === 1 ? euro(tmVergoeding(klaar[0].f, klaar[0].t, klaar[0].k, klaar[0].ti)) : `${klaar.length} ritten`}
                 </b>
-                <span>Komt in de lijst en in de berekening.</span>
+                <span>Komt in de lijst en in de berekening. Het origineel blijft bewaard.</span>
               </>
             ) : (
-              <span>Kies een transportbon</span>
+              <span>Kies een foto of PDF van de transportbon</span>
             )}
           </div>
-          <button type="button" className="btn btn-p" disabled={!klaar.length} onClick={bewaar}>
-            {klaar.length > 1 ? "Ritten toevoegen" : "Rit toevoegen"}
+          <button type="button" className="btn btn-p" disabled={!klaar.length || bewaren} onClick={bewaar}>
+            {bewaren ? "Bewaren…" : klaar.length > 1 ? "Ritten toevoegen" : "Rit toevoegen"}
           </button>
         </div>
       </div>

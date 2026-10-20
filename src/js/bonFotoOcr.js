@@ -109,6 +109,22 @@ function fileToDataUrl(file) {
   });
 }
 
+export async function recognizeBonDataUrl(dataUrl, opts = {}) {
+  if (!dataUrl) throw new Error("Kon afbeelding niet verwerken");
+  const worker = await getBonOcrWorker(opts.logger);
+  const {
+    data: { text },
+  } = await worker.recognize(dataUrl);
+  const codes = extractBonCodesFromOcrText(text);
+  const dates = extractIsoDatesFromText(text);
+  return { text: String(text || "").trim(), codes, dates };
+}
+
+export async function recognizeBonCanvas(canvas, opts = {}) {
+  if (!canvas) throw new Error("Kon pagina niet verwerken");
+  return recognizeBonDataUrl(canvas.toDataURL("image/jpeg", 0.92), opts);
+}
+
 export async function recognizeBonImage(file, opts = {}) {
   let dataUrl = null;
   if (file && file.size && file.size < 2_500_000) {
@@ -120,14 +136,7 @@ export async function recognizeBonImage(file, opts = {}) {
     }
   }
   if (!dataUrl) dataUrl = await imageFileToDataUrlForOcr(file, 2200, 0.95);
-  if (!dataUrl) throw new Error("Kon afbeelding niet verwerken");
-  const worker = await getBonOcrWorker(opts.logger);
-  const {
-    data: { text },
-  } = await worker.recognize(dataUrl);
-  const codes = extractBonCodesFromOcrText(text);
-  const dates = extractIsoDatesFromText(text);
-  return { text: String(text || "").trim(), codes, dates };
+  return recognizeBonDataUrl(dataUrl, opts);
 }
 
 export { extractIsoDatesFromText };

@@ -3,6 +3,9 @@ import {
   matchPlaatsNaam,
   lookupRouteKm,
   voorstelIsKlaar,
+  splitBonStukken,
+  bonInhoudRegels,
+  tripUitVoorstel,
 } from "./transportBon.js";
 
 const SAMPLE = `
@@ -66,9 +69,57 @@ assert(naar && /sint-jan/i.test(naar.name), "match bestemming " + naar?.name);
 const km = lookupRouteKm(van.name, naar.name);
 console.log("km prijslijst", km, van.name, "→", naar.name);
 
+assert(p.aankomstTijd === "00:45", "aankomst " + p.aankomstTijd);
+assert(/corneel heymanslaan/i.test(p.pickup.adr), "pickup adr " + p.pickup.adr);
+assert(/ruddershove/i.test(p.dropoff.adr), "dropoff adr " + p.dropoff.adr);
+assert(/rkv k12/i.test(p.pickup.stop), "pickup stop " + p.pickup.stop);
+assert(/roes-249975/i.test(p.omschrijving), "omschrijving " + p.omschrijving);
+assert(/ambient/i.test(p.conditionering), "conditionering " + p.conditionering);
+assert(/exam/i.test(p.verpakking), "verpakking " + p.verpakking);
+assert(p.lus === true, "lus");
+assert(p.dringend === true, "drin");
+assert(/UN3373/i.test(p.un3373), "un3373 " + p.un3373);
+assert(!p.extra, "extra leeg, niet barcode: " + p.extra);
+
+const regels = bonInhoudRegels({
+  omschrijving: p.omschrijving,
+  conditionering: p.conditionering,
+  pickup: p.pickup,
+  dropoff: p.dropoff,
+  lus: true,
+  dringend: true,
+  un3373: p.un3373,
+  aankomstTijd: p.aankomstTijd,
+});
+assert(regels.some(r => r.l === "Omschrijving" && /plaatjes/i.test(r.v)), "regel omschrijving");
+assert(regels.some(r => r.l === "Ophalen" && /heymanslaan/i.test(r.v)), "regel ophalen");
+
+const twee = splitBonStukken(`${SAMPLE}\nIHcT61069999 Lus\nPickup 19/10/2026 08:00\nOrg SANGO\nDropoff 19/10/2026 09:00\nOrg UZA`);
+assert(twee.length === 2, "split aantal " + twee.length);
+assert(/IHcT61062594/.test(twee[0]), "split eerste");
+assert(/IHcT61069999/.test(twee[1]), "split tweede");
+
+const trip = tripUitVoorstel(
+  {
+    bon: p.bon,
+    f: van.name,
+    t: naar.name,
+    d: p.datum,
+    ti: p.vertrekTijd,
+    k: 53,
+    s: "voltooid",
+    inhoud: { omschrijving: p.omschrijving, pickup: p.pickup, dropoff: p.dropoff, raw: SAMPLE.trim() },
+  },
+  { id: "t1", chauffeur: "Houdaifa", voertuig: "V1", bestandId: "b1" }
+);
+assert(trip.bon === "IHcT61062594", "trip bon");
+assert(trip.bonBestandId === "b1", "trip bestand");
+assert(/plaatjes/i.test(trip.bonInhoud.omschrijving), "trip inhoud");
+assert(/heymanslaan/i.test(trip.bonInhoud.pickup.adr), "trip pickup adr");
+
 assert(
   voorstelIsKlaar({ f: van.name, t: naar.name, d: p.datum, k: 55 }),
   "voorstel klaar"
 );
 
-console.log("ok", { bon: p.bon, d: p.datum, ti: p.vertrekTijd, van: van.name, naar: naar.name, km });
+console.log("ok", { bon: p.bon, d: p.datum, ti: p.vertrekTijd, van: van.name, naar: naar.name, km, extra: regels.length });

@@ -11,6 +11,7 @@ import { getDrivingRouteKm, getDrivingRouteWithGeometry } from "./js/ors.js";
 import { searchPlacesBelgium } from "./js/placeSearchFree.js";
 import { PRESET_ANCHOR_ZIEKENHUIZEN, ALL_PRESET_ROUTES } from "./js/config.js";
 import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
+import BewaardeBonnen from "./app/BewaardeBonnen.jsx";
 
 /** Kaartkleur van de route-lijn — zwart op de witte kaart */
 const TM_ACC = "#111111";
@@ -2430,7 +2431,7 @@ function Meer({ D, sD, pid, pr, onBackupImported, onBonInvoegen }) {
         <h2 className="tm-meer-sec-h">Transportbon</h2>
         <div className="card">
           <p className="tm-card-p">
-            Foto van de transportbon. De app leest vertrek, bestemming en bonnummer, rekent het bedrag en zet de rit in de lijst.
+            Foto of PDF van de transportbon. De app leest alle velden, rekent het bedrag, zet de rit in de lijst en houdt het origineel bij.
           </p>
           {onBonInvoegen ? (
             <button type="button" className="btn btn-p" onClick={onBonInvoegen}>
@@ -2439,6 +2440,8 @@ function Meer({ D, sD, pid, pr, onBackupImported, onBonInvoegen }) {
           ) : null}
         </div>
       </section>
+
+      <BewaardeBonnen pid={pid} />
 
       <section className="tm-meer-sec">
         <h2 className="tm-meer-sec-h">Tarieven</h2>

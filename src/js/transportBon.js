@@ -120,29 +120,157 @@ function splitPickupDropoff(raw) {
   const pick = text.search(/\bpick\s*up\b|\bophal/i);
   if (drop >= 0) {
     return {
+      kop: text.slice(0, pick >= 0 && pick < drop ? pick : drop),
       pickup: text.slice(pick >= 0 && pick < drop ? pick : 0, drop),
       dropoff: text.slice(drop),
     };
   }
-  return { pickup: pick >= 0 ? text.slice(pick) : text, dropoff: "" };
+  return {
+    kop: pick >= 0 ? text.slice(0, pick) : "",
+    pickup: pick >= 0 ? text.slice(pick) : text,
+    dropoff: "",
+  };
+}
+
+function schoonExtra(s) {
+  const v = schoonPlaatsRegel(s);
+  if (!v) return "";
+  if (/^(barcode|pick\s*up|drop\s*off|org\.?|stop|afd|adr|det|un\d|lus\b)/i.test(v)) return "";
+  return v;
+}
+
+function parseStopVelden(slice) {
+  return {
+    org: schoonPlaatsRegel(veldNaLabel(slice, ["org\\.?", "or\\.", "from"])),
+    stop: schoonPlaatsRegel(veldNaLabel(slice, ["stop", "stp"])),
+    afd: schoonPlaatsRegel(veldNaLabel(slice, ["afd", "afdeling"])),
+    adr: schoonPlaatsRegel(veldNaLabel(slice, ["adr", "adres"])),
+    det: schoonPlaatsRegel(veldNaLabel(slice, ["det", "detail"])),
+  };
+}
+
+function compactStop(stop) {
+  if (!stop) return null;
+  const o = {};
+  for (const k of ["org", "stop", "afd", "adr", "det"]) {
+    const v = String(stop[k] || "").trim();
+    if (v) o[k] = v;
+  }
+  return Object.keys(o).length ? o : null;
+}
+
+function compactInhoud(parsed) {
+  if (!parsed) return null;
+  const o = {};
+  const set = (k, v) => {
+    if (v == null || v === false || v === "") return;
+    o[k] = v;
+  };
+  set("omschrijving", parsed.omschrijving);
+  set("conditionering", parsed.conditionering);
+  set("verpakking", parsed.verpakking);
+  set("extra", parsed.extra);
+  set("un3373", parsed.un3373);
+  set("aankomstTijd", parsed.aankomstTijd);
+  if (parsed.lus) o.lus = true;
+  if (parsed.dringend) o.dringend = true;
+  const pickup = compactStop(parsed.pickup);
+  const dropoff = compactStop(parsed.dropoff);
+  if (pickup) o.pickup = pickup;
+  if (dropoff) o.dropoff = dropoff;
+  const raw = String(parsed.raw || "").trim();
+  if (raw) o.raw = raw.slice(0, 12_000);
+  return Object.keys(o).length ? o : null;
+}
+
+function regelVanStop(stop) {
+  if (!stop) return "";
+  return [stop.stop, stop.afd, stop.adr, stop.det].filter(Boolean).join(" · ");
+}
+
+/** Compacte regels uit de bewaarde bon, voor op het scherm. */
+export function bonInhoudRegels(inhoud) {
+  if (!inhoud) return [];
+  const rows = [];
+  const add = (l, v) => {
+    const s = typeof v === "string" ? v.trim() : v ? String(v) : "";
+    if (s) rows.push({ l, v: s });
+  };
+  add("Omschrijving", inhoud.omschrijving);
+  add("Conditionering", inhoud.conditionering);
+  add("Verpakking", inhoud.verpakking);
+  add("Extra", inhoud.extra);
+  add("Ophalen", regelVanStop(inhoud.pickup));
+  add("Afleveren", regelVanStop(inhoud.dropoff));
+  add("Aankomst", inhoud.aankomstTijd);
+  if (inhoud.lus) add("Lus", "Ja");
+  if (inhoud.dringend) add("Dringend", "Ja");
+  add("UN3373", inhoud.un3373);
+  return rows;
+}
+
+/**
+ * Meerdere IHcT-bons in één bestand (PDF met meerdere pagina’s) splitsen.
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function splitBonStukken(text) {
+  const raw = String(text || "").replace(/\u00a0/g, " ");
+  if (!raw.trim()) return [];
+  const re = new RegExp(IHCT_RE.source, "gi");
+  const hits = [];
+  const seen = new Set();
+  let m;
+  while ((m = re.exec(raw)) !== null) {
+    const code = normaliseerBonnummer(m[0]).toUpperCase();
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    hits.push(m.index);
+  }
+  if (hits.length > 1) {
+    return hits
+      .map((start, i) => {
+        const head = i === 0 && start > 0 ? raw.slice(0, start).trim() : "";
+        const body = raw.slice(start, hits[i + 1]).trim();
+        return [head, body].filter(Boolean).join("\n");
+      })
+      .filter(Boolean);
+  }
+  const picks = [...raw.matchAll(/\bPick\s*up\b/gi)];
+  if (picks.length > 1) {
+    return picks
+      .map((p, i) => raw.slice(i === 0 ? 0 : p.index, picks[i + 1] ? picks[i + 1].index : raw.length).trim())
+      .filter(Boolean);
+  }
+  return [raw.trim()];
 }
 
 /**
  * @param {string} text
- * @returns {{ bon: string, vertrek: string, bestemming: string, datum: string|null, vertrekTijd: string|null, aankomstTijd: string|null }}
+ * @returns {{
+ *   bon: string, vertrek: string, bestemming: string, datum: string|null,
+ *   vertrekTijd: string|null, aankomstTijd: string|null,
+ *   pickup: object, dropoff: object, omschrijving: string, conditionering: string,
+ *   verpakking: string, extra: string, lus: boolean, un3373: string, dringend: boolean, raw: string
+ * }}
  */
 export function parseTransportBonText(text) {
   const raw = String(text || "").replace(/\u00a0/g, " ");
   const codes = extractBonCodesFromOcrText(raw);
-  const { pickup, dropoff } = splitPickupDropoff(raw);
+  const { kop, pickup, dropoff } = splitPickupDropoff(raw);
   const pDt = eersteDatumTijd(pickup);
   const dDt = eersteDatumTijd(dropoff);
+  const pStop = parseStopVelden(pickup);
+  const dStop = parseStopVelden(dropoff);
   const orgLabelsVan = ["org\\.?", "or\\.", "from", "vertrek"];
   const orgLabelsNaar = ["org\\.?", "or\\.", "to", "bestemming", "destin"];
-  const vertrek = schoonPlaatsRegel(veldNaLabel(pickup, orgLabelsVan) || plaatsregelUitBlok(pickup) || "");
-  const bestemming = schoonPlaatsRegel(
-    veldNaLabel(dropoff, orgLabelsNaar) || plaatsregelUitBlok(dropoff) || ""
+  const vertrek = schoonPlaatsRegel(
+    pStop.org || veldNaLabel(pickup, orgLabelsVan) || plaatsregelUitBlok(pickup) || ""
   );
+  const bestemming = schoonPlaatsRegel(
+    dStop.org || veldNaLabel(dropoff, orgLabelsNaar) || plaatsregelUitBlok(dropoff) || ""
+  );
+  const unM = raw.match(/UN\s*3373[^\n\r]*/i);
   return {
     bon: codes[0] || "",
     vertrek,
@@ -150,6 +278,16 @@ export function parseTransportBonText(text) {
     datum: pDt.d || dDt.d,
     vertrekTijd: pDt.ti,
     aankomstTijd: dDt.ti,
+    pickup: pStop,
+    dropoff: dStop,
+    omschrijving: schoonPlaatsRegel(veldNaLabel(kop || raw, ["omschrijving"])),
+    conditionering: schoonPlaatsRegel(veldNaLabel(kop || raw, ["conditionering", "condition"])),
+    verpakking: schoonPlaatsRegel(veldNaLabel(kop || raw, ["verpakking"])),
+    extra: schoonExtra(veldNaLabel(raw, ["extra info"])),
+    lus: /\blus\b/i.test(raw),
+    un3373: unM ? unM[0].replace(/\s+/g, " ").trim() : "",
+    dringend: /\bdrin(?:gent)?\b/i.test(raw),
+    raw: raw.trim(),
   };
 }
 
@@ -277,6 +415,7 @@ export async function voorstelUitBonTekst(text, opts = {}) {
   const d = parsed.datum;
   const kInt = k && k >= 1 ? k : null;
   const v = kInt ? Math.round(vergoedingVoorRit(kInt, ti, { fromName: f, toName: t }) * 100) / 100 : 0;
+  const inhoud = compactInhoud(parsed);
   return {
     bon: parsed.bon,
     f,
@@ -292,10 +431,11 @@ export async function voorstelUitBonTekst(text, opts = {}) {
       van?.lat != null && naar?.lat != null
         ? { a: { lat: van.lat, lng: van.lng }, b: { lat: naar.lat, lng: naar.lng } }
         : null,
+    inhoud,
   };
 }
 
-export function tripUitVoorstel(voorstel, { id, chauffeur, voertuig }) {
+export function tripUitVoorstel(voorstel, { id, chauffeur, voertuig, bestandId }) {
   const kInt = Math.max(1, Math.round(Number(voorstel.k) || 0));
   const f = String(voorstel.f || "").trim();
   const t = String(voorstel.t || "").trim();
@@ -316,6 +456,10 @@ export function tripUitVoorstel(voorstel, { id, chauffeur, voertuig }) {
   };
   const bon = String(voorstel.bon || "").trim();
   if (bon) trip.bon = bon;
+  const inhoud = voorstel.inhoud || null;
+  if (inhoud && Object.keys(inhoud).length) trip.bonInhoud = inhoud;
+  const bid = String(bestandId || voorstel.bestandId || "").trim();
+  if (bid) trip.bonBestandId = bid;
   return trip;
 }
 

@@ -1565,6 +1565,69 @@ label.btn {
   font-weight: 800;
 }
 
+.tm-bon-extra {
+  display: grid;
+  gap: 6px 0;
+  margin: 10px 0 4px;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--bd);
+  font-size: 13px;
+}
+
+.tm-bon-extra > div {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 28%) 1fr;
+  gap: 4px 12px;
+}
+
+.tm-bon-extra dt {
+  color: var(--tx2);
+  font-weight: 600;
+}
+
+.tm-bon-extra dd {
+  margin: 0;
+}
+
+.tm-bon-archief {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tm-bon-archief-rij {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--bd);
+}
+
+.tm-bon-archief-rij:first-child {
+  border-top: none;
+}
+
+.tm-bon-archief-rij > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tm-bon-archief-rij small {
+  color: var(--tx2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tm-bon-archief-act {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .tm-start-card {
   display: flex;
   flex-direction: column;
