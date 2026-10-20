@@ -7,23 +7,40 @@ import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-function tekstVanContent(content) {
-  let lastY = null;
-  const lines = [];
-  let line = "";
+/**
+ * IHcT-PDF’s zetten labels en waarden niet in leesvolgorde in het bestand.
+ * Eerst boven→onder, dan links→rechts, anders raken Pickup/Dropoff door elkaar.
+ */
+export function tekstVanContent(content) {
+  const rows = [];
   for (const it of content.items || []) {
     const s = String(it.str || "");
     if (!s) continue;
-    const y = it.transform ? it.transform[5] : 0;
-    if (lastY != null && Math.abs(y - lastY) > 3.5) {
-      if (line.trim()) lines.push(line.trim());
-      line = s;
-    } else {
-      line += (line && !/\s$/.test(line) && !/^\s/.test(s) ? " " : "") + s;
-    }
-    lastY = y;
+    const x = it.transform ? Number(it.transform[4]) || 0 : 0;
+    const y = it.transform ? Number(it.transform[5]) || 0 : 0;
+    rows.push({ s, x, y });
   }
-  if (line.trim()) lines.push(line.trim());
+  rows.sort((a, b) => b.y - a.y || a.x - b.x);
+  const lines = [];
+  let parts = [];
+  let lastY = null;
+  const flush = () => {
+    if (!parts.length) return;
+    parts.sort((a, b) => a.x - b.x);
+    const line = parts
+      .map(p => p.s)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (line) lines.push(line);
+    parts = [];
+  };
+  for (const r of rows) {
+    if (lastY != null && Math.abs(r.y - lastY) > 3.5) flush();
+    parts.push(r);
+    lastY = r.y;
+  }
+  flush();
   return lines.join("\n");
 }
 

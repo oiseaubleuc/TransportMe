@@ -32,6 +32,30 @@ UN3373 BIOLOGICAL SUBSTANCE CATEGORY B
 Drin
 `;
 
+/** Echte IHcT-export-PDF (labels links, waarden rechts, Pickup boven Dropoff). */
+const SAMPLE_PDF = `
+Omschrijving Geen Omschrijving
+Conditionering Ambiënt (15° - 25°)
+Drin
+Verpakking Box - Large (<30 l)
+IHcT61004279 Extra info
+Lus
+Barcode
+verpakking
+Pickup 02/06/2026 21:46
+Org. Diest AZ
+Stop Bloedbank
+Afd. Labo Klinische Biologie
+Adr. Statiestraat 65,3290 Diest
+Det. Blauwe pijl naar 4de verd.
+Dropoff 02/06/2026 23:16
+Org. UZ Leuven
+Stop Centrale balie
+Afd. Laboratoriumgeneeskunde
+Adr. Herestraat 49,3000 Leuven
+Det. Blauwe straat, Poort 7, Niveau 7 (BL 7.7)
+`;
+
 const messy = SAMPLE.replace(/Org /g, "Org: ").replace(/IHcT/, "lHcT");
 const ocrLike = `
 Pickup 18/10/2026 23:15
@@ -116,6 +140,27 @@ assert(trip.bon === "IHcT61062594", "trip bon");
 assert(trip.bonBestandId === "b1", "trip bestand");
 assert(/plaatjes/i.test(trip.bonInhoud.omschrijving), "trip inhoud");
 assert(/heymanslaan/i.test(trip.bonInhoud.pickup.adr), "trip pickup adr");
+
+const pdf = parseTransportBonText(SAMPLE_PDF);
+assert(pdf.bon === "IHcT61004279", "pdf bon " + pdf.bon);
+assert(pdf.datum === "2026-06-02", "pdf datum " + pdf.datum);
+assert(pdf.vertrekTijd === "21:46", "pdf tijd " + pdf.vertrekTijd);
+assert(pdf.aankomstTijd === "23:16", "pdf aankomst " + pdf.aankomstTijd);
+assert(/diest az/i.test(pdf.vertrek), "pdf vertrek " + pdf.vertrek);
+assert(/uz leuven/i.test(pdf.bestemming), "pdf bestemming " + pdf.bestemming);
+assert(/statiestraat/i.test(pdf.pickup.adr), "pdf pickup adr");
+assert(/herestraat/i.test(pdf.dropoff.adr), "pdf dropoff adr");
+assert(/geen omschrijving/i.test(pdf.omschrijving), "pdf omschrijving " + pdf.omschrijving);
+assert(/ambi/i.test(pdf.conditionering), "pdf conditionering");
+assert(/box/i.test(pdf.verpakking), "pdf verpakking");
+assert(pdf.lus === true, "pdf lus");
+assert(pdf.dringend === true, "pdf drin");
+const pdfVan = matchPlaatsNaam(pdf.vertrek);
+const pdfNaar = matchPlaatsNaam(pdf.bestemming);
+assert(pdfVan && /diest/i.test(pdfVan.name), "pdf match vertrek " + pdfVan?.name);
+assert(pdfNaar && /leuven/i.test(pdfNaar.name), "pdf match bestemming " + pdfNaar?.name);
+const pdfKm = lookupRouteKm(pdfVan.name, pdfNaar.name);
+assert(pdfKm === 36, "pdf km prijslijst " + pdfKm);
 
 assert(
   voorstelIsKlaar({ f: van.name, t: naar.name, d: p.datum, k: 55 }),

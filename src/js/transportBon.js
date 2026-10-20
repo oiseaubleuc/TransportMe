@@ -319,6 +319,7 @@ function scorePlaats(query, name) {
   const b = canonPlaats(name);
   if (!a || !b) return 0;
   if (a === b) return 1000 + b.length;
+  if (zelfdeCanon(a, b)) return 950 + b.length;
   if (b.startsWith(a) || a.startsWith(b)) return 800 + Math.min(a.length, b.length);
   if (b.includes(a) || a.includes(b)) return 600 + Math.min(a.length, b.length);
   const at = a.split(" ").filter(w => w.length > 1);
@@ -354,6 +355,21 @@ export function matchPlaatsNaam(query, extra = []) {
   return { name: best.name, lat: best.lat ?? null, lng: best.lng ?? null, score: bestScore };
 }
 
+/** Zelfde plaats als de woorden omgewisseld zijn (AZ Diest ↔ Diest AZ, UZ Leuven ↔ Leuven UZ). */
+function zelfdeCanon(a, b) {
+  if (a === b) return true;
+  const at = String(a || "")
+    .split(" ")
+    .filter(Boolean)
+    .sort();
+  const bt = String(b || "")
+    .split(" ")
+    .filter(Boolean)
+    .sort();
+  if (at.length < 2 || at.length !== bt.length) return false;
+  return at.every((t, i) => t === bt[i]);
+}
+
 export function lookupRouteKm(fromName, toName, extraPairs = []) {
   const nf = canonPlaats(fromName);
   const nt = canonPlaats(toName);
@@ -365,10 +381,11 @@ export function lookupRouteKm(fromName, toName, extraPairs = []) {
   for (const p of pairs) {
     const a = canonPlaats(p.f);
     const b = canonPlaats(p.t);
-    if ((a === nf && b === nt) || (a === nt && b === nf)) {
-      const k = Math.round(Number(p.k));
-      if (Number.isFinite(k) && k >= 1) return k;
-    }
+    const zelfde =
+      (zelfdeCanon(a, nf) && zelfdeCanon(b, nt)) || (zelfdeCanon(a, nt) && zelfdeCanon(b, nf));
+    if (!zelfde) continue;
+    const k = Math.round(Number(p.k));
+    if (Number.isFinite(k) && k >= 1) return k;
   }
   return null;
 }
