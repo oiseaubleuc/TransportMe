@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource-variable/overpass";
 import App from "./app/App.jsx";
+import Pincode from "./app/Pincode.jsx";
 
 const rootEl = document.getElementById("root");
 if (!rootEl) {
@@ -10,7 +11,9 @@ if (!rootEl) {
   try {
     createRoot(rootEl).render(
       <React.StrictMode>
-        <App />
+        <Pincode>
+          <App />
+        </Pincode>
       </React.StrictMode>
     );
   } catch (e) {

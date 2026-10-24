@@ -1750,3 +1750,54 @@ button.tm-start-card:hover,
 .tm-routes {
   max-height: min(42vh, 320px);
 }
+
+.tm-app.tm-pin,
+.tm-pin {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+}
+
+@media (min-width: 1024px) {
+  .tm-app.tm-pin {
+    grid-template-columns: 1fr;
+    place-items: center;
+  }
+}
+
+.tm-pin-kaart {
+  width: min(100%, 320px);
+  padding: 28px 22px;
+  background: var(--s1);
+  border: 1px solid var(--bd);
+  border-radius: var(--rl);
+}
+
+.tm-pin-kaart h1 {
+  margin: 0 0 20px;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.tm-pin-in {
+  width: 100%;
+  margin: 8px 0 16px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r);
+  background: var(--s2);
+  color: var(--tx);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.45em;
+  text-align: center;
+}
+
+.tm-pin-in:focus {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
