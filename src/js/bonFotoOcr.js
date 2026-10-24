@@ -109,15 +109,25 @@ function fileToDataUrl(file) {
   });
 }
 
+let ocrRij = Promise.resolve();
+
 export async function recognizeBonDataUrl(dataUrl, opts = {}) {
   if (!dataUrl) throw new Error("Kon afbeelding niet verwerken");
-  const worker = await getBonOcrWorker(opts.logger);
-  const {
-    data: { text },
-  } = await worker.recognize(dataUrl);
-  const codes = extractBonCodesFromOcrText(text);
-  const dates = extractIsoDatesFromText(text);
-  return { text: String(text || "").trim(), codes, dates };
+  const run = async () => {
+    const worker = await getBonOcrWorker(opts.logger);
+    const {
+      data: { text },
+    } = await worker.recognize(dataUrl);
+    const codes = extractBonCodesFromOcrText(text);
+    const dates = extractIsoDatesFromText(text);
+    return { text: String(text || "").trim(), codes, dates };
+  };
+  const p = ocrRij.then(run, run);
+  ocrRij = p.then(
+    () => {},
+    () => {}
+  );
+  return p;
 }
 
 export async function recognizeBonCanvas(canvas, opts = {}) {

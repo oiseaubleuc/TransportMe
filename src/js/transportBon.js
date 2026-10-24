@@ -489,3 +489,68 @@ export function voorstelIsKlaar(v) {
     Number(v.k) >= 1
   );
 }
+
+export function bonSleutel(bon) {
+  const n = normaliseerBonnummer(bon);
+  return n ? n.replace(/\s+/g, "").toUpperCase() : "";
+}
+
+/**
+ * Eerdere rit bij dezelfde bon, of dezelfde dag + dezelfde route.
+ * @param {Array<{id:string,bon?:string,d?:string,f?:string,t?:string,s?:string}>} ritten
+ * @param {{ bon?: string, d?: string, f?: string, t?: string }} voorstel
+ */
+export function vindBestaandeRit(ritten, voorstel) {
+  const list = Array.isArray(ritten) ? ritten : [];
+  const code = bonSleutel(voorstel?.bon);
+  if (code) {
+    const hit = list.find(r => {
+      if (r?.s === "geannuleerd") return false;
+      return String(r?.bon || "")
+        .split(/[,;/|\n\r]+/)
+        .map(s => bonSleutel(s))
+        .includes(code);
+    });
+    if (hit) return hit;
+  }
+  const d = String(voorstel?.d || "").slice(0, 10);
+  const f = canonPlaats(voorstel?.f);
+  const t = canonPlaats(voorstel?.t);
+  if (!d || !f || !t) return null;
+  return (
+    list.find(r => {
+      if (r?.s === "geannuleerd") return false;
+      if (String(r?.d || "").slice(0, 10) !== d) return false;
+      const rf = canonPlaats(r.f);
+      const rt = canonPlaats(r.t);
+      return (zelfdeCanon(rf, f) && zelfdeCanon(rt, t)) || (rf === f && rt === t);
+    }) || null
+  );
+}
+
+export function koppelBonAanRit(voorstel, ritten) {
+  const hit = vindBestaandeRit(ritten, voorstel);
+  if (!hit) {
+    return {
+      ...voorstel,
+      bestaandId: "",
+      bestaandStatus: "",
+      vraagVoltooid: false,
+      voltooidKeuze: voorstel.s === "komend" ? false : true,
+    };
+  }
+  const open = hit.s === "komend" || hit.s === "lopend";
+  return {
+    ...voorstel,
+    bestaandId: hit.id,
+    bestaandStatus: hit.s || "",
+    vraagVoltooid: open,
+    voltooidKeuze: open ? null : true,
+  };
+}
+
+export function voorstelRijKlaar(v) {
+  if (!voorstelIsKlaar(v)) return false;
+  if (v.vraagVoltooid && v.voltooidKeuze == null) return false;
+  return true;
+}

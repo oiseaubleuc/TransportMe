@@ -363,18 +363,29 @@ export default function App() {
           all={all}
           startPid={bonIn.pid}
           onClose={() => setBonIn(null)}
-          onSave={(pid, trips, extra) => {
+          onSave={(pid, result, extra) => {
+            const nieuw = Array.isArray(result) ? result : result?.nieuw || [];
+            const updates = Array.isArray(result) ? [] : result?.updates || [];
             let n = 0;
+            let bij = 0;
             let duplicaten = 0;
             setFor(pid, D => {
-              const uit = voegExcelRittenToe(D.r, trips);
+              let ritten = D.r;
+              if (updates.length) {
+                ritten = ritten.map(x => {
+                  const u = updates.find(y => y.id === x.id);
+                  if (!u) return x;
+                  bij++;
+                  return { ...x, ...u.patch };
+                });
+              }
+              const uit = voegExcelRittenToe(ritten, nieuw);
               n = uit.toegevoegd.length;
               duplicaten = uit.duplicaten;
-              return n === 0 ? D : normData({ ...D, r: uit.ritten });
+              return n === 0 && bij === 0 ? D : normData({ ...D, r: uit.ritten });
             });
             setBonIn(null);
-            if (n === 0 && duplicaten) alert("Deze bon staat al in de lijst." + (extra?.archiefFout ? " Het originele bestand kon niet worden bewaard." : " Het origineel blijft bewaard."));
-            else if (n && duplicaten) alert(`${n === 1 ? "1 rit toegevoegd" : n + " ritten toegevoegd"}. ${duplicaten === 1 ? "1 stond al in de lijst." : duplicaten + " stonden al in de lijst."}`);
+            if (n === 0 && bij === 0 && duplicaten) alert("Deze bon staat al in de lijst." + (extra?.archiefFout ? " Het originele bestand kon niet worden bewaard." : " Het origineel blijft bewaard."));
             else if (extra?.archiefFout) alert("De rit is bewaard, maar het originele bestand paste niet op dit toestel.");
           }}
         />

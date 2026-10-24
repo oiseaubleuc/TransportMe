@@ -6,6 +6,9 @@ import {
   splitBonStukken,
   bonInhoudRegels,
   tripUitVoorstel,
+  vindBestaandeRit,
+  koppelBonAanRit,
+  voorstelRijKlaar,
 } from "./transportBon.js";
 
 const SAMPLE = `
@@ -161,6 +164,23 @@ assert(pdfVan && /diest/i.test(pdfVan.name), "pdf match vertrek " + pdfVan?.name
 assert(pdfNaar && /leuven/i.test(pdfNaar.name), "pdf match bestemming " + pdfNaar?.name);
 const pdfKm = lookupRouteKm(pdfVan.name, pdfNaar.name);
 assert(pdfKm === 36, "pdf km prijslijst " + pdfKm);
+
+const gepland = {
+  id: "r-oud",
+  bon: "IHcT61004279",
+  d: "2026-06-02",
+  f: "Diest AZ",
+  t: "UZ Leuven",
+  s: "komend",
+};
+const pdfVoorstel = { bon: pdf.bon, f: pdf.vertrek, t: pdf.bestemming, d: pdf.datum, k: 36, s: "voltooid" };
+assert(vindBestaandeRit([gepland], pdfVoorstel).id === "r-oud", "vind op bonnummer");
+assert(vindBestaandeRit([{ ...gepland, bon: "" }], pdfVoorstel).id === "r-oud", "vind op dag+route");
+const koppel = koppelBonAanRit(pdfVoorstel, [gepland]);
+assert(koppel.vraagVoltooid === true, "vraag voltooid bij eerdere rit");
+assert(koppel.voltooidKeuze == null, "wacht op ja/nee");
+assert(!voorstelRijKlaar(koppel), "niet klaar zonder antwoord");
+assert(voorstelRijKlaar({ ...koppel, f: pdf.vertrek, t: pdf.bestemming, d: pdf.datum, k: 36, voltooidKeuze: true }), "klaar na ja");
 
 assert(
   voorstelIsKlaar({ f: van.name, t: naar.name, d: p.datum, k: 55 }),

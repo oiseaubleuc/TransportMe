@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PR, CA, ui, isN, RitMap, tmVergoeding } from "../TransportMe.jsx";
-import { chauffeurNaam, euro, lijnVar } from "./team.js";
+import { chauffeurNaam, euro, lijnVar, datumKort } from "./team.js";
 import { terminateBonOcrWorker } from "../js/bonFotoOcr.js";
 import { isBonBestand, isPdfBestand, leesBonBestand } from "../js/leesBonBestand.js";
 import { zetBonBestand } from "../js/bonArchief.js";
-import { voorstelUitBonTekst, voorstelIsKlaar, tripUitVoorstel, bonInhoudRegels } from "../js/transportBon.js";
+import {
+  voorstelUitBonTekst,
+  tripUitVoorstel,
+  bonInhoudRegels,
+  koppelBonAanRit,
+  voorstelRijKlaar,
+} from "../js/transportBon.js";
 
-const MAX_BESTANDEN = 12;
+const MAX_BESTANDEN = 20;
 const MAX_MB = 14;
 
 function extraUitData(D) {
@@ -29,11 +35,18 @@ function extraUitData(D) {
   return { extraKm, extraPlaatsen };
 }
 
-function RijEditor({ v, onChange, i }) {
+function statusWoord(s) {
+  if (s === "lopend") return "onderweg";
+  if (s === "voltooid") return "voltooid";
+  return "gepland";
+}
+
+function RijEditor({ v, onChange, i, bestaand }) {
   const kInt = Math.max(0, Math.round(Number(String(v.k).replace(",", ".")) || 0));
   const bedrag = v.f && v.t && kInt >= 1 ? tmVergoeding(v.f, v.t, kInt, v.ti) : 0;
   const kaart = v.coords;
   const extra = bonInhoudRegels(v.inhoud);
+  const eerder = bestaand || (v.bestaandId ? { id: v.bestaandId, s: v.bestaandStatus, f: v.f, t: v.t, d: v.d } : null);
   return (
     <article className="tm-bon-rij">
       <header className="tm-bon-rij-h">
@@ -41,6 +54,38 @@ function RijEditor({ v, onChange, i }) {
         {v.kmBron === "lijst" ? <span className="tm-muted">Km uit de prijslijst</span> : null}
         {v.kmBron === "weg" ? <span className="tm-muted">Km over de weg</span> : null}
       </header>
+      {eerder ? (
+        <div className={"tm-bon-vraag" + (v.vraagVoltooid && v.voltooidKeuze == null ? " tm-bon-vraag--wacht" : "")}>
+          {v.vraagVoltooid ? (
+            <>
+              <p>
+                Deze bon hoort bij een eerdere rit
+                {eerder.f && eerder.t ? ` (${eerder.f} → ${eerder.t}` : ""}
+                {eerder.d ? `${eerder.f && eerder.t ? ", " : " ("}${datumKort(eerder.d)}` : ""}
+                {eerder.f || eerder.d ? ")" : ""}, nu {statusWoord(eerder.s)}. Is de rit voltooid?
+              </p>
+              <div className="tm-chips" role="group" aria-label="Rit voltooid">
+                <button
+                  type="button"
+                  className={"tm-chip" + (v.voltooidKeuze === true ? " on" : "")}
+                  onClick={() => onChange({ ...v, voltooidKeuze: true, s: "voltooid" })}
+                >
+                  Ja, voltooid
+                </button>
+                <button
+                  type="button"
+                  className={"tm-chip" + (v.voltooidKeuze === false ? " on" : "")}
+                  onClick={() => onChange({ ...v, voltooidKeuze: false, s: eerder.s === "lopend" ? "lopend" : "komend" })}
+                >
+                  Nee, nog niet
+                </button>
+              </div>
+            </>
+          ) : (
+            <p>Deze bon staat al in de lijst als {statusWoord(eerder.s)}. Het origineel blijft bewaard.</p>
+          )}
+        </div>
+      ) : null}
       {kaart ? (
         <div className="tm-sheet-map">
           <RitMap
@@ -149,11 +194,13 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
   const [fase, setFase] = useState("kies");
   const [fout, setFout] = useState("");
   const [voortgang, setVoortgang] = useState(null);
+  const [leesInfo, setLeesInfo] = useState("");
   const [rijen, setRijen] = useState([]);
   const [bewaren, setBewaren] = useState(false);
   const inp = useRef(null);
-  const D = all[pid] || { xr: [] };
+  const D = all[pid] || { xr: [], r: [] };
   const extra = useMemo(() => extraUitData(D), [D]);
+  const ritten = D.r || [];
 
   useEffect(() => {
     const f = e => e.key === "Escape" && onClose();
@@ -162,6 +209,10 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
   }, [onClose]);
 
   useEffect(() => () => terminateBonOcrWorker().catch(() => {}), []);
+
+  useEffect(() => {
+    setRijen(cur => (cur.length ? cur.map(v => koppelBonAanRit(v, ritten)) : cur));
+  }, [pid]); // eslint-disable-line react-hooks/exhaustive-deps -- alleen opnieuw koppelen bij chauffeurwissel
 
   const leesBestanden = useCallback(
     async fileList => {
@@ -177,28 +228,59 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
       setFout("");
       setFase("lezen");
       setVoortgang(0);
+      setLeesInfo(ok.length > 1 ? `0 van ${ok.length}` : "");
       const extraKm = extra.extraKm;
       const extraPlaatsen = extra.extraPlaatsen;
-      const next = [];
+      const perBestand = new Array(ok.length).fill(0);
+      const klaarBestand = new Array(ok.length).fill(false);
+      const meld = () => {
+        const som = perBestand.reduce((a, b) => a + b, 0);
+        setVoortgang(som / ok.length);
+        setLeesInfo(ok.length > 1 ? `${klaarBestand.filter(Boolean).length} van ${ok.length}` : "");
+      };
       try {
-        for (let i = 0; i < ok.length; i++) {
-          const file = ok[i];
-          const bestand = { id: ui(), file };
-          setVoortgang((i + 0.15) / ok.length);
-          const stukken = await leesBonBestand(file, {
-            logger: m => {
-              if (m.status === "recognizing text" && typeof m.progress === "number") {
-                setVoortgang((i + 0.2 + m.progress * 0.7) / ok.length);
+        const groepen = await Promise.all(
+          ok.map(async (file, i) => {
+            const bestand = { id: ui(), file };
+            try {
+              const stukken = await leesBonBestand(file, {
+                logger: m => {
+                  if (m.status === "recognizing text" && typeof m.progress === "number") {
+                    perBestand[i] = 0.2 + m.progress * 0.7;
+                    meld();
+                  }
+                },
+                onVoortgang: p => {
+                  perBestand[i] = p;
+                  meld();
+                },
+              });
+              const rows = [];
+              for (const stuk of stukken) {
+                const voorstel = await voorstelUitBonTekst(stuk.text || "", { extraKm, extraPlaatsen });
+                rows.push(koppelBonAanRit({ ...voorstel, id: ui(), bestand }, ritten));
               }
-            },
-            onVoortgang: p => setVoortgang((i + p) / ok.length),
-          });
-          for (const stuk of stukken) {
-            const voorstel = await voorstelUitBonTekst(stuk.text || "", { extraKm, extraPlaatsen });
-            next.push({ ...voorstel, id: ui(), bestand });
-          }
-          setVoortgang((i + 1) / ok.length);
+              perBestand[i] = 1;
+              klaarBestand[i] = true;
+              meld();
+              return { rows, naam: file.name };
+            } catch (e) {
+              console.error(e);
+              klaarBestand[i] = true;
+              perBestand[i] = 1;
+              meld();
+              return { rows: [], naam: file.name, fout: true };
+            }
+          })
+        );
+        const next = groepen.flatMap(g => g.rows);
+        const mislukt = groepen.filter(g => g.fout).length;
+        if (!next.length) {
+          setFout("De bonnen konden niet worden gelezen. Probeer scherpere foto’s of andere PDF’s, of vul de rit zelf in.");
+          setFase("kies");
+          return;
         }
+        if (mislukt) setFout(`${mislukt === 1 ? "1 bestand" : mislukt + " bestanden"} kon niet worden gelezen. De rest staat hieronder.`);
         setRijen(next);
         setFase("check");
       } catch (e) {
@@ -207,12 +289,14 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
         setFase("kies");
       } finally {
         setVoortgang(null);
+        setLeesInfo("");
       }
     },
-    [extra]
+    [extra, ritten]
   );
 
-  const klaar = rijen.filter(voorstelIsKlaar);
+  const klaar = rijen.filter(voorstelRijKlaar);
+  const wachtAntwoord = rijen.filter(v => v.vraagVoltooid && v.voltooidKeuze == null).length;
 
   const bewaar = async () => {
     if (!klaar.length || bewaren) return;
@@ -233,25 +317,41 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
           blob: b.file.slice(0, b.file.size, type),
           bon: v.bon || "",
           d: v.d || "",
-          tripId: "",
+          tripId: v.bestaandId || "",
           toegevoegd: new Date().toISOString(),
         });
       } catch {
         archiefFout = true;
       }
     }
-    const trips = klaar.map(v =>
-      tripUitVoorstel(
-        { ...v, k: Math.max(1, Math.round(Number(String(v.k).replace(",", ".")) || 0)) },
+    const nieuw = [];
+    const updates = [];
+    for (const v of klaar) {
+      const k = Math.max(1, Math.round(Number(String(v.k).replace(",", ".")) || 0));
+      const voltooid = v.voltooidKeuze !== false && v.s !== "komend" && v.s !== "lopend";
+      const trip = tripUitVoorstel(
+        { ...v, k, s: voltooid ? "voltooid" : v.s === "lopend" ? "lopend" : "komend" },
         {
           id: ui(),
           chauffeur: chauffeurNaam(pid),
           voertuig: CA[0],
           bestandId: v.bestand?.id,
         }
-      )
-    );
-    onSave(pid, trips, { archiefFout });
+      );
+      if (v.bestaandId) {
+        const patch = {
+          bon: trip.bon || undefined,
+          bonInhoud: trip.bonInhoud,
+          bonBestandId: trip.bonBestandId,
+        };
+        if (v.vraagVoltooid) patch.s = trip.s;
+        if (!patch.bon) delete patch.bon;
+        updates.push({ id: v.bestaandId, patch });
+      } else {
+        nieuw.push(trip);
+      }
+    }
+    onSave(pid, { nieuw, updates }, { archiefFout });
   };
 
   return (
@@ -284,9 +384,9 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
 
           {fase === "kies" || fase === "lezen" ? (
             <fieldset className="tm-fs">
-              <legend>Bon</legend>
+              <legend>Bonnen</legend>
               <p className="tm-card-p" style={{ marginTop: 0 }}>
-                Foto of PDF van de transportbon. We bewaren het origineel, lezen alle velden, rekenen de rit en zetten hem in de lijst.
+                Eén of meer foto’s of PDF’s. We lezen ze samen, bewaren de originelen en zetten alle ritten in de lijst.
               </p>
               <label
                 className={"btn btn-p btn-full" + (fase === "lezen" ? " tm-btn-busy" : "")}
@@ -300,9 +400,9 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
               >
                 {fase === "lezen"
                   ? voortgang != null
-                    ? `Lezen… ${Math.round(voortgang * 100)}%`
-                    : "Bon lezen…"
-                  : "Foto of PDF kiezen"}
+                    ? `Lezen… ${leesInfo ? leesInfo + " · " : ""}${Math.round(voortgang * 100)}%`
+                    : "Bonnen lezen…"
+                  : "Foto’s of PDF’s kiezen"}
                 <input
                   ref={inp}
                   type="file"
@@ -326,11 +426,12 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
                   key={v.id}
                   i={i}
                   v={v}
+                  bestaand={(ritten || []).find(r => r.id === v.bestaandId)}
                   onChange={nv => setRijen(cur => cur.map(x => (x.id === v.id ? nv : x)))}
                 />
               ))}
-              <button type="button" className="btn btn-o" onClick={() => { setRijen([]); setFase("kies"); }}>
-                Ander bestand
+              <button type="button" className="btn btn-o" onClick={() => { setRijen([]); setFase("kies"); setFout(""); }}>
+                Andere bestanden
               </button>
             </fieldset>
           )}
@@ -342,14 +443,16 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
                 <b className="tm-num">
                   {klaar.length === 1 ? euro(tmVergoeding(klaar[0].f, klaar[0].t, klaar[0].k, klaar[0].ti)) : `${klaar.length} ritten`}
                 </b>
-                <span>Komt in de lijst en in de berekening. Het origineel blijft bewaard.</span>
+                <span>Alles komt in de lijst. Het origineel blijft bewaard.</span>
               </>
+            ) : wachtAntwoord ? (
+              <span>Zeg bij de eerdere rit of hij voltooid is.</span>
             ) : (
-              <span>Kies een foto of PDF van de transportbon</span>
+              <span>Kies één of meer foto’s of PDF’s</span>
             )}
           </div>
           <button type="button" className="btn btn-p" disabled={!klaar.length || bewaren} onClick={bewaar}>
-            {bewaren ? "Bewaren…" : klaar.length > 1 ? "Ritten toevoegen" : "Rit toevoegen"}
+            {bewaren ? "Bewaren…" : rijen.length > 1 || klaar.length > 1 ? "Alle ritten toevoegen" : "Rit toevoegen"}
           </button>
         </div>
       </div>

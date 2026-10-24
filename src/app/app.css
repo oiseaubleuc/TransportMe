@@ -1565,6 +1565,23 @@ label.btn {
   font-weight: 800;
 }
 
+.tm-bon-vraag {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--bd);
+  border-radius: var(--rl);
+  background: var(--s2);
+}
+
+.tm-bon-vraag p {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.tm-bon-vraag--wacht {
+  border-color: var(--acc);
+}
+
 .tm-bon-extra {
   display: grid;
   gap: 6px 0;
