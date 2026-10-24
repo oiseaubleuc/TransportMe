@@ -495,37 +495,69 @@ export function bonSleutel(bon) {
   return n ? n.replace(/\s+/g, "").toUpperCase() : "";
 }
 
+/** Pickup-tijdstip: datum + uur. Leeg als één van beide ontbreekt. */
+export function normaliseerTijdstip(d, ti) {
+  const dag = String(d || "").slice(0, 10);
+  const raw = String(ti || "").trim().replace(/[.h]/, ":");
+  const m = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dag) || !m) return "";
+  const uur = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(uur) || uur < 0 || uur > 23 || !Number.isFinite(min) || min < 0 || min > 59) return "";
+  return `${dag}T${pad2(uur)}:${pad2(min)}`;
+}
+
+/** IHcT-nummer + tijdstip. Leeg als één van beide ontbreekt — dan geen dubbel. */
+export function bonTijdSleutel(bon, d, ti) {
+  const code = bonSleutel(bon);
+  const ts = normaliseerTijdstip(d, ti);
+  return code && ts ? `${code}|${ts}` : "";
+}
+
+function bonTijdSleutelsVanRit(r) {
+  const ts = normaliseerTijdstip(r?.d, r?.ti);
+  if (!ts) return [];
+  return String(r?.bon || "")
+    .split(/[,;/|\n\r]+/)
+    .map(s => bonSleutel(s))
+    .filter(Boolean)
+    .map(code => `${code}|${ts}`);
+}
+
 /**
- * Eerdere rit bij dezelfde bon, of dezelfde dag + dezelfde route.
- * @param {Array<{id:string,bon?:string,d?:string,f?:string,t?:string,s?:string}>} ritten
- * @param {{ bon?: string, d?: string, f?: string, t?: string }} voorstel
+ * Eerdere rit alleen bij hetzelfde IHcT-nummer én hetzelfde tijdstip.
+ * Zelfde route of dezelfde dag alleen telt niet — dat gaf vergissingen.
  */
 export function vindBestaandeRit(ritten, voorstel) {
   const list = Array.isArray(ritten) ? ritten : [];
-  const code = bonSleutel(voorstel?.bon);
-  if (code) {
-    const hit = list.find(r => {
-      if (r?.s === "geannuleerd") return false;
-      return String(r?.bon || "")
-        .split(/[,;/|\n\r]+/)
-        .map(s => bonSleutel(s))
-        .includes(code);
-    });
-    if (hit) return hit;
-  }
-  const d = String(voorstel?.d || "").slice(0, 10);
-  const f = canonPlaats(voorstel?.f);
-  const t = canonPlaats(voorstel?.t);
-  if (!d || !f || !t) return null;
+  const key = bonTijdSleutel(voorstel?.bon, voorstel?.d, voorstel?.ti);
+  if (!key) return null;
   return (
     list.find(r => {
       if (r?.s === "geannuleerd") return false;
-      if (String(r?.d || "").slice(0, 10) !== d) return false;
-      const rf = canonPlaats(r.f);
-      const rt = canonPlaats(r.t);
-      return (zelfdeCanon(rf, f) && zelfdeCanon(rt, t)) || (rf === f && rt === t);
+      return bonTijdSleutelsVanRit(r).includes(key);
     }) || null
   );
+}
+
+/** Nieuwe ritten toevoegen; zelfde IHcT + tijdstip wordt overgeslagen. */
+export function voegBonRittenToe(bestaande, nieuw) {
+  const seen = new Set();
+  for (const r of bestaande || []) {
+    for (const k of bonTijdSleutelsVanRit(r)) seen.add(k);
+  }
+  const toegevoegd = [];
+  let duplicaten = 0;
+  for (const r of nieuw || []) {
+    const keys = bonTijdSleutelsVanRit(r);
+    if (keys.length && keys.every(k => seen.has(k))) {
+      duplicaten++;
+      continue;
+    }
+    for (const k of keys) seen.add(k);
+    toegevoegd.push(r);
+  }
+  return { ritten: [...(bestaande || []), ...toegevoegd], toegevoegd, duplicaten };
 }
 
 export function koppelBonAanRit(voorstel, ritten) {
@@ -555,15 +587,15 @@ export function voorstelRijKlaar(v) {
   return true;
 }
 
-/** Zelfde bonnummer twee keer in deze selectie: de eerste blijft, de rest is dubbel. */
+/** Zelfde IHcT + tijdstip twee keer in deze selectie: de eerste blijft, de rest is dubbel. */
 export function markeerDubbeleRijen(rijen) {
   const seen = new Set();
   return (rijen || []).map(v => {
-    const code = bonSleutel(v.bon);
+    const key = bonTijdSleutel(v.bon, v.d, v.ti);
     let dubbelInBatch = false;
-    if (code) {
-      if (seen.has(code)) dubbelInBatch = true;
-      else seen.add(code);
+    if (key) {
+      if (seen.has(key)) dubbelInBatch = true;
+      else seen.add(key);
     }
     return { ...v, dubbelInBatch };
   });

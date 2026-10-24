@@ -29,7 +29,7 @@ import { getFactuurGegevens } from "../js/storage.js";
 import { downloadRittenExcel, leesRittenExcel, voegExcelRittenToe, meldingExcelInlees } from "../js/rittenExcel.js";
 import BonInvoegenSheet from "./BonInvoegen.jsx";
 import { haalBonBestand, openBonBlob } from "../js/bonArchief.js";
-import { bonInhoudRegels } from "../js/transportBon.js";
+import { bonInhoudRegels, voegBonRittenToe } from "../js/transportBon.js";
 import {
   LIJN_HEX,
   chauffeurIndex,
@@ -379,7 +379,7 @@ export default function App() {
                   return { ...x, ...u.patch };
                 });
               }
-              const uit = voegExcelRittenToe(ritten, nieuw);
+              const uit = voegBonRittenToe(ritten, nieuw);
               n = uit.toegevoegd.length;
               duplicaten = uit.duplicaten;
               return n === 0 && bij === 0 ? D : normData({ ...D, r: uit.ritten });

@@ -12,6 +12,8 @@ import {
   markeerDubbeleRijen,
   isDubbeleBon,
   dubbeleMelding,
+  bonTijdSleutel,
+  voegBonRittenToe,
 } from "./transportBon.js";
 
 const SAMPLE = `
@@ -172,13 +174,25 @@ const gepland = {
   id: "r-oud",
   bon: "IHcT61004279",
   d: "2026-06-02",
+  ti: "21:46",
   f: "Diest AZ",
   t: "UZ Leuven",
   s: "komend",
 };
-const pdfVoorstel = { bon: pdf.bon, f: pdf.vertrek, t: pdf.bestemming, d: pdf.datum, k: 36, s: "voltooid" };
-assert(vindBestaandeRit([gepland], pdfVoorstel).id === "r-oud", "vind op bonnummer");
-assert(vindBestaandeRit([{ ...gepland, bon: "" }], pdfVoorstel).id === "r-oud", "vind op dag+route");
+const pdfVoorstel = {
+  bon: pdf.bon,
+  f: pdf.vertrek,
+  t: pdf.bestemming,
+  d: pdf.datum,
+  ti: pdf.vertrekTijd,
+  k: 36,
+  s: "voltooid",
+};
+assert(bonTijdSleutel(pdf.bon, pdf.datum, pdf.vertrekTijd) === "IHCT61004279|2026-06-02T21:46", "sleutel IHcT+tijd");
+assert(vindBestaandeRit([gepland], pdfVoorstel).id === "r-oud", "vind op IHcT + tijdstip");
+assert(!vindBestaandeRit([{ ...gepland, bon: "" }], pdfVoorstel), "zelfde route zonder IHcT is geen dubbel");
+assert(!vindBestaandeRit([{ ...gepland, ti: "20:00" }], pdfVoorstel), "zelfde IHcT ander uur is geen dubbel");
+assert(!vindBestaandeRit([{ ...gepland, ti: "" }], pdfVoorstel), "IHcT zonder tijdstip is geen dubbel");
 const koppel = koppelBonAanRit(pdfVoorstel, [gepland]);
 assert(koppel.vraagVoltooid === true, "vraag voltooid bij eerdere rit");
 assert(koppel.voltooidKeuze == null, "wacht op ja/nee");
@@ -186,13 +200,15 @@ assert(!voorstelRijKlaar(koppel), "niet klaar zonder antwoord");
 assert(voorstelRijKlaar({ ...koppel, f: pdf.vertrek, t: pdf.bestemming, d: pdf.datum, k: 36, voltooidKeuze: true }), "klaar na ja");
 
 const batch = markeerDubbeleRijen([
-  { id: "a", bon: "IHcT61004279", f: "Diest AZ", t: "UZ Leuven", d: "2026-06-02", k: 36 },
-  { id: "b", bon: "IHcT61004279", f: "Diest AZ", t: "UZ Leuven", d: "2026-06-02", k: 36 },
-  { id: "c", bon: "IHcT61069999", f: "RKV Sango", t: "UZA (Edegem)", d: "2026-10-19", k: 17 },
+  { id: "a", bon: "IHcT61004279", f: "Diest AZ", t: "UZ Leuven", d: "2026-06-02", ti: "21:46", k: 36 },
+  { id: "b", bon: "IHcT61004279", f: "Diest AZ", t: "UZ Leuven", d: "2026-06-02", ti: "21:46", k: 36 },
+  { id: "c", bon: "IHcT61004279", f: "Diest AZ", t: "UZ Leuven", d: "2026-06-02", ti: "22:10", k: 36 },
+  { id: "d", bon: "IHcT61069999", f: "RKV Sango", t: "UZA (Edegem)", d: "2026-10-19", ti: "08:00", k: 17 },
 ]);
 assert(batch[0].dubbelInBatch === false, "eerste geen batch-dubbel");
-assert(batch[1].dubbelInBatch === true, "tweede is batch-dubbel");
-assert(batch[2].dubbelInBatch === false, "andere bon geen dubbel");
+assert(batch[1].dubbelInBatch === true, "tweede zelfde IHcT+tijd is batch-dubbel");
+assert(batch[2].dubbelInBatch === false, "zelfde IHcT ander uur geen batch-dubbel");
+assert(batch[3].dubbelInBatch === false, "andere bon geen dubbel");
 assert(isDubbeleBon({ bestaandId: "x", vraagVoltooid: false }), "al in lijst = dubbel");
 assert(!isDubbeleBon({ bestaandId: "x", vraagVoltooid: true }), "open eerdere rit is geen stille dubbel");
 const melding = dubbeleMelding([
@@ -201,6 +217,17 @@ const melding = dubbeleMelding([
 ]);
 assert(/al in de lijst/i.test(melding), "melding lijst " + melding);
 assert(/twee keer/i.test(melding), "melding batch " + melding);
+
+const voeg = voegBonRittenToe(
+  [{ bon: "IHcT61004279", d: "2026-06-02", ti: "21:46" }],
+  [
+    { id: "n1", bon: "IHcT61004279", d: "2026-06-02", ti: "21:46" },
+    { id: "n2", bon: "IHcT61004279", d: "2026-06-02", ti: "22:10" },
+    { id: "n3", bon: "IHcT61069999", d: "2026-10-19", ti: "08:00" },
+  ]
+);
+assert(voeg.duplicaten === 1, "zelfde IHcT+tijd overslaan");
+assert(voeg.toegevoegd.map(r => r.id).join(",") === "n2,n3", "ander uur of andere bon wel toevoegen");
 
 assert(
   voorstelIsKlaar({ f: van.name, t: naar.name, d: p.datum, k: 55 }),
