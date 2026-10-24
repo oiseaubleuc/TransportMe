@@ -390,8 +390,7 @@ export default function App() {
               alert(`${n === 1 ? "1 rit toegevoegd" : n + " ritten toegevoegd"}. ${dubbel === 1 ? "1 dubbele overgeslagen." : dubbel + " dubbele overgeslagen."}`);
             } else if (!n && dubbel) {
               alert(
-                (dubbel === 1 ? "1 dubbele bon overgeslagen." : `${dubbel} dubbele bonnen overgeslagen.`) +
-                  " Die komt niet nog eens in de lijst." +
+                (dubbel === 1 ? "1 dubbele bon overgeslagen. Die komt niet nog eens in de lijst." : `${dubbel} dubbele bonnen overgeslagen. Die komen niet nog eens in de lijst.`) +
                   (extra?.archiefFout ? " Het originele bestand kon niet worden bewaard." : " De bestanden blijven bewaard.")
               );
             } else if (extra?.archiefFout) alert("De rit is bewaard, maar het originele bestand paste niet op dit toestel.");
