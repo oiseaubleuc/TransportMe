@@ -48,7 +48,7 @@ export default function BewaardeBonnen({ pid }) {
   };
 
   const verwijder = async rec => {
-    if (!confirm("Het originele bestand verwijderen? De rit blijft in de lijst.")) return;
+    if (!confirm("Bestand verwijderen? De rit blijft staan.")) return;
     setBezig(true);
     try {
       await verwijderBonBestand(rec.id);
@@ -64,12 +64,9 @@ export default function BewaardeBonnen({ pid }) {
     <section className="tm-meer-sec">
       <h2 className="tm-meer-sec-h">Bewaarde transportbonnen</h2>
       <div className="card">
-        <p className="tm-card-p" style={{ marginTop: 0 }}>
-          Originele foto’s en PDF’s blijven op dit toestel, ook als de rit later wordt aangepast.
-        </p>
         {fout ? <p className="tm-warn">{fout}</p> : null}
         {!lijst.length ? (
-          <p className="tm-muted">Nog geen bewaarde bonnen voor deze chauffeur.</p>
+          <p className="tm-muted">Nog geen bonnen.</p>
         ) : (
           <ul className="tm-bon-archief">
             {lijst.map(rec => (

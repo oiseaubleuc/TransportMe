@@ -744,7 +744,7 @@ function VoltooiBonSheet({ rit, onBevestig, onAnnuleer }) {
               onChange={e => setBon(e.target.value)}
             />
             <p style={{ fontSize: 11, color: "var(--tx3)", margin: "6px 0 0", lineHeight: 1.35 }}>
-              Meerdere bonnen? Scheid ze met een komma. Op de factuur komt dan één regel per bon.
+              Meerdere bonnen: scheid met een komma.
             </p>
           </div>
           <div className="tm-bon-scan-row">
@@ -1910,7 +1910,7 @@ function FactuurGegevensScherm({ pid }) {
 
   return (
     <div>
-      <p className="tm-lead">Deze gegevens en het logo komen op elke PDF-factuur.</p>
+      <p className="tm-lead">Op elke factuur.</p>
 
       <div className="card" style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Logo</div>
@@ -2195,9 +2195,7 @@ function Meer({ D, sD, pid, pr, onBackupImported, onBonInvoegen }) {
       </p>
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="tm-card-t">Volledige back-up</div>
-        <p className="tm-card-p">
-          Alle chauffeurs en instellingen in één bestand. Bewaar het op een veilige plek; de app zelf bewaart niets online.
-        </p>
+        <p className="tm-card-p">Alle gegevens in één bestand.</p>
         <button type="button" className="btn btn-p btn-full" style={{ marginBottom: 8 }} onClick={() => exportTransporteurData()}>
           Back-up downloaden
         </button>
@@ -2316,8 +2314,7 @@ function Meer({ D, sD, pid, pr, onBackupImported, onBonInvoegen }) {
         <h2 className="tm-meer-sec-h">Prijslijst</h2>
         <div className="card tm-pl-card">
           <p className="tm-card-p">
-            {ROUTES.filter(r => !r.__potentieel).length} vaste ritten. Klopt een km niet? Tik op Aanpassen. Ontbreekt een
-            rit? Voeg die onderaan toe. Jouw wijziging gaat voor.
+            {ROUTES.filter(r => !r.__potentieel).length} vaste ritten. Aanpassen of zelf een rit toevoegen.
           </p>
           {(D.xr || []).length > 0 ? (
             <div className="tm-pl-block">
@@ -2431,7 +2428,7 @@ function Meer({ D, sD, pid, pr, onBackupImported, onBonInvoegen }) {
         <h2 className="tm-meer-sec-h">Transportbon</h2>
         <div className="card">
           <p className="tm-card-p">
-            Foto of PDF van de transportbon. De app leest alle velden, rekent het bedrag, zet de rit in de lijst en houdt het origineel bij.
+            Foto of PDF.
           </p>
           {onBonInvoegen ? (
             <button type="button" className="btn btn-p" onClick={onBonInvoegen}>
@@ -2468,7 +2465,7 @@ function Meer({ D, sD, pid, pr, onBackupImported, onBonInvoegen }) {
         <div className="card">
           <div className="tm-card-t">Bedragen herberekenen</div>
           <p className="tm-card-p">
-            Zet alle ritten van {pr.n} opnieuw op het huidige tarief. Ritten waarvan je km of bedrag zelf hebt aangepast blijven ongewijzigd.
+            Opnieuw op het huidige tarief. Zelf aangepaste km of bedragen blijven.
           </p>
           <button
             type="button"

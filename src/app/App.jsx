@@ -390,10 +390,10 @@ export default function App() {
               alert(`${n === 1 ? "1 rit toegevoegd" : n + " ritten toegevoegd"}. ${dubbel === 1 ? "1 dubbele overgeslagen." : dubbel + " dubbele overgeslagen."}`);
             } else if (!n && dubbel) {
               alert(
-                (dubbel === 1 ? "1 dubbele bon overgeslagen. Die komt niet nog eens in de lijst." : `${dubbel} dubbele bonnen overgeslagen. Die komen niet nog eens in de lijst.`) +
-                  (extra?.archiefFout ? " Het originele bestand kon niet worden bewaard." : " De bestanden blijven bewaard.")
+                (dubbel === 1 ? "1 dubbele overgeslagen." : `${dubbel} dubbele overgeslagen.`) +
+                  (extra?.archiefFout ? " Bestand niet bewaard." : "")
               );
-            } else if (extra?.archiefFout) alert("De rit is bewaard, maar het originele bestand paste niet op dit toestel.");
+            } else if (extra?.archiefFout) alert("Rit bewaard. Bestand niet bewaard.");
           }}
         />
       ) : null}
@@ -575,19 +575,18 @@ function StartVandaag({ openNieuw, openBon, setFor }) {
   return (
     <section className="tm-start" aria-label="Aan de slag">
       <h2 className="tm-start-h">Aan de slag</h2>
-      <p className="tm-start-p">Voeg een transportbon toe, plan een rit uit de prijslijst, of lees een Excel-rittenlijst in.</p>
       <div className="tm-start-cards">
         <button type="button" className="tm-start-card" onClick={() => openBon()}>
           <strong>Transportbon</strong>
-          <span>Foto of PDF van de bon. De rit wordt berekend; het origineel blijft bewaard.</span>
+          <span>Foto of PDF.</span>
         </button>
         <button type="button" className="tm-start-card" onClick={() => openNieuw()}>
           <strong>Nieuwe rit</strong>
-          <span>Kies vertrek en bestemming. Het bedrag volgt uit de prijslijst.</span>
+          <span>Vertrek en bestemming.</span>
         </button>
         <div className="tm-start-card">
           <strong>Rittenlijst inlezen</strong>
-          <span>Een bestand zoals Ritten_maand_augustus.xlsx vult de gereden ritten in.</span>
+          <span>Excel (.xlsx).</span>
           <ExcelInlezenKnop pid={PR[0].id} setFor={setFor} className="btn btn-p" label="Excel kiezen" />
         </div>
       </div>
@@ -1092,7 +1091,7 @@ function Planning({ all, ritten, ritActie, setFor, focus, setFocus, openNieuw, o
             <>Geen ritten gevonden voor “{zoek}”.</>
           ) : filter === "komend" ? (
             <>
-              Niets open. Plan een rit in, dan verschijnt ze hier en op de dagkaart.
+              Niets open.
               <div className="tm-empty-act">
                 <button type="button" className="btn btn-p" onClick={() => openNieuw(focus !== "team" ? focus : undefined)}>
                   Nieuwe rit
@@ -1308,12 +1307,12 @@ function RitDetail({ r, all, setFor, onClose, onVerwijder }) {
               try {
                 const rec = await haalBonBestand(r.bonBestandId);
                 if (!rec?.blob) {
-                  alert("Het originele bestand staat niet meer op dit toestel.");
+                  alert("Bestand niet meer op dit toestel.");
                   return;
                 }
                 openBonBlob(rec);
               } catch {
-                alert("Het originele bestand kon niet worden geopend.");
+                alert("Bestand kon niet worden geopend.");
               }
             }}
           >
@@ -1442,9 +1441,8 @@ function NieuweRitSheet({ all, startPid, onClose, onSave, onOpenBon }) {
           {onOpenBon ? (
             <p className="tm-hint" style={{ marginTop: 0 }}>
               <button type="button" className="tm-link" onClick={onOpenBon}>
-                Foto of PDF van de transportbon
+                Foto of PDF
               </button>
-              {" — "}we rekenen de rit en zetten hem in de lijst.
             </p>
           ) : null}
           {PR.length > 1 ? (
@@ -1487,8 +1485,8 @@ function NieuweRitSheet({ all, startPid, onClose, onSave, onOpenBon }) {
               {!heeftResultaat ? (
                 <p className="tm-empty">
                   {q
-                    ? `Geen rit gevonden voor “${zoek}”. Vul vertrek en bestemming hieronder zelf in.`
-                    : "Geen vaste rit. Vul vertrek en bestemming hieronder zelf in."}
+                    ? `Geen rit voor “${zoek}”.`
+                    : "Geen vaste rit. Vul vertrek en bestemming zelf in."}
                 </p>
               ) : (
                 <>
@@ -1603,7 +1601,7 @@ function NieuweRitSheet({ all, startPid, onClose, onSave, onOpenBon }) {
               </div>
             </div>
             <p className="tm-hint" aria-live="polite">
-              {fm.bron === "lijst" ? "Afstand uit de prijslijst. Je mag de km nog aanpassen." : ""}
+              {fm.bron === "lijst" ? "Uit de prijslijst." : ""}
             </p>
           </fieldset>
 

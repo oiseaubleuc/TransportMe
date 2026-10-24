@@ -60,17 +60,16 @@ function RijEditor({ v, onChange, i, bestaand }) {
       </header>
       {v.dubbelInBatch ? (
         <div className="tm-bon-vraag">
-          <p>Dubbel: dezelfde bon staat hierboven al. Die rit komt niet nog eens in de lijst. Het bestand blijft bewaard.</p>
+          <p>Dubbel. Staat hierboven.</p>
         </div>
       ) : eerder ? (
         <div className={"tm-bon-vraag" + (v.vraagVoltooid && v.voltooidKeuze == null ? " tm-bon-vraag--wacht" : "")}>
           {v.vraagVoltooid ? (
             <>
               <p>
-                Deze bon hoort bij een eerdere rit
-                {eerder.f && eerder.t ? ` (${eerder.f} → ${eerder.t}` : ""}
-                {eerder.d ? `${eerder.f && eerder.t ? ", " : " ("}${datumKort(eerder.d)}` : ""}
-                {eerder.f || eerder.d ? ")" : ""}, nu {statusWoord(eerder.s)}. Is de rit voltooid?
+                Eerdere rit
+                {eerder.f && eerder.t ? `: ${eerder.f} → ${eerder.t}` : ""}
+                {eerder.d ? `, ${datumKort(eerder.d)}` : ""}. Voltooid?
               </p>
               <div className="tm-chips" role="group" aria-label="Rit voltooid">
                 <button
@@ -90,7 +89,7 @@ function RijEditor({ v, onChange, i, bestaand }) {
               </div>
             </>
           ) : (
-            <p>Dubbel: deze bon staat al in de lijst als {statusWoord(eerder.s)}. We voegen geen tweede rit toe. Het origineel blijft bewaard.</p>
+            <p>Dubbel. Staat al in de lijst ({statusWoord(eerder.s)}).</p>
           )}
         </div>
       ) : null}
@@ -188,11 +187,12 @@ function RijEditor({ v, onChange, i, bestaand }) {
           ))}
         </dl>
       ) : null}
-      <p className="tm-hint" aria-live="polite">
-        {kInt >= 1 && v.f && v.t
-          ? `${euro(bedrag)}${isN(v.ti) ? ", nachttarief" : ""}`
-          : "Vul vertrek, bestemming, datum en km aan als iets ontbreekt."}
-      </p>
+      {kInt >= 1 && v.f && v.t ? (
+        <p className="tm-hint" aria-live="polite">
+          {euro(bedrag)}
+          {isN(v.ti) ? ", nachttarief" : ""}
+        </p>
+      ) : null}
     </article>
   );
 }
@@ -226,7 +226,7 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
     async fileList => {
       const arr = Array.from(fileList || []).filter(isBonBestand);
       if (!arr.length) {
-        setFout("Kies een foto of een PDF van de transportbon.");
+        setFout("Kies een foto of PDF.");
         return;
       }
       const teGroot = arr.filter(f => f.size > MAX_MB * 1024 * 1024);
@@ -284,16 +284,16 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
         const next = groepen.flatMap(g => g.rows);
         const mislukt = groepen.filter(g => g.fout).length;
         if (!next.length) {
-          setFout("De bonnen konden niet worden gelezen. Probeer scherpere foto’s of andere PDF’s, of vul de rit zelf in.");
+          setFout("Kon niet worden gelezen. Probeer een scherpere foto of een andere PDF.");
           setFase("kies");
           return;
         }
-        if (mislukt) setFout(`${mislukt === 1 ? "1 bestand" : mislukt + " bestanden"} kon niet worden gelezen. De rest staat hieronder.`);
+        if (mislukt) setFout(`${mislukt === 1 ? "1 bestand" : mislukt + " bestanden"} kon niet worden gelezen.`);
         setRijen(markeerDubbeleRijen(next));
         setFase("check");
       } catch (e) {
         console.error(e);
-        setFout("De bon kon niet worden gelezen. Probeer een scherpere foto of een andere PDF, of vul de rit zelf in.");
+        setFout("Kon niet worden gelezen. Probeer een scherpere foto of een andere PDF.");
         setFase("kies");
       } finally {
         setVoortgang(null);
@@ -406,7 +406,7 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
             <fieldset className="tm-fs">
               <legend>Bonnen</legend>
               <p className="tm-card-p" style={{ marginTop: 0 }}>
-                Eén of meer foto’s of PDF’s. We lezen ze samen, bewaren de originelen en zetten alle ritten in de lijst.
+                Foto of PDF.
               </p>
               <label
                 className={"btn btn-p btn-full" + (fase === "lezen" ? " tm-btn-busy" : "")}
@@ -464,16 +464,12 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
                 <b className="tm-num">
                   {klaar.length === 1 ? euro(tmVergoeding(klaar[0].f, klaar[0].t, klaar[0].k, klaar[0].ti)) : `${klaar.length} ritten`}
                 </b>
-                <span>
-                  {dubbeleMelding(rijen)
-                    ? "Nieuwe ritten komen in de lijst. Dubbele worden overgeslagen; de bestanden blijven bewaard."
-                    : "Alles komt in de lijst. Het origineel blijft bewaard."}
-                </span>
+                {dubbeleMelding(rijen) ? <span>Dubbele worden overgeslagen.</span> : null}
               </>
             ) : wachtAntwoord ? (
               <span>Zeg bij de eerdere rit of hij voltooid is.</span>
             ) : (
-              <span>Kies één of meer foto’s of PDF’s</span>
+              <span>Kies foto’s of PDF’s</span>
             )}
           </div>
           <button type="button" className="btn btn-p" disabled={!klaar.length || bewaren} onClick={bewaar}>
