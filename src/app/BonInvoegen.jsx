@@ -15,7 +15,7 @@ import {
   dubbeleMelding,
 } from "../js/transportBon.js";
 
-const MAX_BESTANDEN = 20;
+const MAX_BESTANDEN = 80;
 const MAX_MB = 14;
 
 function extraUitData(D) {
