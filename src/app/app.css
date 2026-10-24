@@ -1582,6 +1582,21 @@ label.btn {
   border-color: var(--acc);
 }
 
+.tm-bon-dubbel-tag {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bd);
+  color: var(--ink);
+  background: var(--s2);
+}
+
+.tm-bon-dubbel-sam {
+  margin: 0 0 12px;
+}
+
 .tm-bon-extra {
   display: grid;
   gap: 6px 0;

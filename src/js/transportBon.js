@@ -554,3 +554,57 @@ export function voorstelRijKlaar(v) {
   if (v.vraagVoltooid && v.voltooidKeuze == null) return false;
   return true;
 }
+
+/** Zelfde bonnummer twee keer in deze selectie: de eerste blijft, de rest is dubbel. */
+export function markeerDubbeleRijen(rijen) {
+  const seen = new Set();
+  return (rijen || []).map(v => {
+    const code = bonSleutel(v.bon);
+    let dubbelInBatch = false;
+    if (code) {
+      if (seen.has(code)) dubbelInBatch = true;
+      else seen.add(code);
+    }
+    return { ...v, dubbelInBatch };
+  });
+}
+
+export function isDubbeleBon(v) {
+  return !!(v && (v.dubbelInBatch || (v.bestaandId && !v.vraagVoltooid)));
+}
+
+export function dubbeleMelding(rijen) {
+  const lijst = [];
+  const batch = [];
+  const seenL = new Set();
+  const seenB = new Set();
+  for (const v of rijen || []) {
+    const label = String(v.bon || "").trim() || "zonder nummer";
+    const key = bonSleutel(v.bon) || label.toUpperCase();
+    if (v.bestaandId && !seenL.has(key)) {
+      seenL.add(key);
+      lijst.push(label);
+    }
+    if (v.dubbelInBatch && !seenB.has(key)) {
+      seenB.add(key);
+      batch.push(label);
+    }
+  }
+  if (!lijst.length && !batch.length) return "";
+  const stukken = [];
+  if (lijst.length) {
+    stukken.push(
+      lijst.length === 1
+        ? `${lijst[0]} staat al in de lijst.`
+        : `${lijst.join(", ")} staan al in de lijst.`
+    );
+  }
+  if (batch.length) {
+    stukken.push(
+      batch.length === 1
+        ? `${batch[0]} staat twee keer in deze selectie.`
+        : `${batch.join(", ")} staan twee keer in deze selectie.`
+    );
+  }
+  return "Dubbele: " + stukken.join(" ");
+}

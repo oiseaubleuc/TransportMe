@@ -385,8 +385,16 @@ export default function App() {
               return n === 0 && bij === 0 ? D : normData({ ...D, r: uit.ritten });
             });
             setBonIn(null);
-            if (n === 0 && bij === 0 && duplicaten) alert("Deze bon staat al in de lijst." + (extra?.archiefFout ? " Het originele bestand kon niet worden bewaard." : " Het origineel blijft bewaard."));
-            else if (extra?.archiefFout) alert("De rit is bewaard, maar het originele bestand paste niet op dit toestel.");
+            const dubbel = (extra?.overgeslagenDubbel || 0) + (duplicaten || 0);
+            if (n && dubbel) {
+              alert(`${n === 1 ? "1 rit toegevoegd" : n + " ritten toegevoegd"}. ${dubbel === 1 ? "1 dubbele overgeslagen." : dubbel + " dubbele overgeslagen."}`);
+            } else if (!n && dubbel) {
+              alert(
+                (dubbel === 1 ? "1 dubbele bon overgeslagen." : `${dubbel} dubbele bonnen overgeslagen.`) +
+                  " Die komt niet nog eens in de lijst." +
+                  (extra?.archiefFout ? " Het originele bestand kon niet worden bewaard." : " De bestanden blijven bewaard.")
+              );
+            } else if (extra?.archiefFout) alert("De rit is bewaard, maar het originele bestand paste niet op dit toestel.");
           }}
         />
       ) : null}

@@ -10,6 +10,9 @@ import {
   bonInhoudRegels,
   koppelBonAanRit,
   voorstelRijKlaar,
+  markeerDubbeleRijen,
+  isDubbeleBon,
+  dubbeleMelding,
 } from "../js/transportBon.js";
 
 const MAX_BESTANDEN = 20;
@@ -51,10 +54,15 @@ function RijEditor({ v, onChange, i, bestaand }) {
     <article className="tm-bon-rij">
       <header className="tm-bon-rij-h">
         <span className="tm-num">{v.bon || "Bon " + (i + 1)}</span>
+        {isDubbeleBon(v) || v.vraagVoltooid ? <span className="tm-bon-dubbel-tag">Dubbel</span> : null}
         {v.kmBron === "lijst" ? <span className="tm-muted">Km uit de prijslijst</span> : null}
         {v.kmBron === "weg" ? <span className="tm-muted">Km over de weg</span> : null}
       </header>
-      {eerder ? (
+      {v.dubbelInBatch ? (
+        <div className="tm-bon-vraag">
+          <p>Dubbel: dezelfde bon staat hierboven al. Die rit komt niet nog eens in de lijst. Het bestand blijft bewaard.</p>
+        </div>
+      ) : eerder ? (
         <div className={"tm-bon-vraag" + (v.vraagVoltooid && v.voltooidKeuze == null ? " tm-bon-vraag--wacht" : "")}>
           {v.vraagVoltooid ? (
             <>
@@ -82,7 +90,7 @@ function RijEditor({ v, onChange, i, bestaand }) {
               </div>
             </>
           ) : (
-            <p>Deze bon staat al in de lijst als {statusWoord(eerder.s)}. Het origineel blijft bewaard.</p>
+            <p>Dubbel: deze bon staat al in de lijst als {statusWoord(eerder.s)}. We voegen geen tweede rit toe. Het origineel blijft bewaard.</p>
           )}
         </div>
       ) : null}
@@ -281,7 +289,7 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
           return;
         }
         if (mislukt) setFout(`${mislukt === 1 ? "1 bestand" : mislukt + " bestanden"} kon niet worden gelezen. De rest staat hieronder.`);
-        setRijen(next);
+        setRijen(markeerDubbeleRijen(next));
         setFase("check");
       } catch (e) {
         console.error(e);
@@ -326,7 +334,13 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
     }
     const nieuw = [];
     const updates = [];
+    const gezienUpdate = new Set();
+    let overgeslagenDubbel = 0;
     for (const v of klaar) {
+      if (v.dubbelInBatch) {
+        overgeslagenDubbel++;
+        continue;
+      }
       const k = Math.max(1, Math.round(Number(String(v.k).replace(",", ".")) || 0));
       const voltooid = v.voltooidKeuze !== false && v.s !== "komend" && v.s !== "lopend";
       const trip = tripUitVoorstel(
@@ -339,6 +353,12 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
         }
       );
       if (v.bestaandId) {
+        if (gezienUpdate.has(v.bestaandId)) {
+          overgeslagenDubbel++;
+          continue;
+        }
+        gezienUpdate.add(v.bestaandId);
+        if (!v.vraagVoltooid) overgeslagenDubbel++;
         const patch = {
           bon: trip.bon || undefined,
           bonInhoud: trip.bonInhoud,
@@ -351,7 +371,7 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
         nieuw.push(trip);
       }
     }
-    onSave(pid, { nieuw, updates }, { archiefFout });
+    onSave(pid, { nieuw, updates }, { archiefFout, overgeslagenDubbel });
   };
 
   return (
@@ -421,13 +441,14 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
           ) : (
             <fieldset className="tm-fs">
               <legend>{rijen.length === 1 ? "Rit uit de bon" : `${rijen.length} ritten uit de bonnen`}</legend>
+              {dubbeleMelding(rijen) ? <p className="tm-warn tm-bon-dubbel-sam">{dubbeleMelding(rijen)}</p> : null}
               {rijen.map((v, i) => (
                 <RijEditor
                   key={v.id}
                   i={i}
                   v={v}
                   bestaand={(ritten || []).find(r => r.id === v.bestaandId)}
-                  onChange={nv => setRijen(cur => cur.map(x => (x.id === v.id ? nv : x)))}
+                  onChange={nv => setRijen(cur => markeerDubbeleRijen(cur.map(x => (x.id === v.id ? nv : x))))}
                 />
               ))}
               <button type="button" className="btn btn-o" onClick={() => { setRijen([]); setFase("kies"); setFout(""); }}>
@@ -443,7 +464,11 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
                 <b className="tm-num">
                   {klaar.length === 1 ? euro(tmVergoeding(klaar[0].f, klaar[0].t, klaar[0].k, klaar[0].ti)) : `${klaar.length} ritten`}
                 </b>
-                <span>Alles komt in de lijst. Het origineel blijft bewaard.</span>
+                <span>
+                  {dubbeleMelding(rijen)
+                    ? "Nieuwe ritten komen in de lijst. Dubbele worden overgeslagen; de bestanden blijven bewaard."
+                    : "Alles komt in de lijst. Het origineel blijft bewaard."}
+                </span>
               </>
             ) : wachtAntwoord ? (
               <span>Zeg bij de eerdere rit of hij voltooid is.</span>

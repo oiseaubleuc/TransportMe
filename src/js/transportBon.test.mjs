@@ -9,6 +9,9 @@ import {
   vindBestaandeRit,
   koppelBonAanRit,
   voorstelRijKlaar,
+  markeerDubbeleRijen,
+  isDubbeleBon,
+  dubbeleMelding,
 } from "./transportBon.js";
 
 const SAMPLE = `
@@ -181,6 +184,23 @@ assert(koppel.vraagVoltooid === true, "vraag voltooid bij eerdere rit");
 assert(koppel.voltooidKeuze == null, "wacht op ja/nee");
 assert(!voorstelRijKlaar(koppel), "niet klaar zonder antwoord");
 assert(voorstelRijKlaar({ ...koppel, f: pdf.vertrek, t: pdf.bestemming, d: pdf.datum, k: 36, voltooidKeuze: true }), "klaar na ja");
+
+const batch = markeerDubbeleRijen([
+  { id: "a", bon: "IHcT61004279", f: "Diest AZ", t: "UZ Leuven", d: "2026-06-02", k: 36 },
+  { id: "b", bon: "IHcT61004279", f: "Diest AZ", t: "UZ Leuven", d: "2026-06-02", k: 36 },
+  { id: "c", bon: "IHcT61069999", f: "RKV Sango", t: "UZA (Edegem)", d: "2026-10-19", k: 17 },
+]);
+assert(batch[0].dubbelInBatch === false, "eerste geen batch-dubbel");
+assert(batch[1].dubbelInBatch === true, "tweede is batch-dubbel");
+assert(batch[2].dubbelInBatch === false, "andere bon geen dubbel");
+assert(isDubbeleBon({ bestaandId: "x", vraagVoltooid: false }), "al in lijst = dubbel");
+assert(!isDubbeleBon({ bestaandId: "x", vraagVoltooid: true }), "open eerdere rit is geen stille dubbel");
+const melding = dubbeleMelding([
+  { bon: "IHcT61004279", bestaandId: "r-oud", vraagVoltooid: false },
+  { bon: "IHcT61069999", dubbelInBatch: true },
+]);
+assert(/al in de lijst/i.test(melding), "melding lijst " + melding);
+assert(/twee keer/i.test(melding), "melding batch " + melding);
 
 assert(
   voorstelIsKlaar({ f: van.name, t: naar.name, d: p.datum, k: 55 }),
