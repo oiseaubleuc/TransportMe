@@ -3,7 +3,7 @@
  * index + Vite /assets/* worden netwerk-eerst geladen (hashed bestandsnamen wijzigen per build).
  */
 const CACHE_NAME = "transportme-v3";
-const PRECACHE_URLS = ["/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png"];
+const PRECACHE_URLS = ["/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

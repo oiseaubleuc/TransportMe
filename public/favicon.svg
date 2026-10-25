@@ -1,15 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="TransportMe">
   <rect width="512" height="512" rx="108" fill="#1a1a1a"/>
   <g fill="#ffffff">
-    <rect x="108" y="210" width="230" height="112" rx="24"/>
-    <path d="M338 232h52c10 0 18 4 24 12l28 34c4 5 6 11 6 17v27h-110V232z"/>
-    <path d="M356 246h38c4 0 8 2 11 5l19 23h-68V246z" fill="#9a9a9a"/>
-    <rect x="114" y="322" width="334" height="18" rx="8"/>
-    <circle cx="184" cy="352" r="36"/>
-    <circle cx="374" cy="352" r="36"/>
+    <rect x="72" y="188" width="248" height="148" rx="28"/>
+    <rect x="310" y="214" width="154" height="122" rx="16"/>
+    <rect x="84" y="336" width="352" height="16" rx="8"/>
+    <circle cx="176" cy="362" r="40"/>
+    <circle cx="372" cy="362" r="40"/>
+    <rect x="148" y="166" width="72" height="22" rx="7"/>
   </g>
   <g fill="#1a1a1a">
-    <circle cx="184" cy="352" r="16"/>
-    <circle cx="374" cy="352" r="16"/>
+    <circle cx="176" cy="362" r="16"/>
+    <circle cx="372" cy="362" r="16"/>
+    <rect x="154" y="228" width="84" height="24" rx="6"/>
+    <rect x="184" y="198" width="24" height="84" rx="6"/>
   </g>
 </svg>
