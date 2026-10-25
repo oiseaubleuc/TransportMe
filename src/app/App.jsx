@@ -28,6 +28,7 @@ import {
 import { getFactuurGegevens } from "../js/storage.js";
 import { downloadRittenExcel, leesRittenExcel, voegExcelRittenToe, meldingExcelInlees } from "../js/rittenExcel.js";
 import BonInvoegenSheet from "./BonInvoegen.jsx";
+import LopendeEiland from "./LopendeEiland.jsx";
 import { haalBonBestand, openBonBlob } from "../js/bonArchief.js";
 import { bonInhoudRegels, voegBonRittenToe } from "../js/transportBon.js";
 import {
@@ -272,6 +273,7 @@ export default function App() {
 
   const team = useMemo(() => PR.map(p => ({ ...p, D: all[p.id] })), [all]);
   const ritten = useMemo(() => team.flatMap(t => t.D.r.map(r => ({ ...r, _pid: t.id }))), [team]);
+  const heeftLopend = ritten.some(r => r.s === "lopend");
 
   const openNieuw = pid => setNieuw({ pid: pid || (focus !== "team" ? focus : PR[0].id) });
   const openBon = pid => setBonIn({ pid: pid || (focus !== "team" ? focus : PR[0].id) });
@@ -295,7 +297,8 @@ export default function App() {
     );
 
   return (
-    <div className="tm-app">
+    <div className={"tm-app" + (heeftLopend ? " tm-app--eiland" : "")}>
+      <LopendeEiland ritten={ritten} ritActie={ritActie} />
       <nav className="tm-nav" aria-label="Hoofdmenu">
         <div className="tm-brand">
           <Logo />
@@ -326,7 +329,7 @@ export default function App() {
       </nav>
 
       <main className="tm-main" ref={mainRef}>
-        <div className="tm-page" key={tab}>
+        <div className={"tm-page" + (tab === "overzicht" ? " tm-dash" : "")} key={tab}>
           {pagina}
         </div>
       </main>
