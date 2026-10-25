@@ -159,13 +159,15 @@ function StatusWoord({ s }) {
 function Logo() {
   return (
     <svg className="tm-logo-mark" viewBox="0 0 32 32" aria-hidden="true">
-      <rect x="3" y="11" width="15" height="10" rx="2.2" fill="currentColor" />
-      <path d="M18 13h4.2c.7 0 1.3.3 1.7.8L26.8 17.4c.3.4.4.8.4 1.2V21H18V13z" fill="currentColor" />
-      <rect x="4" y="21" width="23" height="1.4" rx=".7" fill="currentColor" />
-      <circle cx="9.5" cy="23.2" r="2.6" fill="currentColor" />
-      <circle cx="22.5" cy="23.2" r="2.6" fill="currentColor" />
-      <rect x="7.8" y="13.6" width="5.4" height="1.7" rx=".5" fill="#1a1a1a" />
-      <rect x="9.6" y="11.8" width="1.7" height="5.4" rx=".5" fill="#1a1a1a" />
+      <path
+        fill="currentColor"
+        d="M4.2 17.6 9.6 11.4h15.2c1.2 0 2.2.9 2.2 2.2V21H4.2z"
+      />
+      <path fill="#1a1a1a" d="m10.6 12.6 2.8 3.2h3.6v-3.2z" />
+      <circle cx="10.4" cy="22.8" r="3" fill="currentColor" />
+      <circle cx="22.4" cy="22.8" r="3" fill="currentColor" />
+      <circle cx="10.4" cy="22.8" r="1.15" fill="#1a1a1a" />
+      <circle cx="22.4" cy="22.8" r="1.15" fill="#1a1a1a" />
     </svg>
   );
 }
