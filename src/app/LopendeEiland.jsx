@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { chauffeurNaam, ritSortKey } from "./team.js";
+import { toonLopendeMelding, wisLopendeMelding } from "../js/lopendeMelding.js";
 
 function useNu(ms = 15000) {
   const [n, setN] = useState(() => new Date());
@@ -49,12 +51,34 @@ export default function LopendeEiland({ ritten, ritActie }) {
     return () => window.removeEventListener("keydown", sluit);
   }, [open]);
 
-  if (!rit) return null;
+  useEffect(() => {
+    document.documentElement.classList.toggle("tm-eiland-aan", !!rit);
+    if (rit) toonLopendeMelding(rit);
+    else wisLopendeMelding();
+    return () => {
+      document.documentElement.classList.remove("tm-eiland-aan");
+    };
+  }, [rit?.id, rit?._pid, rit?.f, rit?.t]);
+
+  useEffect(() => {
+    if (!rit) return;
+    const op = () => {
+      if (document.visibilityState === "hidden") toonLopendeMelding(rit);
+    };
+    document.addEventListener("visibilitychange", op);
+    window.addEventListener("pagehide", op);
+    return () => {
+      document.removeEventListener("visibilitychange", op);
+      window.removeEventListener("pagehide", op);
+    };
+  }, [rit?.id, rit?._pid, rit?.f, rit?.t]);
+
+  if (!rit || typeof document === "undefined") return null;
 
   const min = minutenOnderweg(rit, nu);
   const extra = lopend.length - 1;
 
-  return (
+  return createPortal(
     <div className={"tm-eiland" + (open ? " is-open" : "")} role="status" aria-live="polite">
       <button
         type="button"
@@ -87,6 +111,7 @@ export default function LopendeEiland({ ritten, ritActie }) {
           </button>
         </div>
       ) : null}
-    </div>
+    </div>,
+    document.body
   );
 }

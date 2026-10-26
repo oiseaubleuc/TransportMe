@@ -29,6 +29,7 @@ import { getFactuurGegevens } from "../js/storage.js";
 import { downloadRittenExcel, leesRittenExcel, voegExcelRittenToe, meldingExcelInlees } from "../js/rittenExcel.js";
 import BonInvoegenSheet from "./BonInvoegen.jsx";
 import LopendeEiland from "./LopendeEiland.jsx";
+import { vraagMeldingToestemming } from "../js/lopendeMelding.js";
 import { haalBonBestand, openBonBlob } from "../js/bonArchief.js";
 import { bonInhoudRegels, voegBonRittenToe } from "../js/transportBon.js";
 import {
@@ -258,6 +259,7 @@ export default function App() {
         setPending({ pid, id });
         return;
       }
+      if (a === "go") vraagMeldingToestemming();
       if (a === "no" || a === "x") {
         if (!confirm(`Rit ${r.f} naar ${r.t} (${datumKort(r.d)}${r.ti ? " " + r.ti : ""}) verwijderen?`)) return;
       }

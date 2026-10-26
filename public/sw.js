@@ -2,7 +2,7 @@
  * TransportMe PWA — voorkomt wit scherm na deploy:
  * index + Vite /assets/* worden netwerk-eerst geladen (hashed bestandsnamen wijzigen per build).
  */
-const CACHE_NAME = "transportme-v3";
+const CACHE_NAME = "transportme-v4";
 const PRECACHE_URLS = ["/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -30,6 +30,21 @@ function maybeCache(cache, request, response) {
   }
   return cache.put(request, response.clone()).then(() => response);
 }
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const doel = event.notification?.data?.url || "/#overzicht";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(lijst => {
+      const open = lijst.find(c => "focus" in c);
+      if (open) {
+        open.postMessage({ type: "tm-open-lopend" });
+        return open.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(doel);
+    })
+  );
+});
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;

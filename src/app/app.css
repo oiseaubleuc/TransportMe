@@ -6,7 +6,7 @@
 /* ---------- Shell ---------- */
 .tm-app {
   display: block;
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100%;
 }
 
@@ -1886,12 +1886,12 @@ button.tm-start-card:hover,
 
 .tm-eiland {
   position: fixed;
-  z-index: 70;
-  top: calc(10px + env(safe-area-inset-top, 0px));
+  z-index: 2147483000;
+  top: max(10px, env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   width: min(360px, calc(100vw - 28px));
-  background: rgba(12, 12, 14, 0.9);
+  background: rgba(12, 12, 14, 0.92);
   color: #f4f4f5;
   border-radius: 999px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.28);
@@ -1900,10 +1900,8 @@ button.tm-start-card:hover,
   overflow: hidden;
 }
 
-@media (min-width: 1024px) {
-  .tm-eiland {
-    left: calc(232px + (100vw - 232px) / 2);
-  }
+html.tm-standalone .tm-eiland {
+  top: 11px;
 }
 
 .tm-eiland.is-open {

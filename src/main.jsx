@@ -3,6 +3,10 @@ import { createRoot } from "react-dom/client";
 import "@fontsource-variable/overpass";
 import App from "./app/App.jsx";
 import Pincode from "./app/Pincode.jsx";
+import { zetStandaloneKlasse } from "./js/lopendeMelding.js";
+
+zetStandaloneKlasse();
+window.matchMedia?.("(display-mode: standalone)")?.addEventListener?.("change", zetStandaloneKlasse);
 
 const rootEl = document.getElementById("root");
 if (!rootEl) {
