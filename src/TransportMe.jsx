@@ -14,8 +14,8 @@ import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 import BewaardeBonnen from "./app/BewaardeBonnen.jsx";
 import { lsGet, lsSet } from "./js/veiligeOpslag.js";
 
-/** Kaartkleur van de route-lijn — zwart op de witte kaart */
-const TM_ACC = "#111111";
+/** Kaartkleur van de route-lijn — inktzwart op de witte kaart */
+const TM_ACC = "#0A0A0A";
 
 const PR = [{ id: "houdaifa", n: "Houdaifa", i: "H" }];
 const DR = ["Houdaifa", "Student 1"],

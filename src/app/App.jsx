@@ -60,7 +60,7 @@ import {
 import "./app.css";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
-ChartJS.defaults.font.family = "'Overpass Variable', 'Overpass', system-ui, sans-serif";
+ChartJS.defaults.font.family = "'Inter Tight', system-ui, sans-serif";
 
 /* ------------------------------------------------------------------ */
 /* Kleine hulpmiddelen                                                 */
@@ -168,11 +168,11 @@ function Logo() {
         fill="currentColor"
         d="M4.2 17.6 9.6 11.4h15.2c1.2 0 2.2.9 2.2 2.2V21H4.2z"
       />
-      <path fill="#1a1a1a" d="m10.6 12.6 2.8 3.2h3.6v-3.2z" />
+      <path fill="#ffffff" d="m10.6 12.6 2.8 3.2h3.6v-3.2z" />
       <circle cx="10.4" cy="22.8" r="3" fill="currentColor" />
       <circle cx="22.4" cy="22.8" r="3" fill="currentColor" />
-      <circle cx="10.4" cy="22.8" r="1.15" fill="#1a1a1a" />
-      <circle cx="22.4" cy="22.8" r="1.15" fill="#1a1a1a" />
+      <circle cx="10.4" cy="22.8" r="1.15" fill="#ffffff" />
+      <circle cx="22.4" cy="22.8" r="1.15" fill="#ffffff" />
     </svg>
   );
 }
@@ -791,14 +791,14 @@ function WeekBlok({ team, ws, tot, gaNaar }) {
         t.D.r.filter(r => r.s === "voltooid" && r.d === d).reduce((a, r) => a + money(r.v), 0)
       ),
       backgroundColor: kleuren[i % 4],
-      borderRadius: 3,
+      borderRadius: 0,
       borderSkipped: false,
       maxBarThickness: 26,
       stack: "omzet",
     })),
   };
-  const as = donker ? "#8a8a8a" : "#767676";
-  const grid = donker ? "rgba(255,255,255,.1)" : "rgba(0,0,0,.07)";
+  const as = donker ? "#a3a3a3" : "#525252";
+  const grid = donker ? "rgba(255,255,255,.2)" : "rgba(10,10,10,.12)";
   const opts = {
     responsive: true,
     maintainAspectRatio: false,
@@ -807,11 +807,11 @@ function WeekBlok({ team, ws, tot, gaNaar }) {
       legend: { display: false },
       tooltip: {
         callbacks: { label: c => `${c.dataset.label}: ${euro(c.parsed.y)}` },
-        backgroundColor: donker ? "#f2f2f2" : "#111111",
-        titleColor: donker ? "#111111" : "#ffffff",
-        bodyColor: donker ? "#111111" : "#ffffff",
+        backgroundColor: donker ? "#ffffff" : "#0a0a0a",
+        titleColor: donker ? "#0a0a0a" : "#ffffff",
+        bodyColor: donker ? "#0a0a0a" : "#ffffff",
         padding: 10,
-        cornerRadius: 8,
+        cornerRadius: 0,
       },
     },
     scales: {
@@ -1868,7 +1868,7 @@ function FinTeam({ team, setFocus }) {
   const nuWs = weekStart(vandaagIso());
   const weken = Array.from({ length: 10 }, (_, i) => isoPlusDagen(nuWs, -7 * (9 - i)));
   const kleuren = LIJN_HEX[donker ? "dark" : "light"];
-  const as = donker ? "#8a8a8a" : "#767676";
+  const as = donker ? "#a3a3a3" : "#525252";
   const data = {
     labels: weken.map(w => datumKort(w)),
     datasets: [
@@ -1877,7 +1877,7 @@ function FinTeam({ team, setFocus }) {
         data: weken.map(w => totalen(t.D, w, isoPlusDagen(w, 6)).omzet),
         backgroundColor: kleuren[i % 4],
         stack: "omzet",
-        borderRadius: 3,
+        borderRadius: 0,
         borderSkipped: false,
         maxBarThickness: 30,
       })),
@@ -1886,7 +1886,7 @@ function FinTeam({ team, setFocus }) {
         data: weken.map(w => team.reduce((a, t) => a + totalen(t.D, w, isoPlusDagen(w, 6)).kosten, 0)),
         backgroundColor: donker ? "rgba(240,122,110,.55)" : "rgba(182,60,50,.42)",
         stack: "kosten",
-        borderRadius: 3,
+        borderRadius: 0,
         borderSkipped: false,
         maxBarThickness: 12,
       },
@@ -1900,11 +1900,11 @@ function FinTeam({ team, setFocus }) {
       legend: { display: false },
       tooltip: {
         callbacks: { title: c => "Week van " + c[0].label, label: c => `${c.dataset.label}: ${euro(c.parsed.y)}` },
-        backgroundColor: donker ? "#f2f2f2" : "#111111",
-        titleColor: donker ? "#111111" : "#ffffff",
-        bodyColor: donker ? "#111111" : "#ffffff",
+        backgroundColor: donker ? "#ffffff" : "#0a0a0a",
+        titleColor: donker ? "#0a0a0a" : "#ffffff",
+        bodyColor: donker ? "#0a0a0a" : "#ffffff",
         padding: 10,
-        cornerRadius: 8,
+        cornerRadius: 0,
       },
     },
     scales: {
@@ -1912,7 +1912,7 @@ function FinTeam({ team, setFocus }) {
       y: {
         stacked: true,
         border: { display: false },
-        grid: { color: donker ? "rgba(255,255,255,.1)" : "rgba(0,0,0,.07)" },
+        grid: { color: donker ? "rgba(255,255,255,.2)" : "rgba(10,10,10,.12)" },
         ticks: { color: as, font: { size: 11 }, maxTicksLimit: 5, callback: v => "€" + v },
       },
     },

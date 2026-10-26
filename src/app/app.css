@@ -29,6 +29,7 @@
   padding-bottom: var(--sb);
   background: var(--rail);
   color: var(--rail-tx);
+  border-top: 1px solid var(--bd);
 }
 
 .tm-brand {
@@ -50,7 +51,7 @@
   color: inherit;
   text-decoration: none;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   position: relative;
   padding: 0 2px;
   line-height: 1.15;
@@ -63,6 +64,7 @@
 
 .tm-nav-i.on {
   color: var(--rail-on);
+  font-weight: 700;
 }
 
 .tm-nav-i.on::before {
@@ -71,9 +73,9 @@
   top: 0;
   left: 28%;
   right: 28%;
-  height: 3px;
-  border-radius: 0 0 3px 3px;
-  background: var(--rail-on);
+  height: 2px;
+  border-radius: 0;
+  background: var(--acc);
 }
 
 .tm-nav-cta {
@@ -82,18 +84,24 @@
   bottom: calc(var(--nh) + var(--sb) + 16px);
   height: 52px;
   padding: 0 22px 0 18px;
-  border-radius: 26px;
-  border: none;
-  background: var(--ink);
-  color: var(--ink-tx);
+  border-radius: 0;
+  border: 1px solid var(--cta);
+  background: var(--cta);
+  color: var(--cta-tx);
   font-family: var(--font);
   font-size: 16px;
-  font-weight: 800;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  box-shadow: none;
+}
+
+.tm-nav-cta:hover {
+  background: var(--ink);
+  color: var(--ink-tx);
+  border-color: var(--ink);
 }
 
 .tm-nav-cta::before {
@@ -116,15 +124,17 @@
     display: flex;
     flex-direction: column;
     padding: 22px 14px;
+    border-top: none;
+    border-right: 1px solid var(--bd);
   }
   .tm-brand {
     display: flex;
     align-items: center;
     gap: 10px;
     color: var(--rail-on);
-    font-size: 19px;
+    font-size: 22px;
     font-weight: 800;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.04em;
     padding: 4px 10px 28px;
   }
   .tm-logo-mark {
@@ -144,35 +154,43 @@
     gap: 12px;
     height: 44px;
     padding: 0 12px;
-    border-radius: 10px;
+    border-radius: 0;
     font-size: 15px;
+    font-weight: 500;
   }
   .tm-nav-i:hover {
     color: var(--rail-on);
-    background: rgba(255, 255, 255, 0.08);
+    background: transparent;
   }
   .tm-nav-i.on {
-    background: rgba(255, 255, 255, 0.12);
+    background: transparent;
+    font-weight: 700;
   }
   .tm-nav-i.on::before {
     top: 12px;
     bottom: 12px;
     left: 0;
     right: auto;
-    width: 3px;
+    width: 2px;
     height: auto;
-    border-radius: 0 3px 3px 0;
+    border-radius: 0;
+    background: var(--acc);
   }
   .tm-nav-cta {
     position: static;
     margin-top: auto;
     width: 100%;
     justify-content: center;
-    background: var(--rail-on);
-    color: var(--rail);
+    background: var(--cta);
+    color: var(--cta-tx);
+    border: 1px solid var(--cta);
     box-shadow: none;
-    border-radius: 10px;
-    height: 46px;
+    border-radius: 0;
+    height: auto;
+    min-height: 46px;
+    padding: 13px 22px;
+    font-size: 15px;
+    font-weight: 700;
   }
   .tm-main {
     padding: 36px 44px 64px;
@@ -190,14 +208,15 @@
 
 .tm-ph h1 {
   font-size: 30px;
-  line-height: 1.1;
+  line-height: 0.98;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.055em;
 }
 
 .tm-ph-sub {
   margin: 8px 0 0;
-  font-size: 16px;
+  font-size: 19px;
+  line-height: 1.55;
   color: var(--tx2);
   max-width: 60ch;
 }
@@ -286,7 +305,7 @@ label.btn {
   height: 36px;
   display: inline-grid;
   place-items: center;
-  border-radius: 50%;
+  border-radius: 0;
   border: 1px solid var(--bd);
   background: var(--s1);
   color: var(--tx);
@@ -306,7 +325,7 @@ label.btn {
 .tm-dk {
   background: var(--s1);
   border: 1px solid var(--bd);
-  border-radius: 18px;
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -418,7 +437,7 @@ label.btn {
   top: 50%;
   height: 4px;
   margin-top: -2px;
-  border-radius: 2px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--lijn) 18%, transparent);
 }
 
@@ -429,7 +448,7 @@ label.btn {
   margin-top: -7px;
   padding: 0;
   border: none;
-  border-radius: 7px;
+  border-radius: 0;
   background: var(--lijn);
   cursor: pointer;
   min-width: 14px;
@@ -509,7 +528,7 @@ label.btn {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: 0;
 }
 
 .tm-dk-detail {
@@ -766,21 +785,33 @@ label.btn {
 .tm-figs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 0;
   margin: 0 0 18px;
+  border: 1px solid var(--bd);
+  background: var(--s1);
+}
+
+.tm-figs > div {
+  padding: 22px 20px;
+  border-right: 1px solid var(--bd);
+}
+
+.tm-figs > div:last-child {
+  border-right: none;
 }
 
 .tm-figs dt {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--tx3);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .tm-figs dd {
-  margin: 2px 0 0;
-  font-size: 24px;
+  margin: 4px 0 0;
+  font-size: 32px;
   font-weight: 800;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
 }
 
 .tm-figs dd small {
@@ -797,6 +828,12 @@ label.btn {
 @media (max-width: 420px) {
   .tm-figs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tm-figs > div:nth-child(2) {
+    border-right: none;
+  }
+  .tm-figs > div:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--bd);
   }
 }
 
@@ -942,8 +979,8 @@ label.btn {
   gap: 8px;
   min-height: 38px;
   padding: 0 14px;
-  border-radius: 19px;
-  border: 1px solid var(--bd2);
+  border-radius: 0;
+  border: 1px solid var(--bd);
   background: var(--s1);
   color: var(--tx2);
   font-weight: 700;
@@ -1133,7 +1170,7 @@ label.btn {
   padding: 14px 22px calc(14px + var(--sb));
   border-top: 1px solid var(--bd);
   background: var(--s1);
-  border-radius: 0 0 18px 18px;
+  border-radius: 0;
 }
 
 .tm-sheet-sum {
@@ -1160,7 +1197,7 @@ label.btn {
   position: relative;
   background: var(--s1);
   border: 1px solid var(--bd);
-  border-radius: 18px;
+  border-radius: 0;
   padding: 26px 20px 18px;
   overflow: hidden;
 }
@@ -1171,7 +1208,7 @@ label.btn {
   left: 20px;
   right: 20px;
   height: 4px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--lijn);
 }
 
@@ -1268,18 +1305,24 @@ label.btn {
 .tm-bigfigs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 0;
   margin-bottom: 32px;
+  border: 1px solid var(--bd);
 }
 
 .tm-bigfigs > div {
   background: var(--s1);
-  border: 1px solid var(--bd);
-  border-radius: var(--rl);
-  padding: 16px 18px;
+  border: none;
+  border-right: 1px solid var(--bd);
+  border-radius: 0;
+  padding: 28px 24px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.tm-bigfigs > div:last-child {
+  border-right: none;
 }
 
 .tm-bigfigs span {
@@ -1291,8 +1334,8 @@ label.btn {
 .tm-bigfigs b {
   font-size: 32px;
   font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
 }
 
 .tm-bigfigs small {
@@ -1322,6 +1365,11 @@ label.btn {
   .tm-bigfigs-main {
     grid-column: 1 / -1;
     order: -1;
+    border-right: none;
+    border-bottom: 1px solid var(--bd);
+  }
+  .tm-bigfigs > div:first-child {
+    border-right: 1px solid var(--bd);
   }
   .tm-bigfigs b {
     font-size: 26px;
@@ -1511,7 +1559,7 @@ label.btn {
 .tm-start {
   background: var(--s1);
   border: 1px solid var(--bd);
-  border-radius: 18px;
+  border-radius: 0;
   padding: 22px 20px 20px;
 }
 
@@ -1587,7 +1635,7 @@ label.btn {
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: 0;
   border: 1px solid var(--bd);
   color: var(--ink);
   background: var(--s2);
@@ -1666,10 +1714,10 @@ label.btn {
   align-items: flex-start;
   gap: 8px;
   text-align: left;
-  padding: 18px;
+  padding: 24px 22px;
   border: 1px solid var(--bd);
-  border-radius: var(--rl);
-  background: var(--s2);
+  border-radius: 0;
+  background: var(--s1);
   color: inherit;
   cursor: pointer;
   font: inherit;
@@ -1683,8 +1731,9 @@ button.tm-start-card:hover,
 }
 
 .tm-start-card strong {
-  font-size: 18px;
-  font-weight: 800;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .tm-start-card span {
@@ -1769,17 +1818,18 @@ button.tm-start-card:hover,
 }
 
 .tm-pin-kaart {
-  width: min(100%, 320px);
-  padding: 28px 22px;
+  width: min(100%, 360px);
+  padding: 36px 28px;
   background: var(--s1);
   border: 1px solid var(--bd);
-  border-radius: var(--rl);
+  border-radius: 0;
 }
 
 .tm-pin-kaart h1 {
   margin: 0 0 20px;
   font-size: 22px;
   font-weight: 800;
+  letter-spacing: -0.04em;
 }
 
 .tm-pin-in {
@@ -1809,75 +1859,17 @@ button.tm-start-card:hover,
   outline-offset: 1px;
 }
 
-/* ---------- Glazen dashboard ---------- */
+/* ---------- Overzicht (strak raster, geen glas) ---------- */
 .tm-dash {
   position: relative;
-  margin: -8px -10px;
-  padding: 20px 10px 28px;
-  border-radius: 24px;
-  background:
-    radial-gradient(620px 320px at 6% -8%, rgba(255, 255, 255, 0.95), transparent 58%),
-    radial-gradient(480px 280px at 100% 0%, rgba(148, 168, 204, 0.34), transparent 55%),
-    radial-gradient(520px 260px at 40% 100%, rgba(186, 198, 214, 0.22), transparent 50%),
-    linear-gradient(180deg, #dce3ee 0%, #eef1f5 42%, #f5f5f5 100%);
-}
-
-.tm-dash > * {
-  position: relative;
-  z-index: 1;
-}
-
-.tm-dash .tm-dk,
-.tm-dash .tm-start,
-.tm-dash .tm-sec {
-  background: rgba(255, 255, 255, 0.42);
-  backdrop-filter: blur(26px) saturate(1.45);
-  -webkit-backdrop-filter: blur(26px) saturate(1.45);
-  border: 1px solid rgba(255, 255, 255, 0.62);
-  box-shadow: 0 8px 32px rgba(30, 40, 60, 0.08);
-}
-
-.tm-dash .tm-sec {
-  padding: 16px 16px 8px;
-  border-radius: 18px;
-  margin-bottom: 20px;
-}
-
-.tm-dash .tm-start-card {
-  background: rgba(255, 255, 255, 0.34);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  box-shadow: 0 4px 18px rgba(30, 40, 60, 0.05);
-}
-
-.tm-dash .tm-figs,
-.tm-dash .tm-list,
-.tm-dash .tm-todo {
-  background: rgba(255, 255, 255, 0.28);
-  border-radius: 14px;
-}
-
-.tm-dash .tm-dk-names {
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
   background: transparent;
 }
 
-@media (prefers-color-scheme: dark) {
-  .tm-dash {
-    background:
-      radial-gradient(620px 320px at 6% -8%, rgba(70, 76, 92, 0.55), transparent 58%),
-      radial-gradient(480px 280px at 100% 0%, rgba(40, 48, 68, 0.5), transparent 55%),
-      linear-gradient(180deg, #16181d 0%, #111111 70%);
-  }
-
-  .tm-dash .tm-dk,
-  .tm-dash .tm-start,
-  .tm-dash .tm-sec,
-  .tm-dash .tm-start-card {
-    background: rgba(28, 28, 32, 0.48);
-    border-color: rgba(255, 255, 255, 0.1);
-    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.32);
-  }
+.tm-dash .tm-sec {
+  margin-bottom: 28px;
 }
 
 /* ---------- Dynamic Island (lopende rit) ---------- */
@@ -1898,12 +1890,11 @@ button.tm-start-card:hover,
   left: 50%;
   transform: translateX(-50%);
   width: min(360px, calc(100vw - 28px));
-  background: rgba(12, 12, 14, 0.92);
-  color: #f4f4f5;
-  border-radius: 999px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(28px) saturate(1.5);
-  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  background: #0a0a0a;
+  color: #ffffff;
+  border: 1px solid #0a0a0a;
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -1911,8 +1902,14 @@ html.tm-standalone .tm-eiland {
   top: 11px;
 }
 
+@media (prefers-color-scheme: dark) {
+  .tm-eiland {
+    border-color: #ffffff;
+  }
+}
+
 .tm-eiland.is-open {
-  border-radius: 26px;
+  border-radius: 0;
 }
 
 .tm-eiland-kern {
@@ -1934,8 +1931,8 @@ html.tm-standalone .tm-eiland {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #3dde84;
-  box-shadow: 0 0 0 0 rgba(61, 222, 132, 0.7);
+  background: #ff5a1f;
+  box-shadow: 0 0 0 0 rgba(255, 90, 31, 0.7);
   animation: tm-eiland-pulse 1.8s ease-out infinite;
   flex: none;
 }
@@ -1950,10 +1947,10 @@ html.tm-standalone .tm-eiland {
 
 .tm-eiland-kort b {
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #9a9aa2;
+  color: #ff5a1f;
 }
 
 .tm-eiland-kort span {
@@ -1968,7 +1965,7 @@ html.tm-standalone .tm-eiland {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   font-size: 13px;
-  color: #d4d4d8;
+  color: #d4d4d4;
   flex: none;
 }
 
@@ -1985,7 +1982,7 @@ html.tm-standalone .tm-eiland {
 }
 
 .tm-eiland-meer small {
-  color: #a1a1aa;
+  color: #a3a3a3;
   font-size: 12px;
 }
 
@@ -1995,13 +1992,13 @@ html.tm-standalone .tm-eiland {
 
 @keyframes tm-eiland-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(61, 222, 132, 0.55);
+    box-shadow: 0 0 0 0 rgba(255, 90, 31, 0.55);
   }
   70% {
-    box-shadow: 0 0 0 8px rgba(61, 222, 132, 0);
+    box-shadow: 0 0 0 8px rgba(255, 90, 31, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(61, 222, 132, 0);
+    box-shadow: 0 0 0 0 rgba(255, 90, 31, 0);
   }
 }
 
