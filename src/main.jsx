@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "@fontsource-variable/overpass";
 import App from "./app/App.jsx";
-import Pincode from "./app/Pincode.jsx";
+import Toegang from "./app/Toegang.jsx";
 import { zetStandaloneKlasse } from "./js/lopendeMelding.js";
 
 zetStandaloneKlasse();
@@ -15,9 +15,9 @@ if (!rootEl) {
   try {
     createRoot(rootEl).render(
       <React.StrictMode>
-        <Pincode>
+        <Toegang>
           <App />
-        </Pincode>
+        </Toegang>
       </React.StrictMode>
     );
   } catch (e) {

@@ -1791,10 +1791,17 @@ button.tm-start-card:hover,
   border-radius: var(--r);
   background: var(--s2);
   color: var(--tx);
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: 0.45em;
+  letter-spacing: 0.12em;
   text-align: center;
+}
+
+.tm-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-weight: 650;
 }
 
 .tm-pin-in:focus {

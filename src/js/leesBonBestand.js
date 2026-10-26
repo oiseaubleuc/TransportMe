@@ -4,6 +4,7 @@
  */
 import { recognizeBonImage, recognizeBonCanvas } from "./bonFotoOcr.js";
 import { splitBonStukken } from "./transportBon.js";
+import { isBeeldSoort, isPdfSoort, keurBonBestand, leesKop, MAX_PDF_PAGINAS } from "./importGrenzen.js";
 
 export function isPdfBestand(file) {
   const type = String(file?.type || "").toLowerCase();
@@ -32,44 +33,96 @@ function voegTekstToe(delen, text) {
   if (t) delen.push(t);
 }
 
+function ruimCanvasOp(canvas) {
+  if (!canvas) return;
+  try {
+    canvas.width = 0;
+    canvas.height = 0;
+  } catch {
+    /* */
+  }
+}
+
 /**
  * @param {File} file
- * @param {{ logger?: (m: object) => void, onVoortgang?: (p: number) => void }} [opts]
- * @returns {Promise<Array<{ text: string, bron: "pdf"|"ocr"|"foto" }>>}
+ * @param {{ logger?: (m: object) => void, onVoortgang?: (p: number) => void, signal?: AbortSignal }} [opts]
+ * @returns {Promise<Array<{ text: string, bron: "pdf"|"ocr"|"foto", waarschuwing?: string }>>}
  */
 export async function leesBonBestand(file, opts = {}) {
-  if (isPdfBestand(file)) {
+  const signal = opts.signal;
+  if (signal?.aborted) throw new DOMException("Afgebroken", "AbortError");
+  const kop = await leesKop(file, 16);
+  const keur = keurBonBestand(file, kop);
+  if (!keur.ok) {
+    const err = new Error(keur.reden);
+    err.code = "GEWEIGERD";
+    throw err;
+  }
+
+  if (isPdfSoort(keur.soort)) {
     const { pdfFileToPaginas } = await import("./pdfFirstPageToCanvas.js");
-    const pages = await pdfFileToPaginas(file, {
-      scale: 2.1,
-      maxPages: 20,
-      metCanvas: paginaTekstDun,
-    });
-    const delen = [];
-    let bron = "pdf";
-    for (let i = 0; i < pages.length; i++) {
-      if (typeof opts.onVoortgang === "function") opts.onVoortgang((i + 0.2) / pages.length);
-      let text = pages[i].text || "";
-      if (paginaTekstDun(text) && pages[i].canvas) {
-        const ocr = await recognizeBonCanvas(pages[i].canvas, { logger: opts.logger });
-        const ocrText = ocr?.text || "";
-        if (ocrText.length > text.length) {
-          text = ocrText;
-          bron = "ocr";
-        } else if (ocrText) {
-          text = [text, ocrText].filter(Boolean).join("\n");
-          bron = "ocr";
-        }
+    let uit;
+    try {
+      uit = await pdfFileToPaginas(file, {
+        scale: 2.1,
+        maxPages: MAX_PDF_PAGINAS,
+        metCanvas: paginaTekstDun,
+        signal,
+      });
+      const { pages, overgeslagenPaginas } = uit;
+      const delen = [];
+      let bron = "pdf";
+      const waarschuwingen = [];
+      if (overgeslagenPaginas) {
+        waarschuwingen.push(
+          `${overgeslagenPaginas === 1 ? "1 pagina" : overgeslagenPaginas + " pagina’s"} overgeslagen (limiet ${MAX_PDF_PAGINAS}).`
+        );
       }
-      voegTekstToe(delen, text);
-      if (typeof opts.onVoortgang === "function") opts.onVoortgang((i + 1) / pages.length);
+      for (let i = 0; i < pages.length; i++) {
+        if (signal?.aborted) throw new DOMException("Afgebroken", "AbortError");
+        if (typeof opts.onVoortgang === "function") opts.onVoortgang((i + 0.2) / pages.length);
+        let text = pages[i].text || "";
+        if (paginaTekstDun(text) && pages[i].canvas) {
+          try {
+            const ocr = await recognizeBonCanvas(pages[i].canvas, { logger: opts.logger, signal });
+            const ocrText = ocr?.text || "";
+            if (ocrText.length > text.length) {
+              text = ocrText;
+              bron = "ocr";
+            } else if (ocrText) {
+              text = [text, ocrText].filter(Boolean).join("\n");
+              bron = "ocr";
+            }
+          } catch (e) {
+            if (e?.name === "AbortError") throw e;
+            waarschuwingen.push(`Pagina ${pages[i].nr} kon niet worden herkend.`);
+          }
+        }
+        voegTekstToe(delen, text);
+        ruimCanvasOp(pages[i].canvas);
+        if (typeof opts.onVoortgang === "function") opts.onVoortgang((i + 1) / pages.length);
+      }
+      const stukken = splitBonStukken(delen.join("\n\n"));
+      const warn = waarschuwingen.join(" ");
+      const rows = (stukken.length ? stukken : [""]).map(text => ({ text, bron, waarschuwing: warn }));
+      return rows;
+    } finally {
+      try {
+        await uit?.cleanup?.();
+      } catch {
+        /* */
+      }
     }
-    const stukken = splitBonStukken(delen.join("\n\n"));
-    return (stukken.length ? stukken : [""]).map(text => ({ text, bron }));
+  }
+
+  if (!isBeeldSoort(keur.soort)) {
+    const err = new Error("Dit bestandstype wordt niet ondersteund.");
+    err.code = "GEWEIGERD";
+    throw err;
   }
 
   if (typeof opts.onVoortgang === "function") opts.onVoortgang(0.2);
-  const { text } = await recognizeBonImage(file, { logger: opts.logger });
+  const { text } = await recognizeBonImage(file, { logger: opts.logger, signal });
   if (typeof opts.onVoortgang === "function") opts.onVoortgang(1);
   const stukken = splitBonStukken(text || "");
   return (stukken.length ? stukken : [text || ""]).map(t => ({ text: t, bron: "foto" }));

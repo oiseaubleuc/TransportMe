@@ -1,4 +1,5 @@
 const TAG = "tm-lopend";
+const OPTIN_KEY = "tm_melding_route";
 
 export function isStandalone() {
   return (
@@ -10,6 +11,22 @@ export function isStandalone() {
 export function zetStandaloneKlasse() {
   try {
     document.documentElement.classList.toggle("tm-standalone", isStandalone());
+  } catch {
+    /* */
+  }
+}
+
+export function magRouteInMelding() {
+  try {
+    return localStorage.getItem(OPTIN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function zetRouteInMelding(aan) {
+  try {
+    localStorage.setItem(OPTIN_KEY, aan ? "1" : "0");
   } catch {
     /* */
   }
@@ -28,6 +45,7 @@ export async function vraagMeldingToestemming() {
 }
 
 function tekst(rit) {
+  if (!magRouteInMelding()) return "Rit onderweg";
   const van = String(rit?.f || "").trim();
   const naar = String(rit?.t || "").trim();
   if (van && naar) return `${van} → ${naar}`;
@@ -55,7 +73,7 @@ export async function toonLopendeMelding(rit) {
     silent: true,
     requireInteraction: true,
     renotify: true,
-    data: { url: "/#overzicht" },
+    data: { url: "/" },
   };
   try {
     const reg = await sw();

@@ -9,6 +9,9 @@ dist/
 .env.local
 .env.*.local
 
+# Account-/sessiebestanden van een lokale auth-server
+server/data/
+
 # IDE / OS
 .DS_Store
 *.log

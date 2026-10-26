@@ -8,6 +8,8 @@ import {
   tripUitVoorstel,
   vindBestaandeRit,
   koppelBonAanRit,
+  herberekenKoppeling,
+  planBonOpslag,
   voorstelRijKlaar,
   markeerDubbeleRijen,
   isDubbeleBon,
@@ -233,5 +235,59 @@ assert(
   voorstelIsKlaar({ f: van.name, t: naar.name, d: p.datum, k: 55 }),
   "voorstel klaar"
 );
+
+const lopendTrip = tripUitVoorstel(
+  { bon: "IHcT1", f: "AZ Diest", t: "UZ Leuven", d: "2026-06-02", ti: "21:46", k: 36, s: "lopend" },
+  { id: "t-l", chauffeur: "Houdaifa", voertuig: "V1" }
+);
+assert(lopendTrip.s === "lopend", "tripUitVoorstel behoudt lopend, niet voltooid: " + lopendTrip.s);
+const komendTrip = tripUitVoorstel(
+  { bon: "IHcT1", f: "AZ Diest", t: "UZ Leuven", d: "2026-06-02", ti: "21:46", k: 36, s: "komend" },
+  { id: "t-k", chauffeur: "Houdaifa", voertuig: "V1" }
+);
+assert(komendTrip.s === "komend", "komend blijft komend");
+
+const lopendRit = { id: "r-loop", bon: "IHcT61004279", d: "2026-06-02", ti: "21:46", s: "lopend", f: "AZ Diest", t: "UZ Leuven" };
+const neeNogNiet = {
+  ...pdfVoorstel,
+  voltooidKeuze: false,
+  s: "lopend",
+  bestaandId: "r-loop",
+};
+const tripNee = tripUitVoorstel(
+  { ...neeNogNiet, k: 36, s: neeNogNiet.s === "lopend" ? "lopend" : "komend" },
+  { id: "x", chauffeur: "Houdaifa", voertuig: "V1" }
+);
+assert(tripNee.s === "lopend", "Nee, nog niet houdt lopend");
+
+const her = herberekenKoppeling({ ...pdfVoorstel, d: "2026-06-03", ti: "21:46" }, [gepland]);
+assert(!her.bestaandId, "andere datum = geen koppeling");
+const her2 = herberekenKoppeling({ ...pdfVoorstel, ti: "21:46" }, [gepland]);
+assert(her2.bestaandId === "r-oud", "zelfde IHcT+tijd blijft gekoppeld");
+
+const andereRit = { id: "r-ander", bon: "IHcT99999999", d: "2026-01-01", ti: "08:00", s: "komend", f: "A", t: "B" };
+const plan = planBonOpslag(
+  [
+    {
+      id: "n",
+      bon: "IHcT88888888",
+      d: "2026-01-02",
+      ti: "09:00",
+      f: "AZ Diest",
+      t: "UZ Leuven",
+      k: 36,
+      bestaandId: "r-ander",
+      voltooidKeuze: true,
+      vraagVoltooid: true,
+    },
+  ],
+  [andereRit]
+);
+assert(plan.updates.length === 0, "geen overschrijven van een andere rit");
+assert(plan.nieuw.length === 1, "wordt een nieuwe rit als IHcT+tijd niet bij die id hoort");
+
+const mist = koppelBonAanRit({ bon: "", d: "2026-06-02", ti: "", f: "AZ Diest", t: "UZ Leuven", k: 36 }, [gepland]);
+assert(!mist.bestaandId, "zonder IHcT+tijd geen match");
+assert(mist.vraagControle === true, "vraag controle bij ontbrekende gegevens");
 
 console.log("ok", { bon: p.bon, d: p.datum, ti: p.vertrekTijd, van: van.name, naar: naar.name, km, extra: regels.length });

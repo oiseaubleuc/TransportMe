@@ -1,25 +1,29 @@
 /**
  * TransportMe PWA — voorkomt wit scherm na deploy:
  * index + Vite /assets/* worden netwerk-eerst geladen (hashed bestandsnamen wijzigen per build).
+ * /api wordt nooit gecachet.
  */
-const CACHE_NAME = "transportme-v4";
+const CACHE_NAME = "transportme-v5";
+const GELEVERD_DB = "tm-geleverd";
+const GELEVERD_STORE = "intents";
+const IS_LOCAL = self.location.hostname === "localhost" || self.location.hostname === "127.0.0.1";
 const PRECACHE_URLS = ["/manifest.webmanifest", "/favicon.svg", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png"];
 
-self.addEventListener("install", (event) => {
+self.addEventListener("install", event => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(cache => cache.addAll(PRECACHE_URLS))
       .then(() => self.skipWaiting())
       .catch(() => self.skipWaiting())
   );
 });
 
-self.addEventListener("activate", (event) => {
+self.addEventListener("activate", event => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -31,22 +35,79 @@ function maybeCache(cache, request, response) {
   return cache.put(request, response.clone()).then(() => response);
 }
 
+function openGeleverdDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(GELEVERD_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(GELEVERD_STORE)) {
+        db.createObjectStore(GELEVERD_STORE, { keyPath: "key" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function geldigId(value) {
+  return typeof value === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(value);
+}
+
+function bewaarGeleverd(profileId, tripId) {
+  const key = profileId + ":" + tripId;
+  return openGeleverdDb().then(
+    db =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(GELEVERD_STORE, "readwrite");
+        tx.objectStore(GELEVERD_STORE).put({
+          key,
+          profileId,
+          tripId,
+          at: Date.now(),
+        });
+        tx.oncomplete = () => {
+          db.close();
+          resolve(key);
+        };
+        tx.onerror = () => {
+          db.close();
+          reject(tx.error);
+        };
+      })
+  );
+}
+
+async function verwerkGeleverdActie(data) {
+  const profileId = data && data.profileId;
+  const tripId = data && data.tripId;
+  if (!geldigId(profileId) || !geldigId(tripId)) return;
+  const key = await bewaarGeleverd(profileId, tripId);
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of clients) {
+    client.postMessage({ type: "tm-geleverd", profileId, tripId, key });
+  }
+}
+
+async function openOfFocusApp() {
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of clients) {
+    client.postMessage({ type: "tm-open-lopend" });
+    if ("focus" in client) return client.focus();
+  }
+  if (self.clients.openWindow) return self.clients.openWindow("/");
+}
+
 self.addEventListener("notificationclick", event => {
   event.notification.close();
-  const doel = event.notification?.data?.url || "/#overzicht";
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(lijst => {
-      const open = lijst.find(c => "focus" in c);
-      if (open) {
-        open.postMessage({ type: "tm-open-lopend" });
-        return open.focus();
-      }
-      if (self.clients.openWindow) return self.clients.openWindow(doel);
-    })
-  );
+  if (event.action === "geleverd") {
+    event.waitUntil(verwerkGeleverdActie(event.notification.data));
+    return;
+  }
+  event.waitUntil(openOfFocusApp());
 });
 
-self.addEventListener("fetch", (event) => {
+self.addEventListener("fetch", event => {
+  if (IS_LOCAL) return;
   const { request } = event;
   if (request.method !== "GET") return;
 
@@ -57,6 +118,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/")) return;
 
   const path = url.pathname;
   const isNavigate = request.mode === "navigate";
@@ -65,11 +127,11 @@ self.addEventListener("fetch", (event) => {
 
   if (isNavigate || isHtmlShell || isViteAsset) {
     event.respondWith(
-      caches.open(CACHE_NAME).then((cache) =>
+      caches.open(CACHE_NAME).then(cache =>
         fetch(request)
-          .then((res) => maybeCache(cache, request, res))
+          .then(res => maybeCache(cache, request, res))
           .catch(() => cache.match(request))
-          .then((res) => {
+          .then(res => {
             if (res) return res;
             if (isNavigate || isHtmlShell) return cache.match("/index.html");
             return new Response("", { status: 504, statusText: "Offline" });
@@ -80,11 +142,9 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
+    caches.match(request).then(cached => {
       if (cached) return cached;
-      return caches.open(CACHE_NAME).then((cache) =>
-        fetch(request).then((res) => maybeCache(cache, request, res))
-      );
+      return caches.open(CACHE_NAME).then(cache => fetch(request).then(res => maybeCache(cache, request, res)));
     })
   );
 });

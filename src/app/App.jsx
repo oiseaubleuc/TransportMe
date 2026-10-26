@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, useContext } from "react";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import {
@@ -29,7 +29,10 @@ import { getFactuurGegevens } from "../js/storage.js";
 import { downloadRittenExcel, leesRittenExcel, voegExcelRittenToe, meldingExcelInlees } from "../js/rittenExcel.js";
 import BonInvoegenSheet from "./BonInvoegen.jsx";
 import LopendeEiland from "./LopendeEiland.jsx";
-import { vraagMeldingToestemming } from "../js/lopendeMelding.js";
+import { vraagMeldingToestemming, wisLopendeMelding, magRouteInMelding, zetRouteInMelding } from "../js/lopendeMelding.js";
+import { UitlogContext } from "./Toegang.jsx";
+import { lsSet, bewaarDagen, zetBewaarDagen } from "../js/veiligeOpslag.js";
+import { ruimVerlopenBonnenOp } from "../js/bonArchief.js";
 import { haalBonBestand, openBonBlob } from "../js/bonArchief.js";
 import { bonInhoudRegels, voegBonRittenToe } from "../js/transportBon.js";
 import {
@@ -260,6 +263,7 @@ export default function App() {
         return;
       }
       if (a === "go") vraagMeldingToestemming();
+      if (a === "ok" || a === "no" || a === "x") wisLopendeMelding();
       if (a === "no" || a === "x") {
         if (!confirm(`Rit ${r.f} naar ${r.t} (${datumKort(r.d)}${r.ti ? " " + r.ti : ""}) verwijderen?`)) return;
       }
@@ -343,6 +347,7 @@ export default function App() {
           onBevestig={bon => {
             const { pid, id } = pending;
             setPending(null);
+            wisLopendeMelding();
             setFor(pid, D => {
               const rr = applyTripAction(D.r, id, "ok", { bon });
               return rr === D.r ? D : { ...D, r: rr };
@@ -397,14 +402,12 @@ export default function App() {
             });
             setBonIn(null);
             const dubbel = (extra?.overgeslagenDubbel || 0) + (duplicaten || 0);
-            if (n && dubbel) {
-              alert(`${n === 1 ? "1 rit toegevoegd" : n + " ritten toegevoegd"}. ${dubbel === 1 ? "1 dubbele overgeslagen." : dubbel + " dubbele overgeslagen."}`);
-            } else if (!n && dubbel) {
-              alert(
-                (dubbel === 1 ? "1 dubbele overgeslagen." : `${dubbel} dubbele overgeslagen.`) +
-                  (extra?.archiefFout ? " Bestand niet bewaard." : "")
-              );
-            } else if (extra?.archiefFout) alert("Rit bewaard. Bestand niet bewaard.");
+            const stukken = [];
+            if (n) stukken.push(n === 1 ? "1 rit toegevoegd" : n + " ritten toegevoegd");
+            if (bij) stukken.push(bij === 1 ? "1 rit bijgewerkt" : bij + " ritten bijgewerkt");
+            if (dubbel) stukken.push(dubbel === 1 ? "1 dubbele overgeslagen" : dubbel + " dubbele overgeslagen");
+            if (extra?.archiefFout) stukken.push("origineel bestand niet bewaard");
+            if (stukken.length) alert(stukken.join(". ") + ".");
           }}
         />
       ) : null}
@@ -2041,6 +2044,9 @@ function FinTeam({ team, setFocus }) {
 
 function Instellingen({ pid, setPid, D, setFor, onBackupImported, openBon }) {
   const pr = PR.find(p => p.id === pid) || PR[0];
+  const uitloggen = useContext(UitlogContext);
+  const [routeMelding, setRouteMelding] = useState(() => magRouteInMelding());
+  const [bewaar, setBewaar] = useState(() => bewaarDagen());
   return (
     <>
       <header className="tm-ph">
@@ -2049,13 +2055,56 @@ function Instellingen({ pid, setPid, D, setFor, onBackupImported, openBon }) {
           <p className="tm-ph-sub">Prijslijst controleren, factuurgegevens en back-up van {pr.n}.</p>
         </div>
       </header>
+      <section className="tm-sec">
+        <h2 className="tm-h2">Toegang en privacy</h2>
+        <div className="card">
+          <label className="tm-check">
+            <input
+              type="checkbox"
+              checked={routeMelding}
+              onChange={e => {
+                const aan = e.target.checked;
+                zetRouteInMelding(aan);
+                setRouteMelding(aan);
+              }}
+            />
+            Toon vertrek en bestemming in meldingen
+          </label>
+          <p className="tm-muted">Standaard staat er alleen “Rit onderweg”.</p>
+          <div className="tm-fg" style={{ marginTop: 12 }}>
+            <label className="fl" htmlFor="tm-bewaar">
+              Originele bonnen bewaren (dagen)
+            </label>
+            <input
+              id="tm-bewaar"
+              type="number"
+              min="1"
+              max="3650"
+              value={bewaar}
+              onChange={e => setBewaar(e.target.value)}
+              onBlur={async () => {
+                const n = await zetBewaarDagen(bewaar);
+                setBewaar(n);
+                try {
+                  await ruimVerlopenBonnenOp(n);
+                } catch {
+                  /* */
+                }
+              }}
+            />
+          </div>
+          <button type="button" className="btn btn-o" style={{ marginTop: 14 }} onClick={() => uitloggen()}>
+            Uitloggen
+          </button>
+        </div>
+      </section>
       <div className="tm-toolbar">
         <ScopeChips
           value={pid}
           onChange={id => {
             setPid(id);
             try {
-              localStorage.setItem("tp", id);
+              lsSet("tp", id);
             } catch {
               /* ignore */
             }

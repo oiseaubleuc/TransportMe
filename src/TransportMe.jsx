@@ -12,6 +12,7 @@ import { searchPlacesBelgium } from "./js/placeSearchFree.js";
 import { PRESET_ANCHOR_ZIEKENHUIZEN, ALL_PRESET_ROUTES } from "./js/config.js";
 import ziekenVlaanderen from "./data/ziekenhuizen-vlaanderen.json";
 import BewaardeBonnen from "./app/BewaardeBonnen.jsx";
+import { lsGet, lsSet } from "./js/veiligeOpslag.js";
 
 /** Kaartkleur van de route-lijn — zwart op de witte kaart */
 const TM_ACC = "#111111";
@@ -479,13 +480,13 @@ function legacyOverigToTm(x) {
 }
 
 function leesLegacyBundel(profileId) {
-  const r = safeParseJsonArray(localStorage.getItem(`${LS_RITTEN}_${profileId}`))
+  const r = safeParseJsonArray(lsGet(`${LS_RITTEN}_${profileId}`))
     .map(legacyRitToTm)
     .filter(Boolean);
-  const b = safeParseJsonArray(localStorage.getItem(`${LS_BRANDSTOF}_${profileId}`))
+  const b = safeParseJsonArray(lsGet(`${LS_BRANDSTOF}_${profileId}`))
     .map(legacyBrandstofToTm)
     .filter(Boolean);
-  const o = safeParseJsonArray(localStorage.getItem(`${LS_OVERIG}_${profileId}`))
+  const o = safeParseJsonArray(lsGet(`${LS_OVERIG}_${profileId}`))
     .map(legacyOverigToTm)
     .filter(Boolean);
   return { r, b, o };
@@ -547,14 +548,14 @@ function autoFixRitBerekeningen(data) {
 
 function autoApplyCalcFix(profileId, data) {
   try {
-    if (localStorage.getItem(tmCalcFixKey(profileId)) === "1") return data;
+    if (lsGet(tmCalcFixKey(profileId)) === "1") return data;
   } catch {
     /* ignore */
   }
   const fixed = autoFixRitBerekeningen(data);
   try {
-    if (fixed !== data) localStorage.setItem("t_" + profileId, JSON.stringify(fixed));
-    localStorage.setItem(tmCalcFixKey(profileId), "1");
+    if (fixed !== data) lsSet("t_" + profileId, JSON.stringify(fixed));
+    lsSet(tmCalcFixKey(profileId), "1");
   } catch {
     /* ignore quota */
   }
@@ -565,7 +566,7 @@ function autoApplyCalcFix(profileId, data) {
 const ld = p => {
   let data;
   try {
-    data = normData(JSON.parse(localStorage.getItem("t_" + p) || "null"));
+    data = normData(JSON.parse(lsGet("t_" + p) || "null"));
   } catch {
     data = normData(null);
   }
@@ -574,7 +575,7 @@ const ld = p => {
     if (leg.r.length > 0 || leg.b.length > 0 || leg.o.length > 0) {
       const merged = normData({ ...leg, xr: data.xr, xrArch: data.xrArch || [] });
       try {
-        localStorage.setItem("t_" + p, JSON.stringify(merged));
+        lsSet("t_" + p, JSON.stringify(merged));
       } catch {
         /* quota */
       }
@@ -584,7 +585,7 @@ const ld = p => {
   return autoApplyCalcFix(p, data);
 };
 
-const sv = (p, d) => localStorage.setItem("t_" + p, JSON.stringify(d));
+const sv = (p, d) => lsSet("t_" + p, JSON.stringify(d));
 
 /**
  * Start (go) / voltooien (ok). Annuleren (no) of ✕ (x): rit wordt verwijderd — geen status “geannuleerd”, telt nergens mee.
@@ -773,13 +774,13 @@ function VoltooiBonSheet({ rit, onBevestig, onAnnuleer }) {
 
 function initialProfileId() {
   try {
-    const tp = localStorage.getItem("tp");
-    const cur = localStorage.getItem(LS_LEGACY_PROFILE);
+    const tp = lsGet("tp");
+    const cur = lsGet(LS_LEGACY_PROFILE);
     const ok = id => PR.some(x => x.id === id);
     if (ok(tp)) return tp;
     if (ok(cur)) {
       try {
-        localStorage.setItem("tp", cur);
+        lsSet("tp", cur);
       } catch {
         /* ignore */
       }
@@ -2216,7 +2217,7 @@ function Meer({ D, sD, pid, pr, onBackupImported, onBonInvoegen }) {
                   "OK: eerst alle gegevens hier wissen en dan de back-up terugzetten (aanbevolen op een nieuwe telefoon).\n" +
                   "Annuleren: alleen de onderdelen uit het bestand overschrijven."
               );
-              const n = applyImportPayload(payload, { replaceAll: volledig });
+              const n = await applyImportPayload(payload, { replaceAll: volledig });
               alert(`Back-up teruggezet (${n} onderdelen).`);
               onBackupImported?.();
             } catch (err) {

@@ -49,9 +49,25 @@ De Excel heeft parameters bovenaan (prijs per schijf, opstart, nacht, btw), éé
 
 Voorbeeld: 45 km overdag = €15 + 3×€25 = **€90**. ’s Nachts wordt dat **€115**.
 
+## Toegang
+
+De app vraagt een toegangscode die **op de server** wordt gecontroleerd (HttpOnly-cookie, geen pincode in de frontend).
+
+1. Lokaal: `printf '%s' 'jouw-code' | node scripts/hash-pin.mjs`
+2. Zet `SESSION_SECRET`, `AUTH_PIN_SALT`, `AUTH_PIN_HASH` en `AUTH_PEPPER` in `.env` **en** in Vercel → Environment Variables. Gebruik geen `VITE_`-namen.
+3. Zonder die vier weigert de server de login; er is geen fallback.
+
+Er is geen publieke registratie.
+
 ## Gegevens
 
-Alles blijft op het toestel. Bestaande gegevens blijven werken zonder extra stappen. Een volledige back-up (en terugzetten) vind je onder Instellingen.
+Ritten blijven op het toestel. Na een geslaagde login worden bestaande localStorage- en IndexedDB-gegevens versleuteld (AES-GCM; sleutel in geheugen, afgeleid van de toegangscode; naast de data staat alleen een zout).
+
+**Wat dit wel doet:** iemand met alleen de bestanden op schijf ziet na migratie geen leesbare ritten of originele bonnen.
+
+**Wat dit niet doet:** een login beschermt bestaande plaintext pas ná migratie; XSS in de open sessie kan de geheugensleutel nog gebruiken; de toegangscode gaat bij login naar de server (geen zero-knowledge); back-ups bevatten ciphertext plus kluismeta — zonder code niet leesbaar, mét code wel.
+
+Originele bonnen worden na de ingestelde bewaartermijn (standaard 62 dagen, Instellingen) verwijderd.
 
 De vaste ritten komen uit de **prijslijst van 26 mei**. Ontbreekt een rit of klopt een km niet, dan pas je dat aan onder Instellingen → Prijslijst aanvullen. Jouw wijziging gaat voor op de prijslijst.
 

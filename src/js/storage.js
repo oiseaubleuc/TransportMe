@@ -10,10 +10,10 @@ import {
   ALL_PRESET_ROUTES,
   DEFAULT_VOERTUIGEN,
   PROFILES,
-  DATA_RETENTION_DAYS,
   LIVE_AVAILABILITY_TTL_MS,
 } from './config.js';
 import { backfillMissingVolgordeNrs } from './ritVolgorde.js';
+import { lsGet, lsSet, lsRemove, bewaarDagen } from './veiligeOpslag.js';
 
 const VALID_PROFILE_IDS = new Set(PROFILES.map((p) => p.id));
 const VALID_STATUS = new Set(['komend', 'lopend', 'voltooid', 'geannuleerd']);
@@ -147,29 +147,29 @@ function cleanupProfileData() {
     const rKey = `${STORAGE_KEYS.ritten}_${p.id}`;
     const bKey = `${STORAGE_KEYS.brandstof}_${p.id}`;
     const oKey = `${STORAGE_KEYS.overig}_${p.id}`;
-    const rawR = localStorage.getItem(rKey) || '[]';
-    const rawB = localStorage.getItem(bKey) || '[]';
-    const rawO = localStorage.getItem(oKey) || '[]';
+    const rawR = lsGet(rKey) || '[]';
+    const rawB = lsGet(bKey) || '[]';
+    const rawO = lsGet(oKey) || '[]';
     const cleanR = safeParseArray(rawR).map(normalizeRit).filter(Boolean).sort(sortByDatumTijd);
     const cleanB = safeParseArray(rawB).map(normalizeBrandstofItem).filter(Boolean).sort((a, b) => a.datum.localeCompare(b.datum));
     const cleanO = safeParseArray(rawO).map(normalizeOverigItem).filter(Boolean).sort((a, b) => a.datum.localeCompare(b.datum));
     const nextR = JSON.stringify(cleanR);
     const nextB = JSON.stringify(cleanB);
     const nextO = JSON.stringify(cleanO);
-    if (nextR !== rawR) localStorage.setItem(rKey, nextR);
-    if (nextB !== rawB) localStorage.setItem(bKey, nextB);
-    if (nextO !== rawO) localStorage.setItem(oKey, nextO);
+    if (nextR !== rawR) lsSet(rKey, nextR);
+    if (nextB !== rawB) lsSet(bKey, nextB);
+    if (nextO !== rawO) lsSet(oKey, nextO);
   });
 }
 
 export function getCurrentProfileId() {
-  const id = localStorage.getItem(STORAGE_KEYS.currentProfile);
+  const id = lsGet(STORAGE_KEYS.currentProfile);
   return VALID_PROFILE_IDS.has(id) ? id : PROFILES[0].id;
 }
 
 export function setCurrentProfileId(id) {
   if (!VALID_PROFILE_IDS.has(id)) return;
-  localStorage.setItem(STORAGE_KEYS.currentProfile, id);
+  lsSet(STORAGE_KEYS.currentProfile, id);
 }
 
 function profileKey(baseKey) {
@@ -186,22 +186,22 @@ function profileStorageKey(baseKey, profileId) {
  * kopiëren naar elke profiel-sleutel (zelfde startdata), daarna globale sleutels verwijderen.
  */
 function migrateGlobalListsToPerProfileOnce() {
-  if (localStorage.getItem(STORAGE_KEYS.migrateListsPerProfileV1)) return;
-  const legacyZ = localStorage.getItem(STORAGE_KEYS.ziekenhuizen);
-  const legacyP = localStorage.getItem(STORAGE_KEYS.presetRoutes);
-  const legacyV = localStorage.getItem(STORAGE_KEYS.voertuigen);
+  if (lsGet(STORAGE_KEYS.migrateListsPerProfileV1)) return;
+  const legacyZ = lsGet(STORAGE_KEYS.ziekenhuizen);
+  const legacyP = lsGet(STORAGE_KEYS.presetRoutes);
+  const legacyV = lsGet(STORAGE_KEYS.voertuigen);
   for (const p of PROFILES) {
     const zk = profileStorageKey(STORAGE_KEYS.ziekenhuizen, p.id);
     const pk = profileStorageKey(STORAGE_KEYS.presetRoutes, p.id);
     const vk = profileStorageKey(STORAGE_KEYS.voertuigen, p.id);
-    if (legacyZ != null && localStorage.getItem(zk) == null) localStorage.setItem(zk, legacyZ);
-    if (legacyP != null && localStorage.getItem(pk) == null) localStorage.setItem(pk, legacyP);
-    if (legacyV != null && localStorage.getItem(vk) == null) localStorage.setItem(vk, legacyV);
+    if (legacyZ != null && lsGet(zk) == null) lsSet(zk, legacyZ);
+    if (legacyP != null && lsGet(pk) == null) lsSet(pk, legacyP);
+    if (legacyV != null && lsGet(vk) == null) lsSet(vk, legacyV);
   }
-  if (legacyZ != null) localStorage.removeItem(STORAGE_KEYS.ziekenhuizen);
-  if (legacyP != null) localStorage.removeItem(STORAGE_KEYS.presetRoutes);
-  if (legacyV != null) localStorage.removeItem(STORAGE_KEYS.voertuigen);
-  localStorage.setItem(STORAGE_KEYS.migrateListsPerProfileV1, '1');
+  if (legacyZ != null) lsRemove(STORAGE_KEYS.ziekenhuizen);
+  if (legacyP != null) lsRemove(STORAGE_KEYS.presetRoutes);
+  if (legacyV != null) lsRemove(STORAGE_KEYS.voertuigen);
+  lsSet(STORAGE_KEYS.migrateListsPerProfileV1, '1');
 }
 
 /** Eénmalige migratie: bestaande data zonder profiel-suffix naar eerste profiel (legacy default) */
@@ -209,32 +209,32 @@ function migrateLegacyToProfile() {
   const profileId = getCurrentProfileId();
   if (profileId !== PROFILES[0].id) return;
   const rKey = profileKey(STORAGE_KEYS.ritten);
-  if (localStorage.getItem(rKey) != null) return;
-  const legacy = localStorage.getItem(STORAGE_KEYS.ritten);
+  if (lsGet(rKey) != null) return;
+  const legacy = lsGet(STORAGE_KEYS.ritten);
   if (legacy != null) {
-    localStorage.setItem(rKey, legacy);
-    localStorage.removeItem(STORAGE_KEYS.ritten);
+    lsSet(rKey, legacy);
+    lsRemove(STORAGE_KEYS.ritten);
   }
   const bKey = profileKey(STORAGE_KEYS.brandstof);
-  if (localStorage.getItem(bKey) == null && localStorage.getItem(STORAGE_KEYS.brandstof) != null) {
-    localStorage.setItem(bKey, localStorage.getItem(STORAGE_KEYS.brandstof));
-    localStorage.removeItem(STORAGE_KEYS.brandstof);
+  if (lsGet(bKey) == null && lsGet(STORAGE_KEYS.brandstof) != null) {
+    lsSet(bKey, lsGet(STORAGE_KEYS.brandstof));
+    lsRemove(STORAGE_KEYS.brandstof);
   }
   const oKey = profileKey(STORAGE_KEYS.overig);
-  if (localStorage.getItem(oKey) == null && localStorage.getItem(STORAGE_KEYS.overig) != null) {
-    localStorage.setItem(oKey, localStorage.getItem(STORAGE_KEYS.overig));
-    localStorage.removeItem(STORAGE_KEYS.overig);
+  if (lsGet(oKey) == null && lsGet(STORAGE_KEYS.overig) != null) {
+    lsSet(oKey, lsGet(STORAGE_KEYS.overig));
+    lsRemove(STORAGE_KEYS.overig);
   }
 }
 
 /** Eénmalig: data van profiel «test» samenvoegen in eerste profiel (zelfde browser) */
 function mergeTestProfileIntoHoudaifaOnce() {
-  if (localStorage.getItem(STORAGE_KEYS.mergedTestProfile)) return;
+  if (lsGet(STORAGE_KEYS.mergedTestProfile)) return;
   const h = PROFILES[0].id;
   const t = 'test';
   function pair(base) {
-    const rawH = localStorage.getItem(`${base}_${h}`);
-    const rawT = localStorage.getItem(`${base}_${t}`);
+    const rawH = lsGet(`${base}_${h}`);
+    const rawT = lsGet(`${base}_${t}`);
     return {
       houd: JSON.parse(rawH || '[]'),
       tst: JSON.parse(rawT || '[]'),
@@ -254,20 +254,20 @@ function mergeTestProfileIntoHoudaifaOnce() {
   const r = pair(STORAGE_KEYS.ritten);
   const b = pair(STORAGE_KEYS.brandstof);
   const o = pair(STORAGE_KEYS.overig);
-  localStorage.setItem(`${STORAGE_KEYS.ritten}_${h}`, JSON.stringify(mergeArrays(r.houd, r.tst)));
-  localStorage.setItem(`${STORAGE_KEYS.brandstof}_${h}`, JSON.stringify(mergeArrays(b.houd, b.tst)));
-  localStorage.setItem(`${STORAGE_KEYS.overig}_${h}`, JSON.stringify(mergeArrays(o.houd, o.tst)));
-  localStorage.removeItem(`${STORAGE_KEYS.ritten}_${t}`);
-  localStorage.removeItem(`${STORAGE_KEYS.brandstof}_${t}`);
-  localStorage.removeItem(`${STORAGE_KEYS.overig}_${t}`);
-  localStorage.setItem(STORAGE_KEYS.mergedTestProfile, '1');
-  localStorage.setItem(STORAGE_KEYS.currentProfile, PROFILES[0].id);
+  lsSet(`${STORAGE_KEYS.ritten}_${h}`, JSON.stringify(mergeArrays(r.houd, r.tst)));
+  lsSet(`${STORAGE_KEYS.brandstof}_${h}`, JSON.stringify(mergeArrays(b.houd, b.tst)));
+  lsSet(`${STORAGE_KEYS.overig}_${h}`, JSON.stringify(mergeArrays(o.houd, o.tst)));
+  lsRemove(`${STORAGE_KEYS.ritten}_${t}`);
+  lsRemove(`${STORAGE_KEYS.brandstof}_${t}`);
+  lsRemove(`${STORAGE_KEYS.overig}_${t}`);
+  lsSet(STORAGE_KEYS.mergedTestProfile, '1');
+  lsSet(STORAGE_KEYS.currentProfile, PROFILES[0].id);
 }
 
 function retentionCutoffMs() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - DATA_RETENTION_DAYS);
+  d.setDate(d.getDate() - bewaarDagen());
   return d.getTime();
 }
 
@@ -282,19 +282,19 @@ function keptInRollingWindow(datumStr) {
 
 /** Eénmalig: zet alle teller-data (ritten/brandstof/overig) op nul voor elk profiel */
 function resetAllCountersOnce() {
-  if (localStorage.getItem(STORAGE_KEYS.resetAllCountersV1)) return;
+  if (lsGet(STORAGE_KEYS.resetAllCountersV1)) return;
   PROFILES.forEach((p) => {
-    localStorage.setItem(`${STORAGE_KEYS.ritten}_${p.id}`, '[]');
-    localStorage.setItem(`${STORAGE_KEYS.brandstof}_${p.id}`, '[]');
-    localStorage.setItem(`${STORAGE_KEYS.overig}_${p.id}`, '[]');
+    lsSet(`${STORAGE_KEYS.ritten}_${p.id}`, '[]');
+    lsSet(`${STORAGE_KEYS.brandstof}_${p.id}`, '[]');
+    lsSet(`${STORAGE_KEYS.overig}_${p.id}`, '[]');
   });
-  localStorage.setItem(STORAGE_KEYS.resetAllCountersV1, '1');
+  lsSet(STORAGE_KEYS.resetAllCountersV1, '1');
 }
 
 function cleanupDataOnce() {
-  if (localStorage.getItem(STORAGE_KEYS.dataCleanupV2)) return;
+  if (lsGet(STORAGE_KEYS.dataCleanupV2)) return;
   cleanupProfileData();
-  localStorage.setItem(STORAGE_KEYS.dataCleanupV2, '1');
+  lsSet(STORAGE_KEYS.dataCleanupV2, '1');
 }
 
 /** Ritten, brandstof en overig: enkel laatste DATA_RETENTION_DAGEN bewaren */
@@ -318,7 +318,7 @@ export function getData() {
   mergeTestProfileIntoHoudaifaOnce();
   resetAllCountersOnce();
   cleanupDataOnce();
-  let ritten = safeParseArray(localStorage.getItem(profileKey(STORAGE_KEYS.ritten)));
+  let ritten = safeParseArray(lsGet(profileKey(STORAGE_KEYS.ritten)));
   ritten = ritten.map(normalizeRit).filter(Boolean).sort(sortByDatumTijd);
   const idFix = ensureRitIds(ritten);
   if (idFix.changed) {
@@ -330,10 +330,10 @@ export function getData() {
     ritten = bf.ritten;
     saveRitten(ritten);
   }
-  const brandstof = safeParseArray(localStorage.getItem(profileKey(STORAGE_KEYS.brandstof)))
+  const brandstof = safeParseArray(lsGet(profileKey(STORAGE_KEYS.brandstof)))
     .map(normalizeBrandstofItem)
     .filter(Boolean);
-  const overig = safeParseArray(localStorage.getItem(profileKey(STORAGE_KEYS.overig)))
+  const overig = safeParseArray(lsGet(profileKey(STORAGE_KEYS.overig)))
     .map(normalizeOverigItem)
     .filter(Boolean);
   const pruned = applyRetentionAndPersist(ritten, brandstof, overig);
@@ -352,7 +352,7 @@ export function getData() {
  *  Structuur: { [profileId]: { [monthKey: 'YYYY-MM']: { [dateISO: 'YYYY-MM-DD']: true } } }
  */
 export function getPlanningAvailability() {
-  const raw = localStorage.getItem(STORAGE_KEYS.planning);
+  const raw = lsGet(STORAGE_KEYS.planning);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
@@ -363,14 +363,14 @@ export function getPlanningAvailability() {
 }
 
 export function savePlanningAvailability(planning) {
-  localStorage.setItem(STORAGE_KEYS.planning, JSON.stringify(planning || {}));
+  lsSet(STORAGE_KEYS.planning, JSON.stringify(planning || {}));
 }
 
 function ensureDefaultVoertuigen() {
   const key = profileKey(STORAGE_KEYS.voertuigen);
-  const raw = localStorage.getItem(key);
+  const raw = lsGet(key);
   if (!raw) {
-    localStorage.setItem(key, JSON.stringify(DEFAULT_VOERTUIGEN));
+    lsSet(key, JSON.stringify(DEFAULT_VOERTUIGEN));
     return DEFAULT_VOERTUIGEN;
   }
   const stored = JSON.parse(raw);
@@ -382,7 +382,7 @@ function ensureDefaultVoertuigen() {
       changed = true;
     }
   }
-  if (changed) localStorage.setItem(key, JSON.stringify(merged));
+  if (changed) lsSet(key, JSON.stringify(merged));
   return merged;
 }
 
@@ -391,12 +391,12 @@ export function getVoertuigen() {
 }
 
 export function saveVoertuigen(voertuigen) {
-  localStorage.setItem(profileKey(STORAGE_KEYS.voertuigen), JSON.stringify(voertuigen));
+  lsSet(profileKey(STORAGE_KEYS.voertuigen), JSON.stringify(voertuigen));
 }
 
 export function saveRitten(ritten) {
   const clean = (Array.isArray(ritten) ? ritten : []).map(normalizeRit).filter(Boolean).sort(sortByDatumTijd);
-  localStorage.setItem(profileKey(STORAGE_KEYS.ritten), JSON.stringify(clean));
+  lsSet(profileKey(STORAGE_KEYS.ritten), JSON.stringify(clean));
 }
 
 export function saveBrandstof(brandstof) {
@@ -404,7 +404,7 @@ export function saveBrandstof(brandstof) {
     .map(normalizeBrandstofItem)
     .filter(Boolean)
     .sort((a, b) => a.datum.localeCompare(b.datum));
-  localStorage.setItem(profileKey(STORAGE_KEYS.brandstof), JSON.stringify(clean));
+  lsSet(profileKey(STORAGE_KEYS.brandstof), JSON.stringify(clean));
 }
 
 export function saveOverig(overig) {
@@ -412,7 +412,7 @@ export function saveOverig(overig) {
     .map(normalizeOverigItem)
     .filter(Boolean)
     .sort((a, b) => a.datum.localeCompare(b.datum));
-  localStorage.setItem(profileKey(STORAGE_KEYS.overig), JSON.stringify(clean));
+  lsSet(profileKey(STORAGE_KEYS.overig), JSON.stringify(clean));
 }
 
 function routePairExists(routes, fromId, toId) {
@@ -423,15 +423,15 @@ function routePairExists(routes, fromId, toId) {
 
 function ensureDefaultZiekenhuizen() {
   const key = profileKey(STORAGE_KEYS.ziekenhuizen);
-  const raw = localStorage.getItem(key);
+  const raw = lsGet(key);
   if (!raw) {
-    localStorage.setItem(key, JSON.stringify(DEFAULT_ZIEKENHUIZEN));
+    lsSet(key, JSON.stringify(DEFAULT_ZIEKENHUIZEN));
     return DEFAULT_ZIEKENHUIZEN;
   }
   const stored = JSON.parse(raw);
   // Oude versies konden een heel grote OSM-lijst inladen; trim eenmalig hard terug.
   if (Array.isArray(stored) && stored.length > 120) {
-    localStorage.setItem(key, JSON.stringify(DEFAULT_ZIEKENHUIZEN));
+    lsSet(key, JSON.stringify(DEFAULT_ZIEKENHUIZEN));
     return DEFAULT_ZIEKENHUIZEN;
   }
 
@@ -450,15 +450,15 @@ function ensureDefaultZiekenhuizen() {
       }
     }
   }
-  if (changed) localStorage.setItem(key, JSON.stringify(merged));
+  if (changed) lsSet(key, JSON.stringify(merged));
   return merged;
 }
 
 function ensureDefaultPresetRoutes() {
   const key = profileKey(STORAGE_KEYS.presetRoutes);
-  const raw = localStorage.getItem(key);
+  const raw = lsGet(key);
   if (!raw) {
-    localStorage.setItem(key, JSON.stringify(ALL_PRESET_ROUTES));
+    lsSet(key, JSON.stringify(ALL_PRESET_ROUTES));
     return ALL_PRESET_ROUTES;
   }
   const stored = JSON.parse(raw);
@@ -493,7 +493,7 @@ function ensureDefaultPresetRoutes() {
       }
     }
   }
-  if (changed) localStorage.setItem(key, JSON.stringify(merged));
+  if (changed) lsSet(key, JSON.stringify(merged));
   return merged;
 }
 
@@ -502,7 +502,7 @@ export function getZiekenhuizen() {
 }
 
 export function saveZiekenhuizen(ziekenhuizen) {
-  localStorage.setItem(profileKey(STORAGE_KEYS.ziekenhuizen), JSON.stringify(ziekenhuizen));
+  lsSet(profileKey(STORAGE_KEYS.ziekenhuizen), JSON.stringify(ziekenhuizen));
 }
 
 export function getPresetRoutes() {
@@ -510,11 +510,11 @@ export function getPresetRoutes() {
 }
 
 export function savePresetRoutes(routes) {
-  localStorage.setItem(profileKey(STORAGE_KEYS.presetRoutes), JSON.stringify(routes));
+  lsSet(profileKey(STORAGE_KEYS.presetRoutes), JSON.stringify(routes));
 }
 
 function readLiveAvailabilityMap() {
-  const raw = localStorage.getItem(STORAGE_KEYS.liveAvailability);
+  const raw = lsGet(STORAGE_KEYS.liveAvailability);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
@@ -525,7 +525,7 @@ function readLiveAvailabilityMap() {
 }
 
 function writeLiveAvailabilityMap(map) {
-  localStorage.setItem(STORAGE_KEYS.liveAvailability, JSON.stringify(map || {}));
+  lsSet(STORAGE_KEYS.liveAvailability, JSON.stringify(map || {}));
 }
 
 export function getLiveAvailabilityStatus(profileId) {
@@ -604,7 +604,7 @@ export function getFactuurGegevens(profileId = getCurrentProfileId()) {
   if (!VALID_PROFILE_IDS.has(pid)) pid = PROFILES[0].id;
   const key = `${STORAGE_KEYS.factuurGegevens}_${pid}`;
   try {
-    return mergeFactuurGegevens(JSON.parse(localStorage.getItem(key) || '{}'));
+    return mergeFactuurGegevens(JSON.parse(lsGet(key) || '{}'));
   } catch {
     return mergeFactuurGegevens({});
   }
@@ -615,7 +615,7 @@ export function saveFactuurGegevens(partial, profileId = getCurrentProfileId()) 
   const cur = getFactuurGegevens(profileId);
   const next = mergeFactuurGegevens({ ...cur, ...partial });
   const key = `${STORAGE_KEYS.factuurGegevens}_${profileId}`;
-  localStorage.setItem(key, JSON.stringify(next));
+  lsSet(key, JSON.stringify(next));
 }
 
 /**
@@ -627,7 +627,7 @@ export function nextFactuurVolgNummer(profileId = getCurrentProfileId()) {
   const key = `${STORAGE_KEYS.factuurTeller}_${profileId}`;
   let map = {};
   try {
-    map = JSON.parse(localStorage.getItem(key) || '{}');
+    map = JSON.parse(lsGet(key) || '{}');
     if (!map || typeof map !== 'object') map = {};
   } catch {
     map = {};
@@ -635,7 +635,7 @@ export function nextFactuurVolgNummer(profileId = getCurrentProfileId()) {
   const yk = String(year);
   const n = (Number(map[yk]) || 0) + 1;
   map[yk] = n;
-  localStorage.setItem(key, JSON.stringify(map));
+  lsSet(key, JSON.stringify(map));
   const padded = String(n).padStart(3, '0');
   return { year, volgNummer: n, factuurCode: `${year}-${padded}`, orderDisplay: padded };
 }

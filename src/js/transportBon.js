@@ -468,7 +468,7 @@ export function tripUitVoorstel(voorstel, { id, chauffeur, voertuig, bestandId }
     k: kInt,
     dr: chauffeur,
     ca: voertuig,
-    s: voorstel.s === "komend" ? "komend" : "voltooid",
+    s: voorstel.s === "komend" ? "komend" : voorstel.s === "lopend" ? "lopend" : "voltooid",
     v,
   };
   const bon = String(voorstel.bon || "").trim();
@@ -560,6 +560,66 @@ export function voegBonRittenToe(bestaande, nieuw) {
   return { ritten: [...(bestaande || []), ...toegevoegd], toegevoegd, duplicaten };
 }
 
+/** Zonder IHcT én tijdstip geen koppeling — geen bredere regel. */
+export function ontbrekendeKoppelVelden(v) {
+  const mist = [];
+  if (!bonSleutel(v?.bon)) mist.push("bonnummer");
+  if (!normaliseerTijdstip(v?.d, v?.ti)) mist.push("tijdstip");
+  return mist;
+}
+
+export function herberekenKoppeling(voorstel, ritten) {
+  const next = koppelBonAanRit(voorstel, ritten);
+  if (next.bestaandId && next.bestaandId === voorstel.bestaandId && voorstel.voltooidKeuze != null) {
+    return { ...next, voltooidKeuze: voorstel.voltooidKeuze, s: voorstel.s };
+  }
+  return next;
+}
+
+/**
+ * Vlak vóór opslaan: opnieuw koppelen aan de actuele lijst.
+ * Overschrijft geen rit waarvan IHcT+tijdstip niet meer klopt.
+ */
+export function planBonOpslag(rijen, ritten) {
+  const actueel = Array.isArray(ritten) ? ritten : [];
+  const her = markeerDubbeleRijen((rijen || []).map(v => herberekenKoppeling(v, actueel)));
+  const nieuw = [];
+  const updates = [];
+  const gezienUpdate = new Set();
+  let overgeslagenDubbel = 0;
+  const controle = [];
+  for (const v of her) {
+    const mist = ontbrekendeKoppelVelden(v);
+    if (mist.length && !v.bestaandId) controle.push(v);
+    if (v.dubbelInBatch) {
+      overgeslagenDubbel++;
+      continue;
+    }
+    if (v.bestaandId) {
+      const target = actueel.find(r => r.id === v.bestaandId);
+      const key = bonTijdSleutel(v.bon, v.d, v.ti);
+      const targetKeys = target ? bonTijdSleutelsVanRit(target) : [];
+      if (!target || (key && targetKeys.length && !targetKeys.includes(key))) {
+        if (!v.vraagVoltooid) overgeslagenDubbel++;
+        continue;
+      }
+      if (gezienUpdate.has(v.bestaandId)) {
+        overgeslagenDubbel++;
+        continue;
+      }
+      gezienUpdate.add(v.bestaandId);
+      if (!v.vraagVoltooid) {
+        overgeslagenDubbel++;
+        continue;
+      }
+      updates.push({ id: v.bestaandId, voorstel: v });
+    } else {
+      nieuw.push(v);
+    }
+  }
+  return { rijen: her, nieuw, updates, overgeslagenDubbel, controle };
+}
+
 export function koppelBonAanRit(voorstel, ritten) {
   const hit = vindBestaandeRit(ritten, voorstel);
   if (!hit) {
@@ -568,7 +628,8 @@ export function koppelBonAanRit(voorstel, ritten) {
       bestaandId: "",
       bestaandStatus: "",
       vraagVoltooid: false,
-      voltooidKeuze: voorstel.s === "komend" ? false : true,
+      vraagControle: ontbrekendeKoppelVelden(voorstel).length > 0,
+      voltooidKeuze: voorstel.s === "komend" || voorstel.s === "lopend" ? false : true,
     };
   }
   const open = hit.s === "komend" || hit.s === "lopend";
@@ -577,6 +638,7 @@ export function koppelBonAanRit(voorstel, ritten) {
     bestaandId: hit.id,
     bestaandStatus: hit.s || "",
     vraagVoltooid: open,
+    vraagControle: false,
     voltooidKeuze: open ? null : true,
   };
 }

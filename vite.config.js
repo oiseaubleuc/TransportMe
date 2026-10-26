@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
 /**
@@ -19,12 +19,56 @@ function manualChunks(id) {
   if (id.includes("exceljs")) return "vendor-exceljs";
 }
 
-export default defineConfig({
-  plugins: [react()],
-  build: {
-    chunkSizeWarningLimit: 1000,
-    rollupOptions: {
-      output: { manualChunks },
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Cross-Origin-Opener-Policy": "same-origin",
+};
+
+function laadAuthEnv(mode) {
+  const env = loadEnv(mode, process.cwd(), "");
+  for (const [k, v] of Object.entries(env)) {
+    if (k === "SESSION_SECRET" || k.startsWith("AUTH_")) process.env[k] = v;
+  }
+}
+
+function localAuthApi() {
+  return {
+    name: "transportme-auth-api",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url || "";
+        const path = url.split("?")[0];
+        if (path !== "/api/login" && path !== "/api/logout" && path !== "/api/session") return next();
+        const { handleAuthRequest } = await import("./server/authHttp.mjs");
+        return handleAuthRequest(req, res);
+      });
     },
-  },
+    configurePreviewServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url || "";
+        const path = url.split("?")[0];
+        if (path !== "/api/login" && path !== "/api/logout" && path !== "/api/session") return next();
+        const { handleAuthRequest } = await import("./server/authHttp.mjs");
+        return handleAuthRequest(req, res);
+      });
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  laadAuthEnv(mode);
+  return {
+    plugins: [react(), localAuthApi()],
+    server: { headers: SECURITY_HEADERS },
+    preview: { headers: SECURITY_HEADERS },
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: { manualChunks },
+      },
+    },
+  };
 });

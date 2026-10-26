@@ -2,21 +2,31 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PR, CA, ui, isN, RitMap, tmVergoeding } from "../TransportMe.jsx";
 import { chauffeurNaam, euro, lijnVar, datumKort } from "./team.js";
 import { terminateBonOcrWorker } from "../js/bonFotoOcr.js";
-import { isBonBestand, isPdfBestand, leesBonBestand } from "../js/leesBonBestand.js";
+import { isPdfBestand, leesBonBestand } from "../js/leesBonBestand.js";
 import { zetBonBestand } from "../js/bonArchief.js";
 import {
   voorstelUitBonTekst,
   tripUitVoorstel,
   bonInhoudRegels,
   koppelBonAanRit,
+  herberekenKoppeling,
   voorstelRijKlaar,
   markeerDubbeleRijen,
   isDubbeleBon,
   dubbeleMelding,
+  planBonOpslag,
 } from "../js/transportBon.js";
-
-const MAX_BESTANDEN = 80;
-const MAX_MB = 14;
+import {
+  BESTAND_TIMEOUT_MS,
+  geweigerdTekst,
+  IMPORT_CONCURRENTIE,
+  keurBatch,
+  keurBonBestand,
+  leesKop,
+  mapMetLimiet,
+  MAX_BESTANDEN,
+  metTimeout,
+} from "../js/importGrenzen.js";
 
 function extraUitData(D) {
   const extraKm = [];
@@ -58,6 +68,11 @@ function RijEditor({ v, onChange, i, bestaand }) {
         {v.kmBron === "lijst" ? <span className="tm-muted">Km uit de prijslijst</span> : null}
         {v.kmBron === "weg" ? <span className="tm-muted">Km over de weg</span> : null}
       </header>
+      {v.vraagControle && !eerder ? (
+        <div className="tm-bon-vraag">
+          <p>Controleer IHcT-nummer en tijdstip. Zonder beide kan geen eerdere rit worden herkend.</p>
+        </div>
+      ) : null}
       {v.dubbelInBatch ? (
         <div className="tm-bon-vraag">
           <p>Dubbel. Staat hierboven.</p>
@@ -149,7 +164,7 @@ function RijEditor({ v, onChange, i, bestaand }) {
             id={"bon-d-" + i}
             type="date"
             value={v.d}
-            onChange={e => onChange({ ...v, d: e.target.value })}
+            onChange={e => onChange({ ...v, d: e.target.value, _herkoppel: true })}
           />
         </div>
         <div className="tm-fg">
@@ -160,7 +175,7 @@ function RijEditor({ v, onChange, i, bestaand }) {
             id={"bon-ti-" + i}
             type="time"
             value={v.ti}
-            onChange={e => onChange({ ...v, ti: e.target.value })}
+            onChange={e => onChange({ ...v, ti: e.target.value, _herkoppel: true })}
           />
         </div>
         <div className="tm-fg">
@@ -173,7 +188,7 @@ function RijEditor({ v, onChange, i, bestaand }) {
             autoCapitalize="characters"
             spellCheck={false}
             value={v.bon}
-            onChange={e => onChange({ ...v, bon: e.target.value })}
+            onChange={e => onChange({ ...v, bon: e.target.value, _herkoppel: true })}
           />
         </div>
       </div>
@@ -206,6 +221,7 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
   const [rijen, setRijen] = useState([]);
   const [bewaren, setBewaren] = useState(false);
   const inp = useRef(null);
+  const abortRef = useRef(null);
   const D = all[pid] || { xr: [], r: [] };
   const extra = useMemo(() => extraUitData(D), [D]);
   const ritten = D.r || [];
@@ -216,24 +232,52 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
     return () => window.removeEventListener("keydown", f);
   }, [onClose]);
 
-  useEffect(() => () => terminateBonOcrWorker().catch(() => {}), []);
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      terminateBonOcrWorker().catch(() => {});
+    },
+    []
+  );
 
   useEffect(() => {
-    setRijen(cur => (cur.length ? cur.map(v => koppelBonAanRit(v, ritten)) : cur));
+    setRijen(cur => (cur.length ? markeerDubbeleRijen(cur.map(v => herberekenKoppeling(v, ritten))) : cur));
   }, [pid]); // eslint-disable-line react-hooks/exhaustive-deps -- alleen opnieuw koppelen bij chauffeurwissel
+
+  const stopLezen = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    terminateBonOcrWorker().catch(() => {});
+    setFase("kies");
+    setVoortgang(null);
+    setLeesInfo("");
+    setFout("Inlezen geannuleerd.");
+  };
 
   const leesBestanden = useCallback(
     async fileList => {
-      const arr = Array.from(fileList || []).filter(isBonBestand);
-      if (!arr.length) {
-        setFout("Kies een foto of PDF.");
+      const batch = keurBatch(fileList);
+      const meldingen = [];
+      if (batch.geweigerd.length) meldingen.push(geweigerdTekst(batch.geweigerd));
+      const ok = [];
+      for (const file of batch.ok) {
+        try {
+          const kop = await leesKop(file);
+          const keur = keurBonBestand(file, kop);
+          if (!keur.ok) {
+            meldingen.push(`${file.name}: ${keur.reden}`);
+            continue;
+          }
+          ok.push(file);
+        } catch {
+          meldingen.push(`${file.name}: kon niet worden gecontroleerd.`);
+        }
+      }
+      if (!ok.length) {
+        setFout(meldingen.join(" ") || "Kies een foto of PDF.");
         return;
       }
-      const teGroot = arr.filter(f => f.size > MAX_MB * 1024 * 1024);
-      const ok = arr.filter(f => f.size <= MAX_MB * 1024 * 1024).slice(0, MAX_BESTANDEN);
-      if (teGroot.length) setFout(`Een bestand is groter dan ${MAX_MB} MB.`);
-      if (!ok.length) return;
-      setFout("");
+      setFout(meldingen.join(" "));
       setFase("lezen");
       setVoortgang(0);
       setLeesInfo(ok.length > 1 ? `0 van ${ok.length}` : "");
@@ -246,56 +290,78 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
         setVoortgang(som / ok.length);
         setLeesInfo(ok.length > 1 ? `${klaarBestand.filter(Boolean).length} van ${ok.length}` : "");
       };
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
       try {
-        const groepen = await Promise.all(
-          ok.map(async (file, i) => {
+        const groepen = await mapMetLimiet(
+          ok,
+          IMPORT_CONCURRENTIE,
+          async (file, i, signal) => {
             const bestand = { id: ui(), file };
             try {
-              const stukken = await leesBonBestand(file, {
-                logger: m => {
-                  if (m.status === "recognizing text" && typeof m.progress === "number") {
-                    perBestand[i] = 0.2 + m.progress * 0.7;
+              const stukken = await metTimeout(
+                leesBonBestand(file, {
+                  signal,
+                  logger: m => {
+                    if (m.status === "recognizing text" && typeof m.progress === "number") {
+                      perBestand[i] = 0.2 + m.progress * 0.7;
+                      meld();
+                    }
+                  },
+                  onVoortgang: p => {
+                    perBestand[i] = p;
                     meld();
-                  }
-                },
-                onVoortgang: p => {
-                  perBestand[i] = p;
-                  meld();
-                },
-              });
+                  },
+                }),
+                BESTAND_TIMEOUT_MS,
+                signal
+              );
               const rows = [];
+              const waarschuwingen = [];
               for (const stuk of stukken) {
+                if (stuk.waarschuwing) waarschuwingen.push(stuk.waarschuwing);
                 const voorstel = await voorstelUitBonTekst(stuk.text || "", { extraKm, extraPlaatsen });
                 rows.push(koppelBonAanRit({ ...voorstel, id: ui(), bestand }, ritten));
               }
               perBestand[i] = 1;
               klaarBestand[i] = true;
               meld();
-              return { rows, naam: file.name };
+              return { rows, naam: file.name, waarschuwing: waarschuwingen.filter(Boolean)[0] || "" };
             } catch (e) {
-              console.error(e);
               klaarBestand[i] = true;
               perBestand[i] = 1;
               meld();
-              return { rows: [], naam: file.name, fout: true };
+              if (e?.name === "AbortError") throw e;
+              return { rows: [], naam: file.name, fout: e?.message || "kon niet worden gelezen" };
             }
-          })
+          },
+          { signal: ctrl.signal }
         );
         const next = groepen.flatMap(g => g.rows);
-        const mislukt = groepen.filter(g => g.fout).length;
+        const mislukt = groepen.filter(g => g.fout);
+        const extraWarn = groepen.map(g => g.waarschuwing).filter(Boolean);
         if (!next.length) {
-          setFout("Kon niet worden gelezen. Probeer een scherpere foto of een andere PDF.");
+          setFout(
+            mislukt.length
+              ? mislukt.map(g => `${g.naam}: ${g.fout}`).join(" ")
+              : "Kon niet worden gelezen. Probeer een scherpere foto of een andere PDF."
+          );
           setFase("kies");
           return;
         }
-        if (mislukt) setFout(`${mislukt === 1 ? "1 bestand" : mislukt + " bestanden"} kon niet worden gelezen.`);
+        const stukken = [...meldingen];
+        if (mislukt.length) stukken.push(mislukt.map(g => `${g.naam}: ${g.fout}`).join(" "));
+        if (extraWarn.length) stukken.push(extraWarn.join(" "));
+        setFout(stukken.filter(Boolean).join(" "));
         setRijen(markeerDubbeleRijen(next));
         setFase("check");
       } catch (e) {
+        if (e?.name === "AbortError") return;
         console.error(e);
         setFout("Kon niet worden gelezen. Probeer een scherpere foto of een andere PDF.");
         setFase("kies");
       } finally {
+        if (abortRef.current === ctrl) abortRef.current = null;
         setVoortgang(null);
         setLeesInfo("");
       }
@@ -306,12 +372,30 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
   const klaar = rijen.filter(voorstelRijKlaar);
   const wachtAntwoord = rijen.filter(v => v.vraagVoltooid && v.voltooidKeuze == null).length;
 
+  const wijzigRij = (id, nv) => {
+    setRijen(cur =>
+      markeerDubbeleRijen(
+        cur.map(x => {
+          if (x.id !== id) return x;
+          const her = nv._herkoppel;
+          const { _herkoppel, ...rest } = nv;
+          const merged = { ...x, ...rest };
+          return her ? herberekenKoppeling(merged, ritten) : merged;
+        })
+      )
+    );
+  };
+
   const bewaar = async () => {
     if (!klaar.length || bewaren) return;
     setBewaren(true);
+    const actueel = (all[pid] || { r: [] }).r || [];
+    const plan = planBonOpslag(rijen.filter(voorstelRijKlaar), actueel);
     let archiefFout = false;
+    let archiefOk = 0;
     const seen = new Set();
-    for (const v of rijen) {
+    const teArchiveren = [...plan.nieuw, ...plan.updates.map(u => u.voorstel)];
+    for (const v of teArchiveren) {
       const b = v.bestand;
       if (!b?.file || seen.has(b.id)) continue;
       seen.add(b.id);
@@ -328,19 +412,30 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
           tripId: v.bestaandId || "",
           toegevoegd: new Date().toISOString(),
         });
+        archiefOk++;
       } catch {
         archiefFout = true;
       }
     }
     const nieuw = [];
     const updates = [];
-    const gezienUpdate = new Set();
-    let overgeslagenDubbel = 0;
-    for (const v of klaar) {
-      if (v.dubbelInBatch) {
-        overgeslagenDubbel++;
-        continue;
-      }
+    for (const v of plan.nieuw) {
+      const k = Math.max(1, Math.round(Number(String(v.k).replace(",", ".")) || 0));
+      const voltooid = v.voltooidKeuze !== false && v.s !== "komend" && v.s !== "lopend";
+      nieuw.push(
+        tripUitVoorstel(
+          { ...v, k, s: voltooid ? "voltooid" : v.s === "lopend" ? "lopend" : "komend" },
+          {
+            id: ui(),
+            chauffeur: chauffeurNaam(pid),
+            voertuig: CA[0],
+            bestandId: v.bestand?.id,
+          }
+        )
+      );
+    }
+    for (const u of plan.updates) {
+      const v = u.voorstel;
       const k = Math.max(1, Math.round(Number(String(v.k).replace(",", ".")) || 0));
       const voltooid = v.voltooidKeuze !== false && v.s !== "komend" && v.s !== "lopend";
       const trip = tripUitVoorstel(
@@ -352,26 +447,25 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
           bestandId: v.bestand?.id,
         }
       );
-      if (v.bestaandId) {
-        if (gezienUpdate.has(v.bestaandId)) {
-          overgeslagenDubbel++;
-          continue;
-        }
-        gezienUpdate.add(v.bestaandId);
-        if (!v.vraagVoltooid) overgeslagenDubbel++;
-        const patch = {
-          bon: trip.bon || undefined,
-          bonInhoud: trip.bonInhoud,
-          bonBestandId: trip.bonBestandId,
-        };
-        if (v.vraagVoltooid) patch.s = trip.s;
-        if (!patch.bon) delete patch.bon;
-        updates.push({ id: v.bestaandId, patch });
-      } else {
-        nieuw.push(trip);
-      }
+      const patch = {
+        bon: trip.bon || undefined,
+        bonInhoud: trip.bonInhoud,
+        bonBestandId: trip.bonBestandId,
+      };
+      if (v.vraagVoltooid) patch.s = trip.s;
+      if (!patch.bon) delete patch.bon;
+      updates.push({ id: u.id, patch });
     }
-    onSave(pid, { nieuw, updates }, { archiefFout, overgeslagenDubbel });
+    onSave(
+      pid,
+      { nieuw, updates },
+      {
+        archiefFout,
+        archiefOk,
+        overgeslagenDubbel: plan.overgeslagenDubbel,
+        volledigGeslaagd: !archiefFout && (nieuw.length > 0 || updates.length > 0),
+      }
+    );
   };
 
   return (
@@ -406,7 +500,7 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
             <fieldset className="tm-fs">
               <legend>Bonnen</legend>
               <p className="tm-card-p" style={{ marginTop: 0 }}>
-                Foto of PDF.
+                Foto of PDF. Max. {MAX_BESTANDEN} bestanden.
               </p>
               <label
                 className={"btn btn-p btn-full" + (fase === "lezen" ? " tm-btn-busy" : "")}
@@ -436,11 +530,17 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
                   }}
                 />
               </label>
+              {fase === "lezen" ? (
+                <button type="button" className="btn btn-o btn-full" style={{ marginTop: 8 }} onClick={stopLezen}>
+                  Annuleren
+                </button>
+              ) : null}
               {fout ? <p className="tm-warn">{fout}</p> : null}
             </fieldset>
           ) : (
             <fieldset className="tm-fs">
               <legend>{rijen.length === 1 ? "Rit uit de bon" : `${rijen.length} ritten uit de bonnen`}</legend>
+              {fout ? <p className="tm-warn">{fout}</p> : null}
               {dubbeleMelding(rijen) ? <p className="tm-warn tm-bon-dubbel-sam">{dubbeleMelding(rijen)}</p> : null}
               {rijen.map((v, i) => (
                 <RijEditor
@@ -448,10 +548,18 @@ export default function BonInvoegenSheet({ all, startPid, onClose, onSave }) {
                   i={i}
                   v={v}
                   bestaand={(ritten || []).find(r => r.id === v.bestaandId)}
-                  onChange={nv => setRijen(cur => markeerDubbeleRijen(cur.map(x => (x.id === v.id ? nv : x))))}
+                  onChange={nv => wijzigRij(v.id, nv)}
                 />
               ))}
-              <button type="button" className="btn btn-o" onClick={() => { setRijen([]); setFase("kies"); setFout(""); }}>
+              <button
+                type="button"
+                className="btn btn-o"
+                onClick={() => {
+                  setRijen([]);
+                  setFase("kies");
+                  setFout("");
+                }}
+              >
                 Andere bestanden
               </button>
             </fieldset>
