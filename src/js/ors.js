@@ -133,6 +133,13 @@ async function fetchOsrmRouteGeojson(from, to) {
   return { km, geometry };
 }
 
+/** Rijlijn voor de kaart, zonder op Google te wachten. */
+export function getOsrmRouteGeometry(origin, destination) {
+  const { from, to } = normEndpoints(origin, destination);
+  if (!from || !to) return Promise.reject(new Error('Ongeldige coördinaten'));
+  return fetchOsrmRouteGeojson(from, to);
+}
+
 /**
  * Rijroute + lijn: Google → OSRM → OpenRouteService.
  */
