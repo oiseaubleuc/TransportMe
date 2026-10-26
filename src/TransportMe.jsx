@@ -878,7 +878,7 @@ function PlaatsPicker({ label, gekozen, onKies, lijst }) {
       {showHits && (
         <div
           className="tm-prs"
-          style={{ maxHeight: 160, marginTop: 6, border: "1px solid var(--bd)", borderRadius: 8, padding: 6 }}
+          style={{ maxHeight: 160, marginTop: 6, border: "1px solid var(--bd)", borderRadius: 0, padding: 6 }}
         >
           {localHits.map(h => (
             <button
@@ -1438,7 +1438,7 @@ function Historiek({ D, pid, sD }) {
         </div>
         <div className="tm-rvi">
           <span>Omzet</span>
-          <b style={{ color: "var(--acc)" }}>{E(omzet)}</b>
+          <b style={{ color: "var(--tx)" }}>{E(omzet)}</b>
         </div>
         <div className="tm-rvi">
           <span>Brandstof</span>
@@ -1924,7 +1924,7 @@ function FactuurGegevensScherm({ pid }) {
               maxHeight: 120,
               objectFit: "contain",
               marginBottom: 12,
-              borderRadius: 8,
+              borderRadius: 0,
               border: "1px solid var(--bd)",
               background: "var(--s1)",
             }}
@@ -1996,7 +1996,7 @@ function FactuurGegevensScherm({ pid }) {
             rows={3}
             value={S.btwVrijstellingTekst ?? ""}
             onChange={e => setS(prev => ({ ...prev, btwVrijstellingTekst: e.target.value }))}
-            style={{ width: "100%", padding: 12, background: "var(--s2)", border: "1px solid var(--bd)", borderRadius: 8, color: "var(--tx)" }}
+            style={{ width: "100%", padding: 12, background: "var(--s2)", border: "1px solid var(--bd)", borderRadius: 0, color: "var(--tx)" }}
           />
         </div>
         <div className="tm-fg">

@@ -1062,7 +1062,7 @@ label.btn {
 .tm-sheet {
   max-width: min(660px, 100%);
   overflow-x: hidden;
-  border-top: 4px solid var(--lijn);
+  border-top: 4px solid var(--ink);
 }
 
 .tm-sheet-body {

@@ -140,7 +140,7 @@ body {
 }
 
 .acc {
-  color: var(--acc);
+  color: var(--tx);
 }
 
 .sr-only {
@@ -335,13 +335,17 @@ body {
   background: none;
   border: none;
   padding: 0;
-  color: var(--acc);
+  color: var(--tx);
   font-weight: 700;
   font-size: inherit;
   cursor: pointer;
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+}
+
+.tm-link:hover {
+  color: var(--tx3);
 }
 
 .tm-link--sm {
@@ -714,7 +718,7 @@ body {
   border: none;
   padding: 0;
   margin-bottom: 8px;
-  color: var(--acc);
+  color: var(--tx);
   font-weight: 700;
   cursor: pointer;
   display: inline-flex;
