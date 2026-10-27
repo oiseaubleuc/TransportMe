@@ -23,6 +23,16 @@ import {
   LOCK_MS,
 } from "./authCore.mjs";
 
+function nietIngesteld() {
+  const cfg = authConfig();
+  return json(503, {
+    ok: false,
+    error: "Toegang is niet ingesteld op de server.",
+    reden: cfg.reden || "",
+    ontbreekt: cfg.ontbreekt || [],
+  });
+}
+
 function pad(reqLike) {
   try {
     return new URL(reqLike.url || "/", "http://local").pathname;
@@ -80,7 +90,7 @@ export async function dispatchAuth(reqLike) {
 
   if (path === "/api/session" && method === "GET") {
     const cfg = authConfig();
-    if (!cfg.ok) return json(503, { ok: false, error: "Toegang is niet ingesteld op de server." });
+    if (!cfg.ok) return nietIngesteld();
     const sessie = sessieUitReq(reqLike);
     if (!sessie) return json(401, { ok: false, error: "Niet aangemeld." });
     return json(200, { ok: true, exp: sessie.exp, rol: sessie.rol || "beheerder" });
@@ -96,7 +106,7 @@ export async function dispatchAuth(reqLike) {
   if (path === "/api/login" && method === "POST") {
     if (!originToegestaan(reqLike)) return json(403, { ok: false, error: "Verzoek geweigerd." });
     const cfg = authConfig();
-    if (!cfg.ok) return json(503, { ok: false, error: "Toegang is niet ingesteld op de server." });
+    if (!cfg.ok) return nietIngesteld();
     const key = clientSleutel(reqLike);
     const st = pogingStatus(key);
     if (st.locked) {
@@ -111,7 +121,14 @@ export async function dispatchAuth(reqLike) {
     const pin = typeof body.pin === "string" ? body.pin : "";
     const uit = await pinKlopt(pin);
     if (!uit.ok) {
-      if (uit.status === 503) return json(503, { ok: false, error: uit.error });
+      if (uit.status === 503) {
+        return json(503, {
+          ok: false,
+          error: uit.error,
+          reden: uit.reden || "",
+          ontbreekt: uit.ontbreekt || [],
+        });
+      }
       const lock = registreerMislukt(key);
       if (lock.lockedUntil) {
         return json(429, {
@@ -151,7 +168,7 @@ export function eisSessie(reqLike) {
   }
   const cfg = authConfig();
   if (!cfg.ok) {
-    return { ok: false, response: json(503, { ok: false, error: "Toegang is niet ingesteld op de server." }) };
+    return { ok: false, response: nietIngesteld() };
   }
   const sessie = sessieUitReq(reqLike);
   if (!sessie) {

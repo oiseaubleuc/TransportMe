@@ -43,8 +43,26 @@ function req(method, url, { headers = {}, body, ip } = {}) {
 test("config weigert ontbrekende geheimen", () => {
   const prev = { ...process.env };
   delete process.env.AUTH_PIN_HASH;
-  assert.equal(authConfig().ok, false);
+  const cfg = authConfig();
+  assert.equal(cfg.ok, false);
+  assert.ok(cfg.ontbreekt.includes("AUTH_PIN_HASH"));
   process.env.AUTH_PIN_HASH = prev.AUTH_PIN_HASH;
+});
+
+test("aanhalingstekens rond env-waarden worden weggehaald", async () => {
+  const prev = {
+    AUTH_PIN_HASH: process.env.AUTH_PIN_HASH,
+    AUTH_PIN_SALT: process.env.AUTH_PIN_SALT,
+    AUTH_PEPPER: process.env.AUTH_PEPPER,
+    SESSION_SECRET: process.env.SESSION_SECRET,
+  };
+  process.env.AUTH_PIN_HASH = `"${prev.AUTH_PIN_HASH}"`;
+  process.env.AUTH_PIN_SALT = `'${prev.AUTH_PIN_SALT}'`;
+  process.env.AUTH_PEPPER = `"${prev.AUTH_PEPPER}"`;
+  process.env.SESSION_SECRET = `"${prev.SESSION_SECRET}"`;
+  assert.equal(authConfig().ok, true);
+  assert.equal((await pinKlopt(PIN)).ok, true);
+  Object.assign(process.env, prev);
 });
 
 test("juiste pincode, verkeerde pincode", async () => {
@@ -115,6 +133,15 @@ test("poginglimiet na 5 fouten", async () => {
   const locked = await dispatchAuth(req("POST", "/api/login", { body: { pin: PIN }, ip }));
   assert.equal(locked.status, 429);
   resetPogingen();
+});
+
+test("login zonder servergeheimen is 503 met ontbreekt", async () => {
+  const prev = process.env.AUTH_PIN_HASH;
+  delete process.env.AUTH_PIN_HASH;
+  const res = await dispatchAuth(req("POST", "/api/login", { body: { pin: PIN } }));
+  assert.equal(res.status, 503);
+  assert.ok(res.body.ontbreekt.includes("AUTH_PIN_HASH"));
+  process.env.AUTH_PIN_HASH = prev;
 });
 
 test("geen publieke registratie", async () => {

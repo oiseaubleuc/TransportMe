@@ -54,10 +54,12 @@ Voorbeeld: 45 km overdag = €15 + 3×€25 = **€90**. ’s Nachts wordt dat *
 De app vraagt een toegangscode die **op de server** wordt gecontroleerd (HttpOnly-cookie, geen pincode in de frontend).
 
 1. Lokaal: `printf '%s' 'jouw-code' | node scripts/hash-pin.mjs`
-2. Zet `SESSION_SECRET`, `AUTH_PIN_SALT`, `AUTH_PIN_HASH` en `AUTH_PEPPER` in `.env` **en** in Vercel → Environment Variables. Gebruik geen `VITE_`-namen.
-3. Zonder die vier weigert de server de login; er is geen fallback.
+2. Plak de vier regels (`SESSION_SECRET`, `AUTH_PIN_SALT`, `AUTH_PIN_HASH`, `AUTH_PEPPER`) in `.env` **en** in Vercel → Settings → Environment Variables.
+3. In Vercel: elk van de vier aanzetten voor **Production, Preview en Development**. Geen `VITE_`-prefix, geen aanhalingstekens rond de waarde.
+4. Daarna **Redeploy** van de site. Nieuwe variabelen gelden pas na een nieuwe publicatie.
+5. De publieke URL (`transport-tawny-xi.vercel.app`) is Production. Zolang deze branch niet naar Production is gepubliceerd, heeft die URL geen `/api/login`. Een Preview-URL moet bovendien Deployment Protection hebben uitgezet, anders blokkeert Vercel de login vóór de app.
 
-Er is geen publieke registratie.
+Zonder die vier weigert de server de login; er is geen fallback. Er is geen publieke registratie.
 
 ## Gegevens
 

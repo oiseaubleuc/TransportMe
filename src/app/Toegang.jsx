@@ -1,7 +1,7 @@
 import { createContext, useCallback, useEffect, useState } from "react";
 import "../transportme-theme.css";
 import "./app.css";
-import { apiLogin, apiLogout } from "../js/sessie.js";
+import { apiLogin, apiLogout, loginFoutTekst } from "../js/sessie.js";
 import { kluisFlush, openKluis, sluitKluis } from "../js/veiligeOpslag.js";
 import { migreerBonArchief, ruimVerlopenBonnenOp } from "../js/bonArchief.js";
 import { wisLopendeMelding } from "../js/lopendeMelding.js";
@@ -62,12 +62,9 @@ export default function Toegang({ children }) {
       setOpen(true);
     } catch (err) {
       sluitKluis();
-      if (err?.status === 503) setFout("Toegang is niet ingesteld op de server.");
-      else if (err?.status === 429) setFout(err.message || "Te veel pogingen. Probeer later opnieuw.");
-      else if (err?.status === 403) setFout("Verzoek geweigerd.");
-      else if (String(err?.message || "").includes("decrypt") || String(err?.name || "") === "OperationError") {
+      if (String(err?.message || "").includes("decrypt") || String(err?.name || "") === "OperationError") {
         setFout("Deze code opent de lokale kluis niet. Gegevens blijven bewaard.");
-      } else setFout(err?.message || "Verkeerde toegangscode.");
+      } else setFout(loginFoutTekst(err));
       setPin("");
     } finally {
       setBezig(false);

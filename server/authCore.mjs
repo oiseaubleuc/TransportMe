@@ -15,8 +15,15 @@ export const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32, maxmem: 64 * 1024 * 10
 
 const pogingen = new Map();
 
-function trimEnv(name) {
-  return String(process.env[name] || "").trim();
+export function trimEnv(name) {
+  let v = String(process.env[name] ?? "").replace(/^\uFEFF/, "").trim();
+  if (
+    (v.startsWith('"') && v.endsWith('"') && v.length >= 2) ||
+    (v.startsWith("'") && v.endsWith("'") && v.length >= 2)
+  ) {
+    v = v.slice(1, -1).trim();
+  }
+  return v;
 }
 
 export function authConfig() {
@@ -24,9 +31,12 @@ export function authConfig() {
   const salt = trimEnv("AUTH_PIN_SALT");
   const secret = trimEnv("SESSION_SECRET");
   const pepper = trimEnv("AUTH_PEPPER");
-  if (!/^[a-fA-F0-9]{64}$/.test(hash)) return { ok: false, reden: "AUTH_PIN_HASH" };
-  if (!/^[a-fA-F0-9]{32,64}$/.test(salt)) return { ok: false, reden: "AUTH_PIN_SALT" };
-  if (secret.length < 32) return { ok: false, reden: "SESSION_SECRET" };
+  const ontbreekt = [];
+  if (!/^[a-fA-F0-9]{64}$/.test(hash)) ontbreekt.push("AUTH_PIN_HASH");
+  if (!/^[a-fA-F0-9]{32,64}$/.test(salt)) ontbreekt.push("AUTH_PIN_SALT");
+  if (secret.length < 32) ontbreekt.push("SESSION_SECRET");
+  if (!/^[a-fA-F0-9]{32,64}$/.test(pepper)) ontbreekt.push("AUTH_PEPPER");
+  if (ontbreekt.length) return { ok: false, reden: ontbreekt.join(", "), ontbreekt };
   return { ok: true, hash, salt, secret, pepper };
 }
 
@@ -53,7 +63,15 @@ export function veiligGelijk(a, b) {
 
 export async function pinKlopt(pin) {
   const cfg = authConfig();
-  if (!cfg.ok) return { ok: false, status: 503, error: "Toegang is niet ingesteld op de server." };
+  if (!cfg.ok) {
+    return {
+      ok: false,
+      status: 503,
+      error: "Toegang is niet ingesteld op de server.",
+      reden: cfg.reden,
+      ontbreekt: cfg.ontbreekt,
+    };
+  }
   if (typeof pin !== "string" || pin.length < 4 || pin.length > 64) {
     return { ok: false, status: 400, error: "Ongeldige toegangscode." };
   }

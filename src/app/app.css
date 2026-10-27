@@ -287,6 +287,14 @@
   font-weight: 700;
 }
 
+.tm-pin-kaart .tm-warn {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0 0 14px;
+  white-space: normal;
+}
+
 label.btn {
   cursor: pointer;
 }
