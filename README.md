@@ -59,7 +59,7 @@ De app vraagt een toegangscode die **op de server** wordt gecontroleerd (HttpOnl
 4. Daarna **Redeploy** van de site. Nieuwe variabelen gelden pas na een nieuwe publicatie.
 5. De publieke URL (`transport-tawny-xi.vercel.app`) is Production. Zolang deze branch niet naar Production is gepubliceerd, heeft die URL geen `/api/login`. Een Preview-URL moet bovendien Deployment Protection hebben uitgezet, anders blokkeert Vercel de login vóór de app.
 
-Zonder die vier weigert de server de login; er is geen fallback. Er is geen publieke registratie.
+Zonder die vier weigert de **server** de login. De app opent dan nog wel de **lokale kluis** met dezelfde toegangscode (gegevens blijven op het toestel). Er is geen publieke registratie.
 
 ## Gegevens
 

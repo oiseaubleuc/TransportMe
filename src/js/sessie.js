@@ -10,6 +10,15 @@ function tekstUitFoutbody(body) {
   return "";
 }
 
+/** Server weigert of ontbreekt: kluis op het toestel mag nog open. Verkeerde code of Vercel-SSO niet. */
+export function magLokaleToegang(err) {
+  if (!err) return false;
+  if (err.body && typeof err.body === "object" && err.body.protection) return false;
+  const s = err.status;
+  if (s === 401 || s === 403 || s === 429) return false;
+  return true;
+}
+
 export function loginFoutTekst(err) {
   const status = err?.status;
   const body = err?.body && typeof err.body === "object" ? err.body : {};

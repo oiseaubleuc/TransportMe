@@ -1,7 +1,7 @@
 import { createContext, useCallback, useEffect, useState } from "react";
 import "../transportme-theme.css";
 import "./app.css";
-import { apiLogin, apiLogout, loginFoutTekst } from "../js/sessie.js";
+import { apiLogin, apiLogout, loginFoutTekst, magLokaleToegang } from "../js/sessie.js";
 import { kluisFlush, openKluis, sluitKluis } from "../js/veiligeOpslag.js";
 import { migreerBonArchief, ruimVerlopenBonnenOp } from "../js/bonArchief.js";
 import { wisLopendeMelding } from "../js/lopendeMelding.js";
@@ -47,7 +47,11 @@ export default function Toegang({ children }) {
     setBezig(true);
     setFout("");
     try {
-      await apiLogin(pin);
+      try {
+        await apiLogin(pin);
+      } catch (err) {
+        if (!magLokaleToegang(err)) throw err;
+      }
       const uit = await openKluis(pin);
       if (uit.migratie?.fout) {
         setFout("Niet alle lokale gegevens konden worden versleuteld. De rest blijft staan.");

@@ -3,6 +3,7 @@
  * Geheimen komen uitsluitend uit process.env (geen VITE_*, geen defaults).
  */
 import { createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import process from "node:process";
 import { promisify } from "node:util";
 
 const scryptAsync = promisify(scrypt);
@@ -16,7 +17,8 @@ export const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32, maxmem: 64 * 1024 * 10
 const pogingen = new Map();
 
 export function trimEnv(name) {
-  let v = String(process.env[name] ?? "").replace(/^\uFEFF/, "").trim();
+  const env = process.env;
+  let v = String(env[name] ?? "").replace(/^\uFEFF/, "").trim();
   if (
     (v.startsWith('"') && v.endsWith('"') && v.length >= 2) ||
     (v.startsWith("'") && v.endsWith("'") && v.length >= 2)
