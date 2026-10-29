@@ -1,9 +1,10 @@
 /**
  * TransportMe PWA — voorkomt wit scherm na deploy:
- * index + Vite /assets/* worden netwerk-eerst geladen (hashed bestandsnamen wijzigen per build).
+ * HTML altijd van het netwerk (geen HTTP-cache, Safari houdt anders oude shells vast).
+ * Vite /assets/* netwerk-eerst (hashed bestandsnamen wijzigen per build).
  * /api wordt nooit gecachet.
  */
-const CACHE_NAME = "transportme-v5";
+const CACHE_NAME = "transportme-v6";
 const GELEVERD_DB = "tm-geleverd";
 const GELEVERD_STORE = "intents";
 const IS_LOCAL = self.location.hostname === "localhost" || self.location.hostname === "127.0.0.1";
@@ -26,6 +27,10 @@ self.addEventListener("activate", event => {
       .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
+});
+
+self.addEventListener("message", event => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 function maybeCache(cache, request, response) {
@@ -123,19 +128,37 @@ self.addEventListener("fetch", event => {
   const path = url.pathname;
   const isNavigate = request.mode === "navigate";
   const isHtmlShell = path === "/" || path === "/index.html";
-  const isViteAsset = path.startsWith("/assets/") || path.endsWith(".js") || path.endsWith(".css");
+  const isSw = path === "/sw.js";
+  const isViteAsset =
+    !isSw && (path.startsWith("/assets/") || path.endsWith(".js") || path.endsWith(".css"));
 
-  if (isNavigate || isHtmlShell || isViteAsset) {
+  if (isNavigate || isHtmlShell || isSw) {
     event.respondWith(
       caches.open(CACHE_NAME).then(cache =>
-        fetch(request)
-          .then(res => maybeCache(cache, request, res))
+        fetch(request, { cache: "no-store" })
+          .then(res => {
+            if (isSw) return res;
+            if (res && res.ok) cache.put(request, res.clone());
+            return res;
+          })
           .catch(() => cache.match(request))
           .then(res => {
             if (res) return res;
             if (isNavigate || isHtmlShell) return cache.match("/index.html");
             return new Response("", { status: 504, statusText: "Offline" });
           })
+      )
+    );
+    return;
+  }
+
+  if (isViteAsset) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(cache =>
+        fetch(request)
+          .then(res => maybeCache(cache, request, res))
+          .catch(() => cache.match(request))
+          .then(res => res || new Response("", { status: 504, statusText: "Offline" }))
       )
     );
     return;

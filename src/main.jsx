@@ -30,17 +30,46 @@ if (!rootEl) {
   }
 }
 
+const PRODUCTIE_HOST = "transport-tawny-xi.vercel.app";
+
+function isVercelPreview() {
+  const h = location.hostname;
+  return h.endsWith(".vercel.app") && h !== PRODUCTIE_HOST;
+}
+
+function wisServiceWorkersEnCaches() {
+  const taken = [];
+  if ("serviceWorker" in navigator) {
+    taken.push(
+      navigator.serviceWorker.getRegistrations().then((regs) => Promise.all(regs.map((r) => r.unregister())))
+    );
+  }
+  if ("caches" in window) {
+    taken.push(caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))));
+  }
+  return Promise.all(taken);
+}
+
 if ("serviceWorker" in navigator) {
-  if (import.meta.env.PROD) {
+  if (import.meta.env.PROD && !isVercelPreview()) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+      navigator.serviceWorker
+        .register("/sw.js", { updateViaCache: "none" })
+        .then((reg) => {
+          reg.update();
+          document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") reg.update();
+          });
+        })
+        .catch(() => {});
+      let herladen = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (herladen) return;
+        herladen = true;
+        location.reload();
+      });
     });
   } else {
-    navigator.serviceWorker.getRegistrations().then((regs) => {
-      regs.forEach((r) => r.unregister());
-    });
-    if ("caches" in window) {
-      caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
-    }
+    wisServiceWorkersEnCaches();
   }
 }
