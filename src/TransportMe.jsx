@@ -2192,7 +2192,8 @@ function Meer({ D, sD, pid, pr, onBackupImported, onBonInvoegen }) {
   const backupPanel = (
     <div>
       <p className="tm-lead">
-        {pr.n} heeft {D.r.length} ritten, {D.b.length} tankbeurten en {(D.o || []).length} overige kosten op dit toestel.
+        {pr.n} heeft {D.r.length} ritten, {D.b.length} tankbeurten en {(D.o || []).length} overige kosten. Een
+        JSON-bestand blijft een extra kopie; telefoon en computer delen de ritten ook bij het openen.
       </p>
       <div className="card" style={{ marginBottom: 14 }}>
         <div className="tm-card-t">Volledige back-up</div>

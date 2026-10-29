@@ -63,7 +63,11 @@ Zonder die vier weigert de **server** de login. De app opent dan nog wel de **lo
 
 ## Gegevens
 
-Ritten blijven op het toestel. Na een geslaagde login worden bestaande localStorage- en IndexedDB-gegevens versleuteld (AES-GCM; sleutel in geheugen, afgeleid van de toegangscode; naast de data staat alleen een zout).
+Na het openen deelt de app de **versleutelde kluis** met je andere toestel (ritten, planning, factuurgegevens). De server bewaart ciphertext, niet de toegangscode. Originele bonfoto’s blijven op het toestel dat ze inlas.
+
+Lokaal staat de kluis in `server/data/` (gitignored). Op Vercel: Storage → Blob, `BLOB_READ_WRITE_TOKEN` bij Production én Preview, daarna Redeploy. Zonder die token blijven de ritten alleen op het toestel.
+
+Na een geslaagde login worden bestaande localStorage- en IndexedDB-gegevens versleuteld (AES-GCM; sleutel in geheugen, afgeleid van de toegangscode; naast de data staat alleen een zout).
 
 **Wat dit wel doet:** iemand met alleen de bestanden op schijf ziet na migratie geen leesbare ritten of originele bonnen.
 

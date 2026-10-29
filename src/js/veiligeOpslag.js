@@ -13,7 +13,14 @@ import {
 } from "./kluisCrypto.js";
 import { DATA_RETENTION_DAYS } from "./config.js";
 
-const PUBLIEK = new Set([KLUIS_META_KEY, "tm_melding_route"]);
+const PUBLIEK = new Set([KLUIS_META_KEY, "tm_melding_route", "tm_sync_at", "tm_sync_dirty"]);
+
+let naSchrijven = null;
+
+/** Na een lokale wijziging (bv. kluis naar de server sturen). */
+export function zetNaKluisSchrijven(fn) {
+  naSchrijven = typeof fn === "function" ? fn : null;
+}
 
 let sleutel = null;
 let meta = null;
@@ -136,11 +143,21 @@ export function lsSet(key, val) {
   wachtrij = wachtrij.then(() => lsSetAsync(key, s)).catch(err => {
     console.error("Kluis schrijven mislukt", err);
   });
+  try {
+    naSchrijven?.();
+  } catch {
+    /* */
+  }
 }
 
 export function lsRemove(key) {
   cache.delete(key);
   nativeRemove(key);
+  try {
+    naSchrijven?.();
+  } catch {
+    /* */
+  }
 }
 
 export async function kluisFlush() {
@@ -227,6 +244,13 @@ export function sluitKluis() {
   sleutel = null;
   open = false;
   cache.clear();
+}
+
+/** Na een geïmporteerde snapshot met hetzelfde zout: cache opnieuw vullen. */
+export async function kluisHerladen() {
+  if (!kluisOpen()) return { versleuteld: 0, overgeslagen: 0, fout: 0 };
+  cache.clear();
+  return migreerLocalStorage();
 }
 
 export async function zetBewaarDagen(dagen) {

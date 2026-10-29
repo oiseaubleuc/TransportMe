@@ -1,5 +1,5 @@
 /**
- * Export / import van alle Transporteur-localStorage — zelfde data op telefoon en pc (geen cloud).
+ * Export / import van alle Transporteur-localStorage — handmatige kopie naast de automatische kluis-sync.
  * Inclusief TransportMe-bundels (t_<profiel>) en actief profiel (tp).
  * Exporteert de opgeslagen vorm (na migratie: ciphertext + kluismeta). De PIN staat niet in het bestand.
  */

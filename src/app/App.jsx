@@ -32,6 +32,7 @@ import LopendeEiland from "./LopendeEiland.jsx";
 import { vraagMeldingToestemming, wisLopendeMelding, magRouteInMelding, zetRouteInMelding } from "../js/lopendeMelding.js";
 import { UitlogContext } from "./Toegang.jsx";
 import { lsSet, bewaarDagen, zetBewaarDagen } from "../js/veiligeOpslag.js";
+import { KLUIS_SYNC_EVENT, kluisSyncStatus, onKluisSyncStatus, stuurKluisSync } from "../js/kluisSync.js";
 import { ruimVerlopenBonnenOp } from "../js/bonArchief.js";
 import { haalBonBestand, openBonBlob } from "../js/bonArchief.js";
 import { bonInhoudRegels, voegBonRittenToe } from "../js/transportBon.js";
@@ -253,6 +254,12 @@ export default function App() {
   }, []);
 
   const herlaad = useCallback(() => setAll(Object.fromEntries(PR.map(p => [p.id, ld(p.id)]))), []);
+
+  useEffect(() => {
+    const op = () => herlaad();
+    window.addEventListener(KLUIS_SYNC_EVENT, op);
+    return () => window.removeEventListener(KLUIS_SYNC_EVENT, op);
+  }, [herlaad]);
 
   const ritActie = useCallback(
     (pid, id, a) => {
@@ -2042,11 +2049,30 @@ function FinTeam({ team, setFocus }) {
 /* Instellingen                                                         */
 /* ------------------------------------------------------------------ */
 
+function syncTekst(s) {
+  if (s.fase === "niet-ingesteld") {
+    return "Zet in Vercel een Blob-store (BLOB_READ_WRITE_TOKEN) voor Production en Preview, daarna Redeploy. Tot die tijd blijven de ritten op dit toestel.";
+  }
+  if (s.fase === "fout") return s.fout || "Synchroniseren mislukt. De ritten blijven op dit toestel.";
+  if (s.fase === "bezig" || s.fase === "wacht") return "Bezig met delen…";
+  if (s.updatedAt) {
+    try {
+      return "Laatst gedeeld: " + new Date(s.updatedAt).toLocaleString("nl-BE");
+    } catch {
+      return "Ritten worden gedeeld tussen je toestellen.";
+    }
+  }
+  if (s.fase === "lokaal") return "Nog niet gedeeld. Open eerst op het toestel waar de ritten al staan.";
+  return "Bij het openen gaan ritten mee naar je andere toestel.";
+}
+
 function Instellingen({ pid, setPid, D, setFor, onBackupImported, openBon }) {
   const pr = PR.find(p => p.id === pid) || PR[0];
   const uitloggen = useContext(UitlogContext);
   const [routeMelding, setRouteMelding] = useState(() => magRouteInMelding());
   const [bewaar, setBewaar] = useState(() => bewaarDagen());
+  const [sync, setSync] = useState(() => kluisSyncStatus());
+  useEffect(() => onKluisSyncStatus(setSync), []);
   return (
     <>
       <header className="tm-ph">
@@ -2058,6 +2084,20 @@ function Instellingen({ pid, setPid, D, setFor, onBackupImported, openBon }) {
       <section className="tm-sec">
         <h2 className="tm-h2">Toegang en privacy</h2>
         <div className="card">
+          <div className="tm-card-t">Telefoon en computer</div>
+          <p className="tm-card-p">
+            Ritten, planning en factuurgegevens gaan versleuteld mee. Originele bonfoto’s blijven op het toestel dat ze
+            inlas.
+          </p>
+          <p className="tm-muted">{syncTekst(sync)}</p>
+          <button
+            type="button"
+            className="btn btn-o"
+            style={{ marginTop: 10, marginBottom: 14 }}
+            onClick={() => stuurKluisSync().catch(() => {})}
+          >
+            Nu delen
+          </button>
           <label className="tm-check">
             <input
               type="checkbox"

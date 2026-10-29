@@ -3,6 +3,7 @@ import "../transportme-theme.css";
 import "./app.css";
 import { apiLogin, apiLogout, loginFoutTekst, magLokaleToegang } from "../js/sessie.js";
 import { kluisFlush, openKluis, sluitKluis } from "../js/veiligeOpslag.js";
+import { startKluisSync, stopKluisSync, stuurKluisSync, syncNaLogin } from "../js/kluisSync.js";
 import { migreerBonArchief, ruimVerlopenBonnenOp } from "../js/bonArchief.js";
 import { wisLopendeMelding } from "../js/lopendeMelding.js";
 
@@ -15,6 +16,12 @@ export default function Toegang({ children }) {
   const [bezig, setBezig] = useState(false);
 
   const uitloggen = useCallback(async () => {
+    stopKluisSync();
+    try {
+      await stuurKluisSync();
+    } catch {
+      /* lokaal uitloggen gaat voor */
+    }
     await kluisFlush();
     sluitKluis();
     await wisLopendeMelding();
@@ -62,6 +69,12 @@ export default function Toegang({ children }) {
       } catch {
         /* archief is optioneel t.o.v. de ritlijst */
       }
+      try {
+        await syncNaLogin(pin);
+      } catch {
+        /* toestel blijft bruikbaar zonder serverkluis */
+      }
+      startKluisSync();
       setPin("");
       setOpen(true);
     } catch (err) {

@@ -30,30 +30,32 @@ const SECURITY_HEADERS = {
 function laadAuthEnv(mode) {
   const env = loadEnv(mode, process.cwd(), "");
   for (const [k, v] of Object.entries(env)) {
-    if (k === "SESSION_SECRET" || k.startsWith("AUTH_")) process.env[k] = v;
+    if (k === "SESSION_SECRET" || k === "BLOB_READ_WRITE_TOKEN" || k === "TM_SYNC_FILE" || k.startsWith("AUTH_")) {
+      process.env[k] = v;
+    }
   }
+}
+
+async function lokaleApi(req, res, next) {
+  const url = req.url || "";
+  const path = url.split("?")[0];
+  if (path === "/api/sync") {
+    const { handleSyncRequest } = await import("./server/syncHttp.mjs");
+    return handleSyncRequest(req, res);
+  }
+  if (path !== "/api/login" && path !== "/api/logout" && path !== "/api/session") return next();
+  const { handleAuthRequest } = await import("./server/authHttp.mjs");
+  return handleAuthRequest(req, res);
 }
 
 function localAuthApi() {
   return {
     name: "transportme-auth-api",
     configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
-        const url = req.url || "";
-        const path = url.split("?")[0];
-        if (path !== "/api/login" && path !== "/api/logout" && path !== "/api/session") return next();
-        const { handleAuthRequest } = await import("./server/authHttp.mjs");
-        return handleAuthRequest(req, res);
-      });
+      server.middlewares.use(lokaleApi);
     },
     configurePreviewServer(server) {
-      server.middlewares.use(async (req, res, next) => {
-        const url = req.url || "";
-        const path = url.split("?")[0];
-        if (path !== "/api/login" && path !== "/api/logout" && path !== "/api/session") return next();
-        const { handleAuthRequest } = await import("./server/authHttp.mjs");
-        return handleAuthRequest(req, res);
-      });
+      server.middlewares.use(lokaleApi);
     },
   };
 }

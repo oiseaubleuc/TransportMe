@@ -2,7 +2,8 @@
   "functions": {
     "api/login.js": { "includeFiles": "server/**", "maxDuration": 10 },
     "api/logout.js": { "includeFiles": "server/**", "maxDuration": 10 },
-    "api/session.js": { "includeFiles": "server/**", "maxDuration": 10 }
+    "api/session.js": { "includeFiles": "server/**", "maxDuration": 10 },
+    "api/sync.js": { "includeFiles": "server/**", "maxDuration": 10 }
   },
   "headers": [
     {
