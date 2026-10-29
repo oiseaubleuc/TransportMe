@@ -256,6 +256,17 @@ const MAAND_IN_NAAM = [
   ["oktober", 10],
   ["november", 11],
   ["december", 12],
+  ["jan", 1],
+  ["feb", 2],
+  ["mrt", 3],
+  ["apr", 4],
+  ["jun", 6],
+  ["jul", 7],
+  ["aug", 8],
+  ["sep", 9],
+  ["okt", 10],
+  ["nov", 11],
+  ["dec", 12],
 ];
 
 function r2euro(n) {
@@ -447,24 +458,42 @@ function kopRol(kop) {
   if (k.includes("bestemming") || k === "naar" || k === "to" || k.includes("aflever")) return "bestemming";
   if (k === "km" || k.startsWith("km ") || k === "kilometer" || k === "kilometers") return "km";
   if (k.includes("schijf")) return "schijven";
-  if (k.includes("basis")) return "basis";
+  if (k.includes("basis") || k.includes("forfait")) return "basis";
   if (k.includes("excl")) return "excl";
   if (k.includes("incl")) return "incl";
   return null;
 }
 
 function maandUitBestandsnaam(naam) {
-  const n = normTekst(naam);
-  for (const [woord, nr] of MAAND_IN_NAAM) {
-    if (n.includes(woord)) return nr;
-  }
-  return null;
+  return periodeUitBestandsnaam(naam, 0).maand;
 }
 
 function jaarUitBestandsnaam(naam, fallback) {
-  const m = String(naam || "").match(/(?:^|[^\d])(20\d{2})(?:[^\d]|$)/);
-  if (m) return +m[1];
-  return fallback;
+  return periodeUitBestandsnaam(naam, fallback).jaar;
+}
+
+/** `Oktober26_.xlsx` → oktober 2026. Langste maandnaam wint (oktober vóór okt). */
+export function periodeUitBestandsnaam(naam, fallbackJaar) {
+  const n = normTekst(naam);
+  let maand = null;
+  let woord = "";
+  for (const [w, nr] of MAAND_IN_NAAM) {
+    if (n.includes(w) && w.length > woord.length) {
+      maand = nr;
+      woord = w;
+    }
+  }
+  let jaar = fallbackJaar;
+  const y4 = String(naam || "").match(/20\d{2}/);
+  if (y4) jaar = +y4[0];
+  else if (maand && woord) {
+    const esc = woord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const after = n.match(new RegExp(`${esc}[^0-9]{0,3}(\\d{2})(?:[^0-9]|$)`));
+    const before = n.match(new RegExp(`(?:^|[^0-9])(\\d{2})[^0-9]{0,3}${esc}`));
+    const yy = after?.[1] || before?.[1];
+    if (yy) jaar = jaarVanGetal(+yy, fallbackJaar);
+  }
+  return { jaar, maand };
 }
 
 function leesKmKaart(wb) {
@@ -695,8 +724,9 @@ function bepaalSwap(verzameld, bestandsMaand) {
  */
 export function parseRittenExcelWorkbook(wb, opts = {}) {
   const nu = opts.nu instanceof Date ? opts.nu : new Date();
-  const fallbackJaar = jaarUitBestandsnaam(opts.bestandsnaam, nu.getFullYear());
-  const bestandsMaand = maandUitBestandsnaam(opts.bestandsnaam);
+  const periode = periodeUitBestandsnaam(opts.bestandsnaam, nu.getFullYear());
+  const fallbackJaar = periode.jaar;
+  const bestandsMaand = periode.maand;
   const kmKaart = leesKmKaart(wb);
   const ws = kiesRittenBlad(wb);
   if (!ws) return { regels: [], overgeslagen: 0, redenen: { blad: 1 } };
@@ -749,6 +779,7 @@ export function parseRittenExcelWorkbook(wb, opts = {}) {
     let d = ymd ? isoYmd(ymd.y || jaar, ymd.m, ymd.d) : "";
     if (d) laatsteDatum = d;
     else if (laatsteDatum) d = laatsteDatum;
+    else if (bestandsMaand) d = isoYmd(jaar, bestandsMaand, 1);
     if (!d) {
       skip("geen-datum");
       continue;
@@ -840,8 +871,14 @@ function bonSleutels(bon) {
     .filter(Boolean);
 }
 
-export function meldingExcelInlees({ toegevoegd, duplicaten, overgeslagen }) {
+export function meldingExcelInlees({ toegevoegd, duplicaten, overgeslagen, redenen }) {
   if (!toegevoegd && !duplicaten) {
+    if (redenen?.["geen-datum"]) {
+      return "Geen datum in het bestand. Noem het bestand zoals Oktober26.xlsx (maand + jaartal), of vul de kolom Datum.";
+    }
+    if (overgeslagen) {
+      return `Geen ritten ingelezen (${overgeslagen} regels overgeslagen). Controleer Vertrek, Bestemming en KM.`;
+    }
     return "Geen ritten gevonden in dit bestand. Gebruik een rittenlijst met Vertrek, Bestemming en Datum.";
   }
   const stukken = [toegevoegd === 1 ? "1 rit is ingelezen." : `${toegevoegd} ritten zijn ingelezen.`];
@@ -851,20 +888,25 @@ export function meldingExcelInlees({ toegevoegd, duplicaten, overgeslagen }) {
 }
 
 /** Voegt ingelezen ritten toe; bestaande bonnummers worden overgeslagen. */
+function ritDupSleutel(r) {
+  const route = `${normTekst(r.f)}|${normTekst(r.t)}`;
+  const bons = bonSleutels(r.bon);
+  if (bons.length) return bons.slice().sort().join(",") + "@" + route;
+  return `${r.d || ""}|${r.ti || ""}|${route}|${r.k || ""}`;
+}
+
 export function voegExcelRittenToe(bestaande, nieuw) {
   const seen = new Set();
-  for (const r of bestaande || []) {
-    for (const b of bonSleutels(r.bon)) seen.add(b);
-  }
+  for (const r of bestaande || []) seen.add(ritDupSleutel(r));
   const toegevoegd = [];
   let duplicaten = 0;
   for (const r of nieuw || []) {
-    const bons = bonSleutels(r.bon);
-    if (bons.length && bons.every(b => seen.has(b))) {
+    const sleutel = ritDupSleutel(r);
+    if (seen.has(sleutel)) {
       duplicaten++;
       continue;
     }
-    for (const b of bons) seen.add(b);
+    seen.add(sleutel);
     toegevoegd.push(r);
   }
   return { ritten: [...(bestaande || []), ...toegevoegd], toegevoegd, duplicaten };

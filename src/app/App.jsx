@@ -966,7 +966,7 @@ function ExcelInlezenKnop({ pid, setFor, className, label, onKlaar }) {
     setBusy(true);
     try {
       const buf = await file.arrayBuffer();
-      const { ritten, overgeslagen } = await leesRittenExcel(buf, {
+      const { ritten, overgeslagen, redenen } = await leesRittenExcel(buf, {
         bestandsnaam: file.name,
         chauffeur: chauffeurNaam(pid),
         voertuig: CA[0],
@@ -980,7 +980,7 @@ function ExcelInlezenKnop({ pid, setFor, className, label, onKlaar }) {
         n = uit.toegevoegd.length;
         return n === 0 ? D : normData({ ...D, r: uit.ritten });
       });
-      alert(meldingExcelInlees({ toegevoegd: n, duplicaten, overgeslagen }));
+      alert(meldingExcelInlees({ toegevoegd: n, duplicaten, overgeslagen, redenen }));
       if (n > 0) onKlaar?.(n);
     } catch (err) {
       console.error(err);

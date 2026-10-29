@@ -1507,7 +1507,7 @@ function Historiek({ D, pid, sD }) {
               try {
                 const buf = await file.arrayBuffer();
                 const naam = (PR.find(x => x.id === pid) || { n: pid }).n;
-                const { ritten, overgeslagen } = await leesRittenExcel(buf, {
+                const { ritten, overgeslagen, redenen } = await leesRittenExcel(buf, {
                   bestandsnaam: file.name,
                   chauffeur: naam,
                   voertuig: CA[0],
@@ -1521,7 +1521,7 @@ function Historiek({ D, pid, sD }) {
                   n = uit.toegevoegd.length;
                   return n ? normData({ ...nd, r: uit.ritten }) : nd;
                 });
-                alert(meldingExcelInlees({ toegevoegd: n, duplicaten, overgeslagen }));
+                alert(meldingExcelInlees({ toegevoegd: n, duplicaten, overgeslagen, redenen }));
               } catch (err) {
                 console.error(err);
                 alert("Excel inlezen mislukt: " + (err?.message || err));
