@@ -1,6 +1,6 @@
 /**
  * Kaart met MapLibre GL JS – responsive, smooth zoom.
- * Standaard: OpenFreeMap Bright (geen API-sleutel).
+ * Standaard: OpenStreetMap-rastertegels (zelfde beeld als klassieke OSM-kaart).
  * Optioneel: VITE_MAPLIBRE_STYLE_URL in .env voor een andere MapLibre-style.
  */
 
@@ -8,10 +8,37 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { MAPLIBRE_STYLE_URL } from './config.js';
 
-const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/bright";
+/** OpenStreetMap-tegels (officiële tileservers a/b/c) */
+const OSM_RASTER_STYLE = {
+  version: 8,
+  name: 'OpenStreetMap',
+  sources: {
+    openstreetmap: {
+      type: 'raster',
+      tiles: [
+        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      ],
+      tileSize: 256,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+      maxzoom: 19,
+    },
+  },
+  layers: [
+    {
+      id: 'osm',
+      type: 'raster',
+      source: 'openstreetmap',
+      minzoom: 0,
+      maxzoom: 19,
+    },
+  ],
+};
 
 function getMapStyle() {
-  return MAPLIBRE_STYLE_URL || OPENFREEMAP_STYLE;
+  return MAPLIBRE_STYLE_URL || OSM_RASTER_STYLE;
 }
 const DEFAULT_CENTER = [4.35, 51.0];
 const DEFAULT_ZOOM = 8;
@@ -19,8 +46,8 @@ const DEFAULT_ZOOM = 8;
 /** Grenzen Vlaams Gewest (België) – standaardweergave voor vertrek/aankomst kiezen */
 const FLANDERS_BOUNDS = new maplibregl.LngLatBounds([2.54, 50.68], [5.92, 51.51]);
 
-const ROUTE_COLOR = '#2c3f8f';
-const ROUTE_WIDTH = 6;
+const ROUTE_COLOR = '#3d6b9a';
+const ROUTE_WIDTH = 4;
 
 /** Inzoomen op punt A–B: voldoende padding, hoog maxZoom zodat we niet uitzoomen */
 const ROUTE_FIT_PADDING = 50;
@@ -102,13 +129,6 @@ export function addRouteToMapLibreMap(map, geometry) {
   function addRouteLayer() {
     if (map.getLayer('route')) return;
     if (!map.getSource('route')) map.addSource('route', { type: 'geojson', data: geojson });
-    map.addLayer({
-      id: 'route-casing',
-      type: 'line',
-      source: 'route',
-      layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': '#fffdf9', 'line-width': 12, 'line-opacity': 0.95 },
-    });
     map.addLayer({
       id: 'route',
       type: 'line',

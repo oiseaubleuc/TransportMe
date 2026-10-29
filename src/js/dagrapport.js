@@ -8,6 +8,7 @@ import { PROFILES } from './config.js';
 import { toDateStr, vergoedingVoorRit, getWeekKey, getWeekLabel } from './calculations.js';
 import { formatEuro, formatDatumKort } from './format.js';
 import { getCurrentProfileId, getData, getFactuurGegevens } from './storage.js';
+import { lsGet, lsSet } from './veiligeOpslag.js';
 
 const MAILTO_MAX_BODY = 4500;
 
@@ -111,9 +112,9 @@ export function tickWeekrapportMiddernacht() {
 
   const pid = getCurrentProfileId();
   const key = sentKey(pid);
-  if (localStorage.getItem(key) === weekKey) return;
+  if (lsGet(key) === weekKey) return;
 
-  localStorage.setItem(key, weekKey);
+  lsSet(key, weekKey);
   openWeekrapportMailto(weekKey, y);
 }
 

@@ -9,7 +9,7 @@ dist/
 .env.local
 .env.*.local
 
-# Accountgegevens van de lokale server
+# Account-/sessiebestanden van een lokale auth-server
 server/data/
 
 # IDE / OS
@@ -19,3 +19,5 @@ server/data/
 
 # Optional
 *.xlsx
+*.traineddata
+public/tessdata/
