@@ -49,23 +49,60 @@ De Excel heeft parameters bovenaan (prijs per schijf, opstart, nacht, btw), éé
 
 Voorbeeld: 45 km overdag = €15 + 3×€25 = **€90**. ’s Nachts wordt dat **€115**.
 
-## Toegang
+## Omgeving (Vercel)
 
-De app vraagt een toegangscode die **op de server** wordt gecontroleerd (HttpOnly-cookie, geen pincode in de frontend).
+De repo is publiek. Zet geheimen alleen in Vercel en in lokale `.env` (niet in git, nooit `VITE_` voor toegang).
+
+| Variabele | Verplicht | Waar |
+| --- | --- | --- |
+| `SESSION_SECRET` | ja | Vercel Production + Preview + Development |
+| `AUTH_PIN_SALT` | ja | idem |
+| `AUTH_PIN_HASH` | ja | idem |
+| `AUTH_PEPPER` | ja | idem |
+| `BLOB_READ_WRITE_TOKEN` | ja, voor dezelfde ritten op telefoon en computer | Vercel → Storage → Blob, store aan dit project koppelen |
+| `VITE_GOOGLE_MAPS_API_KEY` | nee | alleen als je Google Maps wilt; sleutel is zichtbaar in JS, beperk op HTTP-referrer |
+| `VITE_OPENROUTE_API_KEY` | nee | extra routedienst |
+| `VITE_MAPLIBRE_STYLE_URL` | nee | eigen kaartstijl |
 
 1. Lokaal: `printf '%s' 'jouw-code' | node scripts/hash-pin.mjs`
-2. Plak de vier regels (`SESSION_SECRET`, `AUTH_PIN_SALT`, `AUTH_PIN_HASH`, `AUTH_PEPPER`) in `.env` **en** in Vercel → Settings → Environment Variables.
-3. In Vercel: elk van de vier aanzetten voor **Production, Preview en Development**. Geen `VITE_`-prefix, geen aanhalingstekens rond de waarde.
-4. Daarna **Redeploy** van de site. Nieuwe variabelen gelden pas na een nieuwe publicatie.
-5. De publieke URL (`transport-tawny-xi.vercel.app`) is Production. Zolang deze branch niet naar Production is gepubliceerd, heeft die URL geen `/api/login`. Een Preview-URL moet bovendien Deployment Protection hebben uitgezet, anders blokkeert Vercel de login vóór de app.
+2. Plak de vier `AUTH_*` / `SESSION_SECRET`-regels in `.env` en in Vercel. Geen aanhalingstekens.
+3. Blob-store koppelen (token niet handmatig in git).
+4. **Redeploy**. Nieuwe variabelen gelden pas na een nieuwe publicatie.
+5. Preview: Vercel Deployment Protection uitzetten, anders blokkeert Vercel de login vóór de app. Production-URL (`transport-tawny-xi.vercel.app`) heeft `/api/login` pas na publicatie van deze branch naar Production.
 
-Zonder die vier weigert de **server** de login. De app opent dan nog wel de **lokale kluis** met dezelfde toegangscode (gegevens blijven op het toestel). Er is geen publieke registratie.
+Zonder de vier toegangsheimen weigert de **server** de login. De app opent dan nog wel de **lokale kluis** op dat toestel. Er is geen publieke registratie.
+
+Optioneel later, alleen als je vanuit GitHub Actions wilt publiceren (niet nodig met de Vercel GitHub-koppeling): `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` als GitHub Actions secrets, environment `production` met reviewer.
+
+## CI/CD
+
+```mermaid
+flowchart TD
+  A[Push / PR] --> B[CI: test]
+  A --> C[CI: build]
+  A --> D[CI: geheimen + gitleaks + npm audit]
+  A --> E[CodeQL]
+  B --> F[Vercel Preview]
+  C --> F
+  D --> F
+  G[main] --> H[CI gate]
+  H --> I[Vercel Production]
+  J[Dependabot wekelijks] --> A
+```
+
+- **CI** (elke push en PR): `npm test`, productiebuild, scan of hashes/tokens in git of in `dist/` zitten, Gitleaks, `npm audit --omit=dev --audit-level=high`.
+- **Preview**: Vercel bouwt de PR-branch. Geheimen komen uit Vercel Preview-env, niet uit GitHub.
+- **Production**: push naar `main` (of handmatig *CD* → *Run workflow*). Eerst dezelfde gate, daarna Vercel. Zonder `VERCEL_TOKEN` in Actions blijft de Vercel GitHub-integratie publiceren.
+- **Dependabot**: wekelijkse npm- en Actions-updates als PR, nooit direct op main.
+- Lokaal hetzelfde: `npm run ci`.
+
+Uitbreiden later: extra job in `.github/workflows/` (lint, e2e, staging-environment), required status checks op `main`, environment `production` met verplichte reviewer.
 
 ## Gegevens
 
 Na het openen deelt de app de **versleutelde kluis** met je andere toestel (ritten, planning, factuurgegevens). De server bewaart ciphertext, niet de toegangscode. Originele bonfoto’s blijven op het toestel dat ze inlas.
 
-Lokaal staat de kluis in `server/data/` (gitignored). Op Vercel: Storage → Blob, `BLOB_READ_WRITE_TOKEN` bij Production én Preview, daarna Redeploy. Zonder die token blijven de ritten alleen op het toestel.
+Lokaal staat de kluis in `server/data/` (gitignored). Op Vercel de Blob-store aan het project koppelen (Production én Preview), daarna Redeploy. Zonder die token blijven de ritten alleen op het toestel.
 
 Na een geslaagde login worden bestaande localStorage- en IndexedDB-gegevens versleuteld (AES-GCM; sleutel in geheugen, afgeleid van de toegangscode; naast de data staat alleen een zout).
 

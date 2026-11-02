@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test server/*.test.mjs src/js/*.test.mjs",
+    "test": "node --test server/*.test.mjs src/js/*.test.mjs scripts/*.test.mjs",
+    "ci": "npm test && npm run build && node scripts/check-secrets.mjs",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
     "hash-pin": "node scripts/hash-pin.mjs",
     "data:ziekenhuizen": "node scripts/fetch-ziekenhuizen-vlaanderen.mjs",
     "factuur:beheer": "node scripts/generate-beheer-factuur.mjs"
@@ -32,9 +34,14 @@
     "@vitejs/plugin-react": "^5.0.4",
     "vite": "^6.4.1"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "overrides": {
     "dompurify": "3.4.17",
     "fflate": "0.8.3",
-    "protocol-buffers-schema": "3.6.1"
+    "protocol-buffers-schema": "3.6.1",
+    "zod": "4.6.7"
   }
 }
+

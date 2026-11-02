@@ -1,0 +1,69 @@
+# Productie-publicatie. Vercel GitHub-integratie blijft de standaard (preview per PR, productie vanaf main).
+# Optioneel vanuit Actions: zet VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID als GitHub Actions secrets
+# en maak de environment "production" (Settings → Environments) met een verplichte reviewer.
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  deployments: write
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  gate:
+    name: Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: node scripts/check-secrets.mjs
+
+  production:
+    name: Vercel productie
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Publiceren
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_TOKEN:-}" ] || [ -z "${VERCEL_ORG_ID:-}" ] || [ -z "${VERCEL_PROJECT_ID:-}" ]; then
+            echo "Geen VERCEL_TOKEN in Actions. Publicatie loopt via de Vercel GitHub-integratie op main."
+            echo "Later: GitHub → Settings → Secrets (VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID)."
+            exit 0
+          fi
+          npm ci
+          npx --yes vercel@65 pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@65 build --prod --token="$VERCEL_TOKEN"
+          npx --yes vercel@65 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
