@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
 /**
@@ -16,34 +16,61 @@ function manualChunks(id) {
   if (id.includes("tesseract")) return "vendor-tesseract";
   if (id.includes("pdfjs-dist")) return "vendor-pdfjs";
   if (id.includes("@zxing")) return "vendor-zxing";
+  if (id.includes("exceljs")) return "vendor-exceljs";
 }
 
-function localAuthServer() {
+const SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  "Cross-Origin-Opener-Policy": "same-origin",
+};
+
+function laadAuthEnv(mode) {
+  const env = loadEnv(mode, process.cwd(), "");
+  for (const [k, v] of Object.entries(env)) {
+    if (k === "SESSION_SECRET" || k === "BLOB_READ_WRITE_TOKEN" || k === "TM_SYNC_FILE" || k.startsWith("AUTH_")) {
+      process.env[k] = v;
+    }
+  }
+}
+
+async function lokaleApi(req, res, next) {
+  const url = req.url || "";
+  const path = url.split("?")[0];
+  if (path === "/api/sync") {
+    const { handleSyncRequest } = await import("./server/syncHttp.mjs");
+    return handleSyncRequest(req, res);
+  }
+  if (path !== "/api/login" && path !== "/api/logout" && path !== "/api/session") return next();
+  const { handleAuthRequest } = await import("./server/authHttp.mjs");
+  return handleAuthRequest(req, res);
+}
+
+function localAuthApi() {
   return {
-    name: "transportme-auth",
-    configureServer() {
-      import("./server/index.mjs").catch(err => {
-        console.error("Accountserver start mislukt:", err);
-      });
+    name: "transportme-auth-api",
+    configureServer(server) {
+      server.middlewares.use(lokaleApi);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(lokaleApi);
     },
   };
 }
 
-export default defineConfig({
-  plugins: [react(), localAuthServer()],
-  server: {
-    proxy: {
-      "/api": "http://127.0.0.1:8787",
+export default defineConfig(({ mode }) => {
+  laadAuthEnv(mode);
+  return {
+    plugins: [react(), localAuthApi()],
+    server: { headers: SECURITY_HEADERS },
+    preview: { headers: SECURITY_HEADERS },
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: { manualChunks },
+      },
     },
-  },
-  optimizeDeps: {
-    esbuildOptions: {
-      target: "esnext",
-    },
-  },
-  build: {
-    rollupOptions: {
-      output: { manualChunks },
-    },
-  },
+  };
 });

@@ -9,7 +9,10 @@ dist/
 .env.local
 .env.*.local
 
-# Accountgegevens van de lokale server
+# Vercel CLI (pipeline: vercel pull)
+.vercel/
+
+# Account-/sessiebestanden van een lokale auth-server
 server/data/
 
 # IDE / OS
@@ -19,3 +22,5 @@ server/data/
 
 # Optional
 *.xlsx
+*.traineddata
+public/tessdata/
