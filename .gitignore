@@ -9,6 +9,9 @@ dist/
 .env.local
 .env.*.local
 
+# Vercel CLI (pipeline: vercel pull)
+.vercel/
+
 # Account-/sessiebestanden van een lokale auth-server
 server/data/
 

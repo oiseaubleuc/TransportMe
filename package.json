@@ -10,6 +10,8 @@
     "test": "node --test server/*.test.mjs src/js/*.test.mjs scripts/*.test.mjs",
     "ci": "npm test && npm run build && node scripts/check-secrets.mjs",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "deploy:preview": "bash scripts/vercel-deploy.sh preview",
+    "deploy:production": "bash scripts/vercel-deploy.sh production",
     "hash-pin": "node scripts/hash-pin.mjs",
     "data:ziekenhuizen": "node scripts/fetch-ziekenhuizen-vlaanderen.mjs",
     "factuur:beheer": "node scripts/generate-beheer-factuur.mjs"

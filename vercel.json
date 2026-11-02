@@ -1,4 +1,7 @@
 {
+  "git": {
+    "deploymentEnabled": false
+  },
   "functions": {
     "api/login.js": { "includeFiles": "server/**", "maxDuration": 10 },
     "api/logout.js": { "includeFiles": "server/**", "maxDuration": 10 },

@@ -72,31 +72,56 @@ De repo is publiek. Zet geheimen alleen in Vercel en in lokale `.env` (niet in g
 
 Zonder de vier toegangsheimen weigert de **server** de login. De app opent dan nog wel de **lokale kluis** op dat toestel. Er is geen publieke registratie.
 
-Optioneel later, alleen als je vanuit GitHub Actions wilt publiceren (niet nodig met de Vercel GitHub-koppeling): `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` als GitHub Actions secrets, environment `production` met reviewer.
+## GitHub Secrets (verplicht)
+
+Zonder deze drie stopt de pipeline op Preview én Production (`exit 1`).  
+GitHub → **Settings → Secrets and variables → Actions → New repository secret**.
+
+| Secret | Waar vandaan |
+| --- | --- |
+| `VERCEL_TOKEN` | [Vercel → Account Settings → Tokens](https://vercel.com/account/tokens). Scope: de team van dit project. |
+| `VERCEL_ORG_ID` | Vercel → Project → Settings → General → **Team ID** (`team_…`) |
+| `VERCEL_PROJECT_ID` | zelfde pagina → **Project ID** (`prj_…`) |
+
+**Niet** in GitHub zetten: `AUTH_*`, `SESSION_SECRET`, `BLOB_READ_WRITE_TOKEN`, de toegangscode. Die blijven in Vercel Environment Variables.
+
+Daarna GitHub → **Settings → Environments**:
+
+1. `preview` — geen extra bescherming nodig.
+2. `production` — Required reviewers aanzetten, zodat `main` niet zonder goedkeuring live gaat.
+
+Automatische Vercel-deploys vanaf Git staan **uit** (`vercel.json` → `git.deploymentEnabled: false`). Alleen deze pipeline publiceert.
 
 ## CI/CD
 
+Eén workflow: `.github/workflows/pipeline.yml`.
+
 ```mermaid
 flowchart TD
-  A[Push / PR] --> B[CI: test]
-  A --> C[CI: build]
-  A --> D[CI: geheimen + gitleaks + npm audit]
-  A --> E[CodeQL]
-  B --> F[Vercel Preview]
-  C --> F
-  D --> F
-  G[main] --> H[CI gate]
-  H --> I[Vercel Production]
-  J[Dependabot wekelijks] --> A
+  A[PR] --> B[Test]
+  A --> C[Build]
+  A --> D[Security]
+  B --> E[Vercel Preview]
+  C --> E
+  D --> E
+  E --> F[URL op de PR]
+  G[main] --> H[Test]
+  G --> I[Build]
+  G --> J[Security]
+  H --> K[Vercel Production]
+  I --> K
+  J --> K
+  L[CodeQL] --> A
+  M[Dependabot] --> A
 ```
 
-- **CI** (elke push en PR): `npm test`, productiebuild, scan of hashes/tokens in git of in `dist/` zitten, Gitleaks, `npm audit --omit=dev --audit-level=high`.
-- **Preview**: Vercel bouwt de PR-branch. Geheimen komen uit Vercel Preview-env, niet uit GitHub.
-- **Production**: push naar `main` (of handmatig *CD* → *Run workflow*). Eerst dezelfde gate, daarna Vercel. Zonder `VERCEL_TOKEN` in Actions blijft de Vercel GitHub-integratie publiceren.
-- **Dependabot**: wekelijkse npm- en Actions-updates als PR, nooit direct op main.
-- Lokaal hetzelfde: `npm run ci`.
+- **Test / Build / Security** (elke PR en elke push naar `main`): `npm test`, productiebuild, geen hashes/tokens in git of in `dist/`, Gitleaks, `npm audit --omit=dev --audit-level=high`.
+- **Preview** (PR, na groene gate): `scripts/vercel-deploy.sh preview`. Zonder de drie GitHub Secrets faalt de job. Login gebruikt Vercel Preview-env (`AUTH_*`, Blob). Dependabot- en fork-PR’s skippen Preview.
+- **Production** (alleen `main`, na groene gate + environment `production`): `scripts/vercel-deploy.sh production`.
+- **CodeQL** op PR, `main` en maandag. **Dependabot** wekelijks als PR, nooit direct op main.
+- Lokaal dezelfde gate: `npm run ci`. Handmatig: `npm run deploy:preview` / `npm run deploy:production` (zelfde drie variabelen in je shell).
 
-Uitbreiden later: extra job in `.github/workflows/` (lint, e2e, staging-environment), required status checks op `main`, environment `production` met verplichte reviewer.
+Uitbreiden: extra job in `pipeline.yml` (lint, e2e), required status checks op `main` (Test, Build, Security, Production).
 
 ## Gegevens
 

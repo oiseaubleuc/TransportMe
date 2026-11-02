@@ -18,6 +18,11 @@ test("Vercel verbiedt caching van HTML en de service worker", () => {
   assert.match(vercel, /no-store, no-cache, must-revalidate/);
 });
 
+test("Vercel Git-deploys staan uit, publicatie loopt via de pipeline", () => {
+  const cfg = JSON.parse(vercel);
+  assert.equal(cfg.git.deploymentEnabled, false);
+});
+
 test("client registreert de worker zonder HTTP-cache en ruimt preview-caches op", () => {
   assert.match(main, /updateViaCache:\s*"none"/);
   assert.match(main, /isVercelPreview/);
